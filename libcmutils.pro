@@ -65,4 +65,5 @@ DISTFILES += \
     Makefile.am \
     Makefile.in \
     demo/Makefile.am \
-    demo/Makefile.in
+    demo/Makefile.in \
+    VERSION
