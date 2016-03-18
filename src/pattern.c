@@ -76,6 +76,23 @@
 #endif
 
 
+/* Manifest constants */
+
+#define FPAT_QUOTE      '\\'    /* Quotes a special char        */
+#define FPAT_QUOTE2     '`'     /* Quotes a special char        */
+#define FPAT_DEL        '/'     /* Path delimiter               */
+#define FPAT_DEL2       '\\'    /* Path delimiter               */
+#define FPAT_DOT        '.'     /* Dot char                     */
+#define FPAT_NOT        '!'     /* Exclusion                    */
+#define FPAT_ANY        '?'     /* Any one char                 */
+#define FPAT_CLOS       '*'     /* Zero or more chars           */
+#define FPAT_CLOSP      '\x1A'  /* Zero or more nondelimiters	*/
+#define FPAT_SET_L      '['     /* Set/range open bracket       */
+#define FPAT_SET_R      ']'     /* Set/range close bracket      */
+#define FPAT_SET_NOT    '!'     /* Set exclusion                */
+#define FPAT_SET_THRU   '-'     /* Set range of chars           */
+
+
 /* Local constants */
 
 #ifndef NULL
