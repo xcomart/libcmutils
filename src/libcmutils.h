@@ -83,8 +83,15 @@ extern "C" {
 # define pid_t      DWORD
 #endif
 
+/**
+ * @defgroup CMUTIL Types.
+ * @{
+ *
+ * CMUTIL library uses platform independent data types for multi-platform
+ * support.
+ */
 
-/*
+/**
  * 64 bit signed integer definition.
  */
 #if !defined(int64)
@@ -96,7 +103,7 @@ typedef long long int64;
 # define int64 int64
 #endif
 
-/*
+/**
  * 64 bit unsigned integer definition.
  */
 #if !defined(uint64)
@@ -108,7 +115,7 @@ typedef unsigned long long uint64;
 # define uint64 uint64
 #endif
 
-/*
+/**
  * 64 bit signed / unsigned integer max values.
  */
 #if !defined(INT64_MAX)
@@ -118,7 +125,7 @@ typedef unsigned long long uint64;
 # define UINT64_MAX ui64(0xFFFFFFFFFFFFFFFF)
 #endif
 
-/*
+/**
  * 64 bit signed / unsigned integer constant suffix.
  */
 #define CMUTIL_APPEND(a,b)  a ## b
@@ -130,7 +137,7 @@ typedef unsigned long long uint64;
 # define ui64(x)    CMUTIL_APPEND(x, ULL)
 #endif
 
-/*
+/**
  * 64 bit signed / unsigned integer printf format string.
  */
 #if !defined(PRINT64I)
@@ -143,52 +150,107 @@ typedef unsigned long long uint64;
 # endif
 #endif
 
-/*
+/**
+ * @brief Boolean definition for this library.
+ */
+typedef enum CMUTIL_Bool {
+    CMUTIL_True         =0x0001,
+    CMUTIL_False        =0x0000
+} CMUTIL_Bool;
+
+/**
+ * @}
+ */
+
+#if defined(APPLE)
+/**
  * For Mac OS X.
  * Redefine gethostbyname for consistancy of gethostbyname_r implementation.
  */
-#if defined(APPLE)
 # define gethostbyname      CMUTIL_NetworkGetHostByName
 # define gethostbyname_r    CMUTIL_NetworkGetHostByNameR
 #endif
 
-/*
+/**
  * Unused variable wrapper for avoiding compile warning.
  */
-#define CMUTIL_UNUSED(a,...)    CMUTIL_UnusedP((void*)a, ## __VA_ARGS__)
+#define CMUTIL_UNUSED(a,...)    CMUTIL_UnusedP((void*)(long)(a), ## __VA_ARGS__)
+CMUTIL_API void CMUTIL_UnusedP(void*,...);
 
-/*
- * Method caller
+/**
+ * An wrapper macro for CMUTIL_CALL.
  */
 #define __CMUTIL_CALL(a,b,...)  (a)->b((a), ## __VA_ARGS__)
+
+/**
+ * @brief Method caller for this library.
+ *
+ * This library built on C language, but some of the usage of this library
+ * simillar to object oriented languages like C++ or Java.
+ *
+ * Create instance of type CMUTIL_XX with CMUTIL_XXCreate function,
+ * and call method with member callbacks.
+ *
+ * ie)<code>
+ * // Create CMUTIL_XX object instance.
+ * CMUTIL_XX *obj = CMUTIL_XXCreate();
+ * // Call method FooBar with arguments(arg1, arg2).
+ * obj->FooBar(obj, arg1, arg2);
+ * // Destroy instance.
+ * obj->Destroy(obj);
+ * </code>
+ *
+ * As you see instance variable used redundently in method call,
+ * we created an macro CMUTIL_CALL for this inconvinience.
+ * As a result below code will produce the same result with above code.
+ * <code>
+ * // Create CMUTIL_XX object instance.
+ * CMUTIL_XX *obj = CMUTIL_XXCreate();
+ * // Call method FooBar with arguments(arg1, arg2).
+ * CMUTIL_CALL(obj, FooBar, arg1, arg2);
+ * // Destroy instance.
+ * CMUTIL_CALL(obj, Destroy);
+ * </code>
+ */
 #define CMUTIL_CALL __CMUTIL_CALL
 
 /**
- * @defgroup CMUTILS_Initialization Initialization
+ * @defgroup CMUTILS_Initialization Initialization and memory operations.
  * @{
  *
  * libcmutils offers three types of memory management:
  *
- * - System version malloc, realloc, strdup and free.
+ * <ul>
+ *  <li> System version malloc, realloc, strdup and free.
  *      This option has no memory management, proper for external memory
- *      debugger like 'duma' or 'valgrind'.
- * - Memory recycling, all memory allocation will be fit to 2^n sized memory
+ *      debugger like 'duma' or 'valgrind'.</li>
+ *  <li> Memory recycling, all memory allocation will be fit to 2^n sized memory
  *      blocks. This option prevents heap memory fragments,
  *      supports memory leak detection and detects memory overflow/underflow
- *      corruption while freeing.
- * - Memory recycling with stack information.
+ *      corruption while freeing.</li>
+ *  <li> Memory recycling with stack information.
  *      This option is same as previous recycling option except all memory
  *      allocation will also create it's callstack information,
- *      increadibly slow. Only use for memory leak debugging.
- *
+ *      increadibly slow. Only use for memory leak debugging.</li>
+ * </ul>
  */
 
 /**
- * @typedef CMUTIL_MemOper
+ * @typedef CMUTIL_MemOper Memory operation types.
+ * Refer CMUTIL_Init function for details.
  */
 typedef enum CMUTIL_MemOper {
+    /**
+     * Use system version malloc, realloc, strdup and free.
+     */
     CMUTIL_MemSystem = 0,
+    /**
+     * Use memory recycle technique.
+     */
     CMUTIL_MemRecycle,
+    /**
+     * Use memory operation with debugging informations.
+     */
     CMUTIL_MemDebug
 } CMUTIL_MemOper;
 
@@ -219,17 +281,14 @@ typedef enum CMUTIL_MemOper {
 CMUTIL_API void CMUTIL_Init(CMUTIL_MemOper memoper);
 
 /**
- * \brief Clear allocated resource for this library.
+ * @brief Clear allocated resource for this library.
  */
 CMUTIL_API void CMUTIL_Clear();
 
 /**
- * @}
+ * Memory operation interface.
  */
-
-CMUTIL_API void CMUTIL_UnusedP(void*,...);
-
-typedef struct CMUTIL_Mem_st {
+struct CMUTIL_Mem_st {
     void *(*Alloc)(
             size_t size);
     void *(*Calloc)(
@@ -242,339 +301,576 @@ typedef struct CMUTIL_Mem_st {
             const char *str);
     void (*Free)(
             void *ptr);
-} CMUTIL_Mem_st;
+};
 
-/// \brief Global memory operator structure.
-///  This object will be initialized with appropriate memory operators in
-///  <tt>CMUTIL_Init</tt>.
-extern CMUTIL_Mem_st *__CMUTIL_Mem;
+/**
+ * @brief Global memory operator structure.
+ * This object will be initialized with appropriate memory operators in
+ * <tt>CMUTIL_Init</tt>.
+ */
+extern struct CMUTIL_Mem_st *__CMUTIL_Mem;
 
-/// \brief Allocate new memory. Use this macro instead of malloc
-///  for debugging memory operations.
+/**
+ * @brief Allocate new memory.
+ * Use this macro instead of malloc for debugging memory operations.
+ */
 #define CMAlloc     __CMUTIL_Mem->Alloc
 
-/// \brief Allocate new memory with zero filled.
-///  Use this macro instead of calloc.
+/**
+ * @brief Allocate new memory with zero filled.
+ * Use this macro instead of calloc.
+ */
 #define CMCalloc    __CMUTIL_Mem->Calloc
 
-/// \brief Reallocate memory with given size preserving previous data.
+/**
+ * @brief Reallocate memory with given size preserving previous data.
+ */
 #define CMRealloc   __CMUTIL_Mem->Realloc
 
-/// \brief String duplication.
+/**
+ * @brief String duplication.
+ */
 #define CMStrdup    __CMUTIL_Mem->Strdup
 
-/// \brief Deallocate memory which allocated with
-///  CMAlloc, CMCalloc, CMRealloc and CMStrdup.
+/**
+ * @brief Deallocate memory which allocated with
+ *  CMAlloc, CMCalloc, CMRealloc and CMStrdup.
+ */
 #define CMFree      __CMUTIL_Mem->Free
 
-/// \brief Boolean definition for this library.
-///
-/// Boolean definition for this library.
-typedef enum CMUTIL_Bool {
-    CMUTIL_True         =0x0001,
-    CMUTIL_False        =0x0000
-} CMUTIL_Bool;
+/**
+ * @}
+ */
 
-
-/// \brief Platform independent condition definition for concurrency control.
-///
-/// Condition(or Event)
+/**
+ * @brief Platform independent condition definition for concurrency control.
+ *
+ * Condition(or Event)
+ */
 typedef struct CMUTIL_Cond CMUTIL_Cond;
 struct CMUTIL_Cond {
 
-    /// \brief Wait for this condition is set.
-    ///
-    /// This operation is blocked until this condition is set.
-    /// \param cond this condition object.
+    /**
+     * @brief Wait for this condition is set.
+     *
+     * This operation is blocked until this condition is set.
+     * @param cond this condition object.
+     */
     void (*Wait)(
             CMUTIL_Cond *cond);
 
-    /// \brief Waits with timeout.
-    ///
-    /// Waits until this condition is set or the time-out interval elapses.
-    /// \param cond this condition object.
-    /// \param millisec
-    ///     The time-out interval, in milliseconds. If a nonzero value is
-    ///     specified, this method waits until the condition is set or the
-    ///     interval elapses. If millisec is zero, the function does not
-    ///     enter a wait state if this condition is not set; it always
-    ///     returns immediately.
-    /// \return CMUTIL_True if this condition is set in given interval,
-    ///     CMUTIL_False otherwise.
+    /**
+     * @brief Waits with timeout.
+     *
+     * Waits until this condition is set or the time-out interval elapses.
+     * @param cond this condition object.
+     * @param millisec
+     *     The time-out interval, in milliseconds. If a nonzero value is
+     *     specified, this method waits until the condition is set or the
+     *     interval elapses. If millisec is zero, the function does not
+     *     enter a wait state if this condition is not set, it always
+     *     returns immediately.
+     * @return CMUTIL_True if this condition is set in given interval,
+     *     CMUTIL_False otherwise.
+     */
     CMUTIL_Bool (*TimedWait)(
             CMUTIL_Cond *cond,
             long millisec);
 
-    /// \brief Sets this conidtion object.
-    ///
-    /// The state of a manual-reset condition object remains set until it is
-    /// explicitly to the nonsignaled state by the Reset method. Any number
-    /// of waiting threads, or threads that subsequently begin wait operations
-    /// for this condition object by calling one of wait functions, can be
-    /// released while this condition state is signaled.
-    ///
-    /// The state of an auto-reset condition object remains signaled until a
-    /// single waiting thread is released, at which time the system
-    /// automatically resets this condition state to nonsignaled. If no
-    /// threads are waiting, this condition object's state remains signaled.
-    ///
-    /// If this condition object set already, calling this method will has no
-    /// effect.
-    /// \param cond this condition object.
+    /**
+     * @brief Sets this conidtion object.
+     *
+     * The state of a manual-reset condition object remains set until it is
+     * explicitly to the nonsignaled state by the Reset method. Any number
+     * of waiting threads, or threads that subsequently begin wait operations
+     * for this condition object by calling one of wait functions, can be
+     * released while this condition state is signaled.
+     *
+     * The state of an auto-reset condition object remains signaled until a
+     * single waiting thread is released, at which time the system
+     * automatically resets this condition state to nonsignaled. If no
+     * threads are waiting, this condition object's state remains signaled.
+     *
+     * If this condition object set already, calling this method will has no
+     * effect.
+     * @param cond this condition object.
+     */
     void (*Set)(
             CMUTIL_Cond *cond);
 
-    /// \brief Unsets this condition object.
-    ///
-    /// The state of this condition object remains nonsignaled until it is
-    /// explicitly set to signaled by the Set method. This nonsignaled state
-    /// blocks the execution of any threads that have specified this condition
-    /// object in a call to one of wait methods.
-    ///
-    /// This Reset method is used primarily for manual-reset condition object,
-    /// which must be set explicitly to the nonsignaled state. Auto-reset
-    /// condition objects automatically change from signaled to nonsignaled
-    /// after a single waiting thread is released.
-    /// \param cond this condition object.
+    /**
+     * @brief Unsets this condition object.
+     *
+     * The state of this condition object remains nonsignaled until it is
+     * explicitly set to signaled by the Set method. This nonsignaled state
+     * blocks the execution of any threads that have specified this condition
+     * object in a call to one of wait methods.
+     *
+     * This Reset method is used primarily for manual-reset condition object,
+     * which must be set explicitly to the nonsignaled state. Auto-reset
+     * condition objects automatically change from signaled to nonsignaled
+     * after a single waiting thread is released.
+     * @param cond this condition object.
+     */
     void (*Reset)(
             CMUTIL_Cond *cond);
 
-    /// \brief Destroys all resources related with this object.
-    /// \param cond this condition object.
+    /**
+     * @brief Destroys all resources related with this object.
+     * @param cond this condition object.
+     */
     void (*Destroy)(
             CMUTIL_Cond *cond);
 };
 
-/// \brief Creates a condition object.
-///
-/// Creates a manual or auto resetting condition object.
-///
-/// \param manual_reset
-///         If this parameter is CMUTIL_True, the function creates a
-///         manual-reset condition object, which requires the use of the Reset
-///         method to set the event state to nonsignaled. If this parameter is
-///         CMUTIL_False, the function creates an auto-reset condition
-///         object, and system automatically resets the event state to
-///         nonsignaled after a single waiting thread has been released.
+/**
+ * @brief Creates a condition object.
+ *
+ * Creates a manual or auto resetting condition object.
+ *
+ * @param manual_reset
+ *     If this parameter is CMUTIL_True, the function creates a
+ *     manual-reset condition object, which requires the use of the Reset
+ *     method to set the event state to nonsignaled. If this parameter is
+ *     CMUTIL_False, the function creates an auto-reset condition
+ *     object, and system automatically resets the event state to
+ *     nonsignaled after a single waiting thread has been released.
+ * @return Created conditional object.
+ */
 CMUTIL_API CMUTIL_Cond *CMUTIL_CondCreate(CMUTIL_Bool manual_reset);
 
-
-/// \brief Platform independent mutex implementation.
+/**
+ * @brief Platform independent mutex implementation.
+ */
 typedef struct CMUTIL_Mutex CMUTIL_Mutex;
 struct CMUTIL_Mutex {
 
-    /// \brief Lock this mutex object.
-    ///
-    /// This mutex object shall be locked. If this mutex is already locked by
-    /// another thread, the calling thread shall block until this mutex becomes
-    /// available. This method shall return with this mutex object in the
-    /// locked state with the calling thread as its owner.
-    ///
-    /// This mutex is recursive lockable object. This mutex shall maintain the
-    /// concept of lock count. When a thread successfully acquires a mutex for
-    /// the first time, the lock count shall be set to one. Every time a thread
-    /// relocks this mutex, the lock count shall be incremented by one. Each
-    /// time the thread unlocks the mutex, the lock count shall be decremented
-    /// by one. When the lock count reaches zero, the mutex shall become
-    /// available for other threads to acquire.
-    /// \param mutex This mutex object.
+    /**
+     * @brief Lock this mutex object.
+     *
+     * This mutex object shall be locked. If this mutex is already locked by
+     * another thread, the calling thread shall block until this mutex becomes
+     * available. This method shall return with this mutex object in the
+     * locked state with the calling thread as its owner.
+     *
+     * This mutex is recursive lockable object. This mutex shall maintain the
+     * concept of lock count. When a thread successfully acquires a mutex for
+     * the first time, the lock count shall be set to one. Every time a thread
+     * relocks this mutex, the lock count shall be incremented by one. Each
+     * time the thread unlocks the mutex, the lock count shall be decremented
+     * by one. When the lock count reaches zero, the mutex shall become
+     * available for other threads to acquire.
+     * @param mutex This mutex object.
+     */
     void (*Lock)(CMUTIL_Mutex *mutex);
 
-    /// \brief Unlock this mutex object.
-    ///
-    /// This mutex object shall be unlocked if lock count reaches zero.
-    /// \param mutex This mutex object.
+    /**
+     * @brief Unlock this mutex object.
+     *
+     * This mutex object shall be unlocked if lock count reaches zero.
+     * @param mutex This mutex object.
+     */
     void (*Unlock)(CMUTIL_Mutex *mutex);
 
-    /// \brief Try to lock given mutex object.
-    /// \param  mutex   a mutex object to be tested.
-    /// \return CMUTIL_True if mutex locked successfully,
-    ///         CMUTIL_False if lock failed.
+    /**
+     * @brief Try to lock given mutex object.
+     * @param  mutex   a mutex object to be tested.
+     * @return CMUTIL_True if mutex locked successfully,
+     *         CMUTIL_False if lock failed.
+     */
     CMUTIL_Bool (*TryLock)(CMUTIL_Mutex *mutex);
 
-    /// \brief Destroys all resources related with this object.
-    /// \param mutex This mutex object.
+    /**
+     * @brief Destroys all resources related with this object.
+     * @param mutex This mutex object.
+     */
     void (*Destroy)(CMUTIL_Mutex *mutex);
 };
 
-/// \brief Creates a mutex object.
-///
-/// Any thread of the calling process can use created mutex-object in a call
-/// to lock methods. When a lock method returns, the waiting thread is
-/// released to continue its execution.
-/// This function creates a 'recursive lockable' mutex object.
+/**
+ * @brief Creates a mutex object.
+ *
+ * Any thread of the calling process can use created mutex-object in a call
+ * to lock methods. When a lock method returns, the waiting thread is
+ * released to continue its execution.
+ * This function creates a 'recursive lockable' mutex object.
+ * @return Created mutex object.
+ */
 CMUTIL_API CMUTIL_Mutex *CMUTIL_MutexCreate();
 
 
-
-/// \brief Platform independent thread object.
+/**
+ * @brief Platform independent thread object.
+ */
 typedef struct CMUTIL_Thread CMUTIL_Thread;
 struct CMUTIL_Thread {
 
-    /// \brief Starts this thread.
-    ///
-    /// This function creates a new thread which is not detached,
-    /// so the created thread must be joined by calling Join method.
-    /// \param thread This thread object.
-    /// \return This thread have been started successfully or not.
+    /**
+     * @brief Starts this thread.
+     *
+     * This function creates a new thread which is not detached,
+     * so the created thread must be joined by calling Join method.
+     * @param thread This thread object.
+     * @return This thread have been started successfully or not.
+     */
     CMUTIL_Bool (*Start)(CMUTIL_Thread *thread);
 
-    /// \brief Join this thread.
-    ///
-    /// This function joins this thread and clean up it's resources including
-    /// this thread object, so this references are must not be used after
-    /// calling this method. Every threads which been created by this library
-    /// must be joined by calling this method.
-    /// \param thread This thread object.
+    /**
+     * @brief Join this thread.
+     *
+     * This function joins this thread and clean up it's resources including
+     * this thread object, so this references are must not be used after
+     * calling this method. Every threads which been created by this library
+     * must be joined by calling this method.
+     * @param thread This thread object.
+     * @return Thread return value.
+     */
     void *(*Join)(CMUTIL_Thread *thread);
 
-    /// \brief This thread is running or not.
-    ///
-    /// \param thread This thread object.
-    /// \return CMUTIL_True if this thread is running,
-    ///         CMUTIL_False if this thread is not running.
+    /**
+     * @brief This thread is running or not.
+     *
+     * @param thread This thread object.
+     * @return CMUTIL_True if this thread is running,
+     *         CMUTIL_False if this thread is not running.
+     */
     CMUTIL_Bool (*IsRunning)(CMUTIL_Thread *thread);
 
-    /// \brief Get the ID fo this thread. Returned ID is not system thread ID.
-    ///     just internal thread index.
-    /// \return ID of this thread.
+    /**
+     * @brief Get the ID fo this thread. Returned ID is not system thread ID.
+     *     just internal thread index.
+     * @return ID of this thread.
+     */
     unsigned int(*GetId)(CMUTIL_Thread *thread);
 
-    /// \brief Get the name of this thread.
-    /// \return Name of this thread.
+    /**
+     * @brief Get the name of this thread.
+     * @return Name of this thread.
+     */
     const char *(*GetName)(CMUTIL_Thread *thread);
 };
 
-/// \brief Creates a thread object.
-///
-/// Created thread does not start automatically.
-/// Call <tt>Start</tt> method to start thread.
-/// Returned object must be free by calling <tt>Join</tt> method,
-/// even if thread not started.
-///
-/// \param proc Start routine of the created thread.
-/// \param udata This argument is passed as the sole argument of 'proc'
-/// \param name Thread name, any name could be assigned,
-///      and can also duplicable. But must not be exceed 200 bytes.
-/// \return Created thread object.
+/**
+ * @brief Creates a thread object.
+ *
+ * Created thread does not start automatically.
+ * Call <tt>Start</tt> method to start thread.
+ * Returned object must be free by calling <tt>Join</tt> method,
+ * even if thread not started.
+ *
+ * @param proc Start routine of the created thread.
+ * @param udata This argument is passed as the sole argument of 'proc'
+ * @param name Thread name, any name could be assigned,
+ *      and can also duplicable. But must not be exceed 200 bytes.
+ * @return Created thread object.
+ */
 CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadCreate(
         void*(*proc)(void*), void *udata, const char *name);
 
-/// \brief Get the ID of current thread. This id is not system thread id,
-///     just internal thread index.
-/// \return ID of current thread.
+/**
+ * @rief Get the ID of current thread. This id is not system thread id,
+ *     just internal thread index.
+ * @return ID of current thread.
+ */
 CMUTIL_API unsigned int CMUTIL_ThreadSelfId();
 
-/// \brief Get current thread context.
-/// \return Current thread context.
+/**
+ * @brief Get current thread context.
+ * @return Current thread context.
+ */
 CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadSelf();
 
-/// \brief Get system dependent thread id.
-/// \return System dependent thread id.
+/**
+ * @brief Get system dependent thread id.
+ * @return System dependent thread id.
+ */
 CMUTIL_API uint64 CMUTIL_ThreadSystemSelfId();
 
-/// \brief Platform independent semaphore object.
+/**
+ * @brief Platform independent semaphore object.
+ */
 typedef struct CMUTIL_Semaphore CMUTIL_Semaphore;
 struct CMUTIL_Semaphore {
 
-    /// \brief Acquire an ownership from semaphore.
-    ///
-    /// Acquire an ownership in given time or fail with timed out. This method
-    /// will blocked until an ownership acquired successfully in time,
-    /// or the waiting time expired.
-    ///
-    /// \param semaphore This semaphore object.
-    /// \param millisec Waiting time to acquire an ownership in millisecond.
-    /// \return CMUTIL_True if an ownership acquired successfully in time,
-    ///         CMUTIL_False if failed to acquire ownership in time.
+    /**
+     * @brief Acquire an ownership from semaphore.
+     *
+     * Acquire an ownership in given time or fail with timed out. This method
+     * will blocked until an ownership acquired successfully in time,
+     * or the waiting time expired.
+     *
+     * @param semaphore This semaphore object.
+     * @param millisec Waiting time to acquire an ownership in millisecond.
+     * @return CMUTIL_True if an ownership acquired successfully in time,
+     *         CMUTIL_False if failed to acquire ownership in time.
+     */
     CMUTIL_Bool (*Acquire)(CMUTIL_Semaphore *semaphore, long millisec);
 
-    /// \brief Release an ownership to semaphore.
-    ///
-    /// Release an ownership to semaphore, the semaphore value increased
-    /// greater than zero consequently, one of the thread which blocked in
-    /// Acquire method will get the ownership and be unblocked.
-    /// \param semaphore This semaphore object.
+    /**
+     * @brief Release an ownership to semaphore.
+     *
+     * Release an ownership to semaphore, the semaphore value increased
+     * greater than zero consequently, one of the thread which blocked in
+     * Acquire method will get the ownership and be unblocked.
+     * @param semaphore This semaphore object.
+     */
     void (*Release)(CMUTIL_Semaphore *semaphore);
 
-    /// \brief Destroy all resources related with this object.
-    /// \param semaphore This semaphore object.
+    /**
+     * @brief Destroy all resources related with this object.
+     * @param semaphore This semaphore object.
+     */
     void (*Destroy)(CMUTIL_Semaphore *semaphore);
 };
 
-/// \brief Creates a semaphore object.
-///
-/// Create an in-process semaphore object.
-/// \param initcnt Initial semaphore ownership count.
-/// \return Created semaphore object.
+/**
+ * @brief Creates a semaphore object.
+ *
+ * Create an in-process semaphore object.
+ * @param initcnt Initial semaphore ownership count.
+ * @return Created semaphore object.
+ */
 CMUTIL_API CMUTIL_Semaphore *CMUTIL_SemaphoreCreate(int initcnt);
 
 
-
-/// \brief Platform independent read/write lock object.
+/**
+ * @brief Platform independent read/write lock object.
+ */
 typedef struct CMUTIL_RWLock CMUTIL_RWLock;
 struct CMUTIL_RWLock {
 
-    /// \brief Read lock for this object.
-    ///
-    /// This method shall apply a read lock to given object. The calling thread
-    /// acquires the read lock if a writer does not hold the lock and
-    /// there are no writers blocked on the lock.
-    /// \param rwlock This read-write lock object.
+    /**
+     * @brief Read lock for this object.
+     *
+     * This method shall apply a read lock to given object. The calling thread
+     * acquires the read lock if a writer does not hold the lock and
+     * there are no writers blocked on the lock.
+     * @param rwlock This read-write lock object.
+     */
     void (*ReadLock)(CMUTIL_RWLock *rwlock);
 
-    /// \brief Read unlock for this object.
-    ///
-    /// This method shall release a read lock held on given object.
-    /// \param rwlock This read-write lock object.
+    /**
+     * @brief Read unlock for this object.
+     *
+     * This method shall release a read lock held on given object.
+     * @param rwlock This read-write lock object.
+     */
     void (*ReadUnlock)(CMUTIL_RWLock *rwlock);
 
-    /// \brief Write lock for this object.
-    ///
-    /// This method whall apply a write lock to given object. The calling thread
-    /// acquires the write lock if no other thread (reader or writer) holds
-    /// given object. Otherwise, the thread shall block until it can acquire
-    /// the lock. The calling thread may deadlock if at the time
-    /// the call is made it holds the read-write lock
-    /// (whether a read or write lock).
-    /// \param rwlock This read-write lock object.
+    /**
+     * @brief Write lock for this object.
+     *
+     * This method whall apply a write lock to given object. The calling thread
+     * acquires the write lock if no other thread (reader or writer) holds
+     * given object. Otherwise, the thread shall block until it can acquire
+     * the lock. The calling thread may deadlock if at the time
+     * the call is made it holds the read-write lock
+     * (whether a read or write lock).
+     * @param rwlock This read-write lock object.
+     */
     void (*WriteLock)(CMUTIL_RWLock *rwlock);
 
-    /// \brief Write unlock for this object.
-    ///
-    /// This method shall release a write lock held on given object.
-    /// \param rwlock This read-write lock object.
+    /**
+     * @brief Write unlock for this object.
+     *
+     * This method shall release a write lock held on given object.
+     * @param rwlock This read-write lock object.
+     */
     void (*WriteUnlock)(CMUTIL_RWLock *rwlock);
 
-    /// \brief Destroy all resources related with this object.
-    /// \param rwlock This read-write lock object.
+    /**
+     * @brief Destroy all resources related with this object.
+     * @param rwlock This read-write lock object.
+     */
     void (*Destroy)(CMUTIL_RWLock *rwlock);
 };
 
-/// \brief Create a read-write lock object.
+/**
+ * @brief Create a read-write lock object.
+ */
 CMUTIL_API CMUTIL_RWLock *CMUTIL_RWLockCreate();
 
-
+/**
+ * @brief Iterator of collection members.
+ */
 typedef struct CMUTIL_Iterator CMUTIL_Iterator;
 struct CMUTIL_Iterator {
+
+    /**
+     * @brief Check iterator has next element.
+     * @param iter This iterator object.
+     * @return CMUTIL_True if this iterator has next element.
+     *         CMUTIL_False if there is no more elements.
+     */
     CMUTIL_Bool (*HasNext)(CMUTIL_Iterator *iter);
+
+    /**
+     * @brief Get next element from this iterator.
+     * @param iter This iterator object.
+     * @return Next element.
+     */
     void *(*Next)(CMUTIL_Iterator *iter);
+
+    /**
+     * @brief Destroy this iterator.
+     *
+     * This method must be called after use this iterator.
+     * @param iter This iterator object.
+     */
     void (*Destroy)(CMUTIL_Iterator *iter);
 };
 
 
+/**
+ * @brief Dynamic array of any type element.
+ */
 typedef struct CMUTIL_Array CMUTIL_Array;
 struct CMUTIL_Array {
+
+    /**
+     * @brief Add new element to this array.
+     *
+     * If this array is a sorted array(created including <code>comparator</code>
+     * callback function), this method will add new item to appropriate
+     * location.
+     * Otherwise this method will add new item to the end of this array.
+     *
+     * @param array This dynamic array object.
+     * @param item Item to be added.
+     * @return Previous data at that position if this array is sorted array.
+     *         NULL if this is not sorted array.
+     */
     void *(*Add)(CMUTIL_Array *array, void *item);
+
+    /**
+     * @brief Remove an item from sorted array.
+     *
+     * This method will only work if this array is a sorted array.
+     * <code>compval</code> will be compared with array elements in
+     * binary search manner.
+     *
+     * @param array This dynamic array object.
+     * @param compval Search key of item to be removed.
+     * @return Removed element if given item found in this array.
+     *         NULL if given key does not exists in this array or
+     *         this array is not a sorted array.
+     */
     void *(*Remove)(CMUTIL_Array *array, const void *compval);
+
+    /**
+     * @brief Insert a new element to this array.
+     *
+     * This method will only work if this array is not a sorted array.
+     * New item will be stored at given <code>index</code>.
+     *
+     * @param array This dynamic array object.
+     * @param item Item to be inserted.
+     * @param index The index of this array where new item will be stored in.
+     * @return Inserted item if this array is not a sorted array.
+     *         NULL if this array is a sorted array.
+     */
     void *(*InsertAt)(CMUTIL_Array *array, void *item, int index);
+
+    /**
+     * @brief Remove an item from this array.
+     *
+     * The item at the index of this array will be removed.
+     *
+     * @param array This dynamic array object.
+     * @param index The index of this array which item will be removed.
+     * @return Removed item if given index is a valid index.
+     *         NULL if given index is invalid.
+     */
     void *(*RemoveAt)(CMUTIL_Array *array, int index);
+
+    /**
+     * @brief Replace an item at the position of this array.
+     *
+     * This method will only work if this array is not a sorted array.
+     * The item positioned at the <code>index</code> of this array will be
+     * replaced with given <code>item</code>.
+     *
+     * @param array This dynamic array object.
+     * @param item New item which will replace old one.
+     * @param index The index of this array, the item in which will be replaced.
+     * @return Replaced old item if this array is not a sorted array and
+     *         given index is a valid index.
+     *         NULL if this array is a sorted array or given index is not a
+     *         valid index or the old item is NULL.
+     */
     void *(*SetAt)(CMUTIL_Array *array, void *item, int index);
+
+    /**
+     * @brief Get an item from this array.
+     *
+     * Get an item which stored at given <code>index</code>.
+     *
+     * @param array This dynamic array object.
+     * @param index The index of this array,
+     *        the item in which will be retreived.
+     * @return An item which positioned at <code>index</code> of this array if
+     *         given index is valid one.
+     *         NULL if given index is invalid.
+     */
     void *(*GetAt)(CMUTIL_Array *array, int index);
+
+    /**
+     * @brief Find an item from this array.
+     *
+     * This method will only work if this array is a sorted array.
+     *
+     * @param array This dynamic array object.
+     * @param compval Search key of item which to be found.
+     * @param index The index reference of the item which found with
+     *        <code>compval</code>.
+     *        Where the found item index will be stored in.
+     * @return A found item from this array if the item found. NULL if
+     *         this array is not a sorted array or item not found.
+     */
     void *(*Find)(CMUTIL_Array *array, const void *compval, int *index);
+
+    /**
+     * @brief The size of this array.
+     *
+     * @param array This dynamic array object.
+     * @return The size of this array.
+     */
     int  (*GetSize)(CMUTIL_Array *array);
-    void (*Push)(CMUTIL_Array *array, void *item);
+
+    /**
+     * @brief Push an item to this array like stack operation.
+     *
+     * This method will only work if this array is not a sorted array.
+     * This operation will add given <code>item</code> at the end of this array.
+     *
+     * @param array This dynamic array object.
+     * @param item A new item to be pushed to this array.
+     * @return CMUTIL_True if push operation performed successfully.
+     *         CMUTIL_False otherwise.
+     */
+    CMUTIL_Bool (*Push)(CMUTIL_Array *array, void *item);
+
+    /**
+     * @brief Pop an item from this array like stack operation.
+     *
+     * This operation will remove an item at the end of this array.
+     *
+     * @param array This dynamic array object.
+     * @return Removed item if there are elements exists. NULL if there is
+     *         no more elements.
+     */
     void *(*Pop)(CMUTIL_Array *array);
+
+    /**
+     * @brief Get the top element from this array like stack operation.
+     *
+     * Get the item at the end of this array.
+     *
+     * @param array This dynamic array object.
+     * @return An item at the end of this array
+     *         if the size of this array is bigger than zero.
+     *         NULL if there is no item in this array.
+     */
     void *(*Top)(CMUTIL_Array *array);
     void *(*Bottom)(CMUTIL_Array *array);
     CMUTIL_Iterator *(*Iterator)(CMUTIL_Array *array);

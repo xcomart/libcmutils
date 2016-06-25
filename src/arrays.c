@@ -1,6 +1,8 @@
 
 #include "functions.h"
 
+CMUTIL_LogDefine("cmutil.array")
+
 //*****************************************************************************
 // CMUTIL_Array implementation
 //*****************************************************************************
@@ -68,7 +70,7 @@ CMUTIL_STATIC int CMUTIL_ArraySearchPrivate(CMUTIL_Array_Internal *arr,
     return found;
 }
 
-CMUTIL_STATIC void* CMUTIL_ArrayInsertAt(
+CMUTIL_STATIC void* CMUTIL_ArrayInsertAtPrivate(
         CMUTIL_Array *array, void *item, int index)
 {
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
@@ -83,17 +85,41 @@ CMUTIL_STATIC void* CMUTIL_ArrayInsertAt(
     return item;
 }
 
-CMUTIL_STATIC void* CMUTIL_ArraySetAt(
+CMUTIL_STATIC void* CMUTIL_ArrayInsertAt(
+        CMUTIL_Array *array, void *item, int index)
+{
+    CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
+
+    if (!iarray->issorted)
+        return CMUTIL_ArrayInsertAtPrivate(array, item, index);
+    CMLogError("InsertAt is not applicable to sorted array.");
+    return NULL;
+}
+
+CMUTIL_STATIC void* CMUTIL_ArraySetAtPrivate(
         CMUTIL_Array *array, void *item, int index)
 {
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
     void *res = NULL;
-    if (index < iarray->size) {
+    if (index < iarray->size && index > -1) {
         res = iarray->data[index];
         iarray->data[index] = item;
+    } else {
+        CMLogError("Index out of range: %d (array size is %d).",
+                   index, iarray->size);
     }
 
     return res;
+}
+
+CMUTIL_STATIC void* CMUTIL_ArraySetAt(
+        CMUTIL_Array *array, void *item, int index)
+{
+    CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
+    if (!iarray->issorted)
+        return CMUTIL_ArraySetAtPrivate(array, item, index);
+    CMLogError("SetAt is not applicable to sorted array.");
+    return NULL;
 }
 
 CMUTIL_STATIC void *CMUTIL_ArrayAdd(CMUTIL_Array *array, void *item)
@@ -109,7 +135,7 @@ CMUTIL_STATIC void *CMUTIL_ArrayAdd(CMUTIL_Array *array, void *item)
             res = CMUTIL_CALL(array, GetAt, index);
             iarray->data[index] = item;
         } else if (found != 0) {
-            CMUTIL_CALL(array, InsertAt, item, index);
+            CMUTIL_ArrayInsertAtPrivate(array, item, index);
         }
     } else {
         CMUTIL_ArrayCheckSize(iarray, 1);
@@ -127,6 +153,9 @@ CMUTIL_STATIC void *CMUTIL_ArrayRemoveAt(CMUTIL_Array *array, int index)
         memmove(iarray->data+index, iarray->data+index+1,
                 (iarray->size - index - 1) * sizeof(void*));
         iarray->size--;
+    } else {
+        CMLogError("Index out of range: %d (array size is %d).",
+                   index, iarray->size);
     }
     return res;
 }
@@ -137,6 +166,8 @@ CMUTIL_STATIC void *CMUTIL_ArrayGetAt(CMUTIL_Array *array, int index)
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
     if (index > -1 && index < iarray->size)
         res = iarray->data[index];
+    CMLogError("Index out of range: %d (array size is %d).",
+               index, iarray->size);
     return res;
 }
 
@@ -152,6 +183,8 @@ CMUTIL_STATIC void *CMUTIL_ArrayRemove(
         if (found == 1)
             // found data and remove it
             res = CMUTIL_CALL(array, RemoveAt, index);
+    } else {
+        CMLogError("Remove method only applicable to sorted array.");
     }
     return res;
 }
@@ -198,9 +231,15 @@ CMUTIL_STATIC int CMUTIL_ArrayGetSize(CMUTIL_Array *array)
     return iarray->size;
 }
 
-CMUTIL_STATIC void CMUTIL_ArrayPush(CMUTIL_Array *array, void *item)
+CMUTIL_STATIC CMUTIL_Bool CMUTIL_ArrayPush(CMUTIL_Array *array, void *item)
 {
+    CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
+    if (iarray->issorted) {
+        CMLogError("Push method cannot applicable to sorted array.");
+        return CMUTIL_False;
+    }
     CMUTIL_CALL(array, Add, item);
+    return CMUTIL_True;
 }
 
 CMUTIL_STATIC void *CMUTIL_ArrayPop(CMUTIL_Array *array)
