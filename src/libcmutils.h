@@ -1106,9 +1106,9 @@ struct CMUTIL_Timer {
     void (*Destroy)(CMUTIL_Timer *timer);
 };
 
-#define CMUTIL_TIMER_PRECISION	100
-#define CMUTIL_TIMER_THREAD		10
-#define CMUTIL_TimerCreate()	\
+#define CMUTIL_TIMER_PRECISION  100
+#define CMUTIL_TIMER_THREAD     10
+#define CMUTIL_TimerCreate()    \
         CMUTIL_TimerCreateEx(CMUTIL_TIMER_PRECISION, CMUTIL_TIMER_THREAD)
 CMUTIL_API CMUTIL_Timer *CMUTIL_TimerCreateEx(long precision, int threads);
 
