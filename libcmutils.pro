@@ -43,7 +43,6 @@ SOURCES += \
 HEADERS += \
     src/functions.h \
     src/libcmutils.h \
-    src/pattern.h \
     src/platforms.h
 
 DISTFILES += \

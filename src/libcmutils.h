@@ -61,6 +61,10 @@ extern "C" {
 # include <unistd.h>
 #endif
 #include <stdarg.h>
+#include <stdint.h>
+
+#define __STDC_FORMAT_MACROS /* for 64bit integer related macros */
+#include <inttypes.h>
 
 #ifndef CMUTIL_API
 # if defined(MSWIN)
@@ -95,24 +99,26 @@ extern "C" {
  * 64 bit signed integer definition.
  */
 #if !defined(int64)
-# if defined(_MSC_VER)
-typedef __int64 int64;
-# else
-typedef long long int64;
-# endif
-# define int64 int64
+//# if defined(_MSC_VER)
+//typedef __int64 int64;
+//# else
+//typedef long long int64;
+//# endif
+//# define int64 int64
+# define int64 int64_t
 #endif
 
 /**
  * 64 bit unsigned integer definition.
  */
 #if !defined(uint64)
-# if defined(_MSC_VER)
-typedef unsigned __int64 uint64;
-# else
-typedef unsigned long long uint64;
-# endif
-# define uint64 uint64
+//# if defined(_MSC_VER)
+//typedef unsigned __int64 uint64;
+//# else
+//typedef unsigned long long uint64;
+//# endif
+//# define uint64 uint64
+# define uint64 uint64_t
 #endif
 
 /**
@@ -141,13 +147,15 @@ typedef unsigned long long uint64;
  * 64 bit signed / unsigned integer printf format string.
  */
 #if !defined(PRINT64I)
-# if defined(_MSC_VER)
-#  define PRINT64I  "%I64d"
-#  define PRINT64U  "%I64u"
-# else
-#  define PRINT64I  "%lld"
-#  define PRINT64U  "%llu"
-# endif
+//# if defined(_MSC_VER)
+//#  define PRINT64I  "%I64d"
+//#  define PRINT64U  "%I64u"
+//# else
+//#  define PRINT64I  "%lld"
+//#  define PRINT64U  "%llu"
+//# endif
+# define PRINT64I  PRIi64
+# define PRINT64U  PRIu64
 #endif
 
 /**
@@ -568,7 +576,7 @@ CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadCreate(
         void*(*proc)(void*), void *udata, const char *name);
 
 /**
- * @rief Get the ID of current thread. This id is not system thread id,
+ * @brief Get the ID of current thread. This id is not system thread id,
  *     just internal thread index.
  * @return ID of current thread.
  */
@@ -1628,6 +1636,7 @@ struct CMUTIL_JsonArray {
 };
 
 CMUTIL_API CMUTIL_JsonArray *CMUTIL_JsonArrayCreate();
+
 CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
 #define CMUTIL_JsonDestroy(a)   CMUTIL_CALL((CMUTIL_Json*)(a), Destroy)
 
