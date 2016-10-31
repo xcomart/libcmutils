@@ -4,8 +4,21 @@ TEMPLATE = lib
 
 DEFINES += CMUTILS_LIBRARY
 
+BUILD_DIR = ../build
+COPY_CMD = cp
+LIB_DIR = lib
+win32 {
+    LIB_DIR = bin
+}
+
 CONFIG(debug, debug|release) {
 	DEFINES += DEBUG
+    DESTDIR = $$BUILD_DIR/$$LIB_DIR/debug
+}
+
+CONFIG(release, debug|release) {
+    DEFINES += DEBUG
+    DESTDIR = $$BUILD_DIR/$$LIB_DIR/release
 }
 
 unix {
@@ -14,6 +27,7 @@ unix {
 }
 win32 {
 	LIBS += -lws2_32
+#    COPY_CMD = copy
 }
 
 !linux {
@@ -66,3 +80,10 @@ DISTFILES += \
     demo/Makefile.am \
     demo/Makefile.in \
     VERSION
+
+INCLUDE_TARGET.commands = $$COPY_CMD ../libcmutils/src/libcmutils.h $$BUILD_DIR/include
+
+QMAKE_EXTRA_TARGETS += INCLUDE_TARGET
+
+POST_TARGETDEPS += INCLUDE_TARGET
+
