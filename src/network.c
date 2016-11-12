@@ -137,11 +137,11 @@ typedef struct CMUTIL_Socket_Internal {
     SOCKET				sock;
     struct sockaddr_in	peer;
     CMUTIL_Bool			silent;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_Socket_Internal;
 
 CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
-        CMUTIL_Mem_st *memst, CMUTIL_Bool silent);
+        CMUTIL_Mem *memst, CMUTIL_Bool silent);
 
 # define CMUTIL_RBUF_LEN    1024
 CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SocketRead(
@@ -651,7 +651,7 @@ static CMUTIL_Socket g_cmutil_socket = {
 };
 
 CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
-        CMUTIL_Mem_st *memst, CMUTIL_Bool silent)
+        CMUTIL_Mem *memst, CMUTIL_Bool silent)
 {
     CMUTIL_Socket_Internal *res = NULL;
     res = memst->Alloc(sizeof(CMUTIL_Socket_Internal));
@@ -664,7 +664,7 @@ CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
 }
 
 CMUTIL_Socket *CMUTIL_SocketConnectInternal(
-        CMUTIL_Mem_st *memst, const char *host, int port, long timeout,
+        CMUTIL_Mem *memst, const char *host, int port, long timeout,
         CMUTIL_Bool silent)
 {
     unsigned char ip[4];
@@ -719,14 +719,14 @@ CMUTIL_Socket *CMUTIL_SocketConnect(
         const char *host, int port, long timeout)
 {
     return CMUTIL_SocketConnectInternal(
-                __CMUTIL_Mem, host, port, timeout, CMUTIL_False);
+                CMUTIL_GetMem(), host, port, timeout, CMUTIL_False);
 }
 
 typedef struct CMUTIL_ServerSocket_Internal {
     CMUTIL_ServerSocket	base;
     SOCKET				ssock;
     CMUTIL_Bool			silent;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_ServerSocket_Internal;
 
 CMUTIL_STATIC CMUTIL_Socket *CMUTIL_ServerSocketAccept(
@@ -791,7 +791,7 @@ static CMUTIL_ServerSocket g_cmutil_serversocket = {
 };
 
 CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
-        CMUTIL_Mem_st *memst, const char *host, int port, int qcnt,
+        CMUTIL_Mem *memst, const char *host, int port, int qcnt,
         CMUTIL_Bool silent)
 {
     struct sockaddr_in addr;
@@ -880,5 +880,5 @@ CMUTIL_ServerSocket *CMUTIL_ServerSocketCreate(
         const char *host, int port, int qcnt)
 {
     return CMUTIL_ServerSocketCreateInternal(
-                __CMUTIL_Mem, host, port, qcnt, CMUTIL_False);
+                CMUTIL_GetMem(), host, port, qcnt, CMUTIL_False);
 }

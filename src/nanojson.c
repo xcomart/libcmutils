@@ -56,19 +56,19 @@ typedef struct CMUTIL_JsonValue_Internal {
     CMUTIL_JsonValue		base;
     CMUTIL_String			*data;
     CMUTIL_JsonValueType	type;
-    CMUTIL_Mem_st			*memst;
+    CMUTIL_Mem			*memst;
 } CMUTIL_JsonValue_Internal;
 
 typedef struct CMUTIL_JsonObject_Internal {
     CMUTIL_JsonObject	base;
     CMUTIL_Map			*map;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_JsonObject_Internal;
 
 typedef struct CMUTIL_JsonArray_Internal {
     CMUTIL_JsonArray	base;
     CMUTIL_Array		*arr;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_JsonArray_Internal;
 
 
@@ -328,7 +328,7 @@ static CMUTIL_JsonValue g_cmutil_jsonvalue = {
 };
 
 CMUTIL_STATIC CMUTIL_JsonValue *CMUTIL_JsonValueCreateInternal(
-        CMUTIL_Mem_st *memst)
+        CMUTIL_Mem *memst)
 {
     CMUTIL_JsonValue_Internal *res =
             memst->Alloc(sizeof(CMUTIL_JsonValue_Internal));
@@ -341,7 +341,7 @@ CMUTIL_STATIC CMUTIL_JsonValue *CMUTIL_JsonValueCreateInternal(
 
 CMUTIL_JsonValue *CMUTIL_JsonValueCreate()
 {
-    return CMUTIL_JsonValueCreateInternal(__CMUTIL_Mem);
+    return CMUTIL_JsonValueCreateInternal(CMUTIL_GetMem());
 }
 
 
@@ -498,7 +498,7 @@ static CMUTIL_JsonObject g_cmutil_jsonobject = {
     CMUTIL_JsonObjectRemove
 };
 
-CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem_st *memst)
+CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst)
 {
     CMUTIL_JsonObject_Internal *res =
             memst->Alloc(sizeof(CMUTIL_JsonObject_Internal));
@@ -511,7 +511,7 @@ CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem_st *memst)
 
 CMUTIL_JsonObject *CMUTIL_JsonObjectCreate()
 {
-    return CMUTIL_JsonObjectCreateInternal(__CMUTIL_Mem);
+    return CMUTIL_JsonObjectCreateInternal(CMUTIL_GetMem());
 }
 
 
@@ -666,7 +666,7 @@ static CMUTIL_JsonArray g_cmutil_jsonarray = {
     CMUTIL_JsonArrayRemove
 };
 
-CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem_st *memst)
+CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem *memst)
 {
     CMUTIL_JsonArray_Internal *res =
             memst->Alloc(sizeof(CMUTIL_JsonArray_Internal));
@@ -680,7 +680,7 @@ CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem_st *memst)
 
 CMUTIL_JsonArray *CMUTIL_JsonArrayCreate()
 {
-    return CMUTIL_JsonArrayCreateInternal(__CMUTIL_Mem);
+    return CMUTIL_JsonArrayCreateInternal(CMUTIL_GetMem());
 }
 
 
@@ -691,7 +691,7 @@ typedef struct CMUTIL_JsonParser {
     const char *orig, *curr;
     int remain, linecnt;
     CMUTIL_Bool silent;
-    CMUTIL_Mem_st *memst;
+    CMUTIL_Mem *memst;
 } CMUTIL_JsonParser;
 
 CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonParseValue(CMUTIL_JsonParser *pctx);
@@ -1043,7 +1043,7 @@ ENDPOINT:
 }
 
 CMUTIL_Json *CMUTIL_JsonParseInternal(
-        CMUTIL_Mem_st *memst, CMUTIL_String *jsonstr, CMUTIL_Bool silent)
+        CMUTIL_Mem *memst, CMUTIL_String *jsonstr, CMUTIL_Bool silent)
 {
     CMUTIL_JsonParser parser = {
         CMUTIL_CALL(jsonstr, GetCString),
@@ -1058,5 +1058,5 @@ CMUTIL_Json *CMUTIL_JsonParseInternal(
 
 CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr)
 {
-    return CMUTIL_JsonParseInternal(__CMUTIL_Mem, jsonstr, CMUTIL_False);
+    return CMUTIL_JsonParseInternal(CMUTIL_GetMem(), jsonstr, CMUTIL_False);
 }

@@ -106,7 +106,7 @@ typedef struct CMUTIL_XmlNode_Internal {
     CMUTIL_Map			*attributes;
     CMUTIL_Array		*children;
     CMUTIL_XmlNode		*parent;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
     void				*udata;
     void				(*freef)(void*);
 } CMUTIL_XmlNode_Internal;
@@ -116,7 +116,8 @@ static CMUTIL_Map *g_cmutil_xml_escape_map = NULL;
 void CMUTIL_XmlInit()
 {
     struct CMUTIL_EscapePair *pair = g_cmutil_xml_escapes;
-    g_cmutil_xml_escape_map = CMUTIL_MapCreateInternal(__CMUTIL_Mem, 10, NULL);
+    g_cmutil_xml_escape_map = CMUTIL_MapCreateInternal(
+                CMUTIL_GetMem(), 10, NULL);
 
     while (pair->key) {
         CMUTIL_CALL(g_cmutil_xml_escape_map, Put, pair->key, pair->val);
@@ -359,7 +360,7 @@ CMUTIL_STATIC void CMUTIL_XmlNodeDestroyer(void *data)
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
-        CMUTIL_Mem_st *memst,
+        CMUTIL_Mem *memst,
         CMUTIL_XmlNodeKind type, const char *tagname, int namelen)
 {
     CMUTIL_XmlNode_Internal *res =
@@ -378,7 +379,7 @@ CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateInternal(
-        CMUTIL_Mem_st *memst, CMUTIL_XmlNodeKind type, const char *tagname)
+        CMUTIL_Mem *memst, CMUTIL_XmlNodeKind type, const char *tagname)
 {
     return CMUTIL_XmlNodeCreateWithLenInternal(
                 memst, type, tagname, (int)strlen(tagname));
@@ -387,14 +388,14 @@ CMUTIL_XmlNode *CMUTIL_XmlNodeCreateInternal(
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreate(
         CMUTIL_XmlNodeKind type, const char *tagname)
 {
-    return CMUTIL_XmlNodeCreateInternal(__CMUTIL_Mem, type, tagname);
+    return CMUTIL_XmlNodeCreateInternal(CMUTIL_GetMem(), type, tagname);
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLen(
         CMUTIL_XmlNodeKind type, const char *tagname, int namelen)
 {
     return CMUTIL_XmlNodeCreateWithLenInternal(
-                __CMUTIL_Mem, type, tagname, namelen);
+                CMUTIL_GetMem(), type, tagname, namelen);
 }
 
 static const char g_cmutil_spaces[]=" \t\r\n";
@@ -406,7 +407,7 @@ typedef struct CMUTIL_XmlParseCtx {
     int remain;
     CMUTIL_Array *stack;
     CMUTIL_CSConv *cconv;
-    CMUTIL_Mem_st *memst;
+    CMUTIL_Mem *memst;
 } CMUTIL_XmlParseCtx;
 
 #define DO_BOOL(...) do { if (!(__VA_ARGS__)) {	\
@@ -721,7 +722,7 @@ PARSE_NEXT:
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlParseStringInternal(
-        CMUTIL_Mem_st *memst, const char *xmlstr, int len)
+        CMUTIL_Mem *memst, const char *xmlstr, int len)
 {
     CMUTIL_XmlParseCtx ctx;
     memset(&ctx, 0x0, sizeof(CMUTIL_XmlParseCtx));
@@ -754,11 +755,11 @@ CMUTIL_XmlNode *CMUTIL_XmlParseStringInternal(
 
 CMUTIL_XmlNode *CMUTIL_XmlParseString(const char *xmlstr, int len)
 {
-    return CMUTIL_XmlParseStringInternal(__CMUTIL_Mem, xmlstr, len);
+    return CMUTIL_XmlParseStringInternal(CMUTIL_GetMem(), xmlstr, len);
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlParseInternal(
-        CMUTIL_Mem_st *memst, CMUTIL_String *str)
+        CMUTIL_Mem *memst, CMUTIL_String *str)
 {
     return CMUTIL_XmlParseStringInternal(
                 memst, CMUTIL_CALL(str, GetCString),
@@ -767,11 +768,11 @@ CMUTIL_XmlNode *CMUTIL_XmlParseInternal(
 
 CMUTIL_XmlNode *CMUTIL_XmlParse(CMUTIL_String *str)
 {
-    return CMUTIL_XmlParseInternal(__CMUTIL_Mem, str);
+    return CMUTIL_XmlParseInternal(CMUTIL_GetMem(), str);
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlParseFileInternal(
-        CMUTIL_Mem_st *memst, const char *fpath)
+        CMUTIL_Mem *memst, const char *fpath)
 {
     FILE *f;
     char buffer[1024];
@@ -793,12 +794,12 @@ CMUTIL_XmlNode *CMUTIL_XmlParseFileInternal(
 
 CMUTIL_XmlNode *CMUTIL_XmlParseFile(const char *fpath)
 {
-    return CMUTIL_XmlParseFileInternal(__CMUTIL_Mem, fpath);
+    return CMUTIL_XmlParseFileInternal(CMUTIL_GetMem(), fpath);
 }
 
 typedef struct CMUTIL_XmlToJsonCtx {
     CMUTIL_Array *stack;
-    CMUTIL_Mem_st *memst;
+    CMUTIL_Mem *memst;
 } CMUTIL_XmlToJsonCtx;
 
 CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(

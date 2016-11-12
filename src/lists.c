@@ -35,7 +35,7 @@ typedef struct CMUTIL_List_Internal {
     CMUTIL_ListItem		*tail;
     int					size;
     void				(*freecb)(void*);
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_List_Internal;
 
 CMUTIL_STATIC void CMUTIL_ListAddFront(CMUTIL_List *list, void *data)
@@ -223,7 +223,7 @@ static CMUTIL_List g_cmutil_list = {
 };
 
 CMUTIL_List *CMUTIL_ListCreateInternal(
-        CMUTIL_Mem_st *memst, void(*freecb)(void*))
+        CMUTIL_Mem *memst, void(*freecb)(void*))
 {
     CMUTIL_List_Internal *ilist = memst->Alloc(sizeof(CMUTIL_List_Internal));
     memset(ilist, 0x0, sizeof(CMUTIL_List_Internal));
@@ -235,6 +235,6 @@ CMUTIL_List *CMUTIL_ListCreateInternal(
 
 CMUTIL_List *CMUTIL_ListCreateEx(void(*freecb)(void*))
 {
-    return CMUTIL_ListCreateInternal(__CMUTIL_Mem, freecb);
+    return CMUTIL_ListCreateInternal(CMUTIL_GetMem(), freecb);
 }
 

@@ -43,7 +43,7 @@ typedef uint64          CMUTIL_PointDiff;
 int gettimeofday(struct timeval *tv, struct timezone *tz);
 #endif
 
-typedef struct CMUTIL_Mem_st CMUTIL_Mem_st;
+typedef struct CMUTIL_Mem CMUTIL_Mem;
 
 void CMUTIL_XmlInit();
 void CMUTIL_XmlClear();
@@ -59,79 +59,75 @@ void CMUTIL_MemDebugInit(CMUTIL_MemOper memoper);
 void CMUTIL_MemDebugClear();
 
 
-CMUTIL_Array *CMUTIL_ArrayCreateInternal(
-        CMUTIL_Mem_st *mem,
+CMUTIL_Array *CMUTIL_ArrayCreateInternal(CMUTIL_Mem *mem,
         int initcapacity,
         int(*comparator)(const void*,const void*),
         void(*freecb)(void*));
 
-CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(CMUTIL_Mem_st *memst);
+CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(CMUTIL_Mem *memst);
 
-CMUTIL_Cond *CMUTIL_CondCreateInternal(
-        CMUTIL_Mem_st *memst, CMUTIL_Bool manual_reset);
-CMUTIL_Mutex *CMUTIL_MutexCreateInternal(CMUTIL_Mem_st *memst);
-CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
-        CMUTIL_Mem_st *memst, void*(*proc)(void*), void *udata,
+CMUTIL_Cond *CMUTIL_CondCreateInternal(CMUTIL_Mem *memst, CMUTIL_Bool manual_reset);
+CMUTIL_Mutex *CMUTIL_MutexCreateInternal(CMUTIL_Mem *memst);
+CMUTIL_Thread *CMUTIL_ThreadCreateInternal(CMUTIL_Mem *memst, void*(*proc)(void*), void *udata,
         const char *name);
-CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
-        CMUTIL_Mem_st *memst, int initcnt);
-CMUTIL_RWLock *CMUTIL_RWLockCreateInternal(CMUTIL_Mem_st *memst);
+CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(CMUTIL_Mem *memst, int initcnt);
+CMUTIL_RWLock *CMUTIL_RWLockCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_Timer *CMUTIL_TimerCreateInternal(
-        CMUTIL_Mem_st *memst, long precision, int threads);
+        CMUTIL_Mem *memst, long precision, int threads);
 
-CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem_st *memst);
+CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_Config *CMUTIL_ConfigLoadInternal(
-        CMUTIL_Mem_st *memst, const char *fconf);
+        CMUTIL_Mem *memst, const char *fconf);
 
 CMUTIL_List *CMUTIL_ListCreateInternal(
-        CMUTIL_Mem_st *memst, void(*freecb)(void*));
+        CMUTIL_Mem *memst, void(*freecb)(void*));
 
 CMUTIL_LogAppender *CMUTIL_LogConsoleAppenderCreateInternal(
-        CMUTIL_Mem_st *memst, const char *name, const char *pattern);
+        CMUTIL_Mem *memst, const char *name, const char *pattern);
 CMUTIL_LogAppender *CMUTIL_LogFileAppenderCreateInternal(
-        CMUTIL_Mem_st *memst, const char *name,
+        CMUTIL_Mem *memst, const char *name,
         const char *fpath, const char *pattern);
 CMUTIL_LogAppender *CMUTIL_LogRollingFileAppenderCreateInternal(
-        CMUTIL_Mem_st *memst, const char *name,
+        CMUTIL_Mem *memst, const char *name,
         const char *fpath, CMUTIL_LogTerm logterm,
         const char *rollpath, const char *pattern);
 CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreateInternal(
-        CMUTIL_Mem_st *memst, const char *name, const char *accept_host,
+        CMUTIL_Mem *memst, const char *name, const char *accept_host,
         int listen_port, const char *pattern);
-CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem_st *memst);
+CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_LogSystem *CMUTIL_LogSystemConfigureInternal(
-        CMUTIL_Mem_st *memst, CMUTIL_Json *json);
+        CMUTIL_Mem *memst, CMUTIL_Json *json);
 CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFromXmlInternal(
-        CMUTIL_Mem_st *memst, const char *xmlfile);
+        CMUTIL_Mem *memst, const char *xmlfile);
 CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJsonInternal(
-        CMUTIL_Mem_st *memst, const char *jsonfile);
-CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem_st *memst);
+        CMUTIL_Mem *memst, const char *jsonfile);
+CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem *memst);
 
 CMUTIL_Map *CMUTIL_MapCreateInternal(
-        CMUTIL_Mem_st *memst, int bucketsize, void(*freecb)(void*));
+        CMUTIL_Mem *memst, int bucketsize, void(*freecb)(void*));
 
-CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem_st *memst);
-CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem_st *memst);
+CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst);
+CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_Json *CMUTIL_JsonParseInternal(
-        CMUTIL_Mem_st *memst, CMUTIL_String *jsonstr, CMUTIL_Bool silent);
+        CMUTIL_Mem *memst, CMUTIL_String *jsonstr, CMUTIL_Bool silent);
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
-        CMUTIL_Mem_st *memst,
+        CMUTIL_Mem *memst,
         CMUTIL_XmlNodeKind type, const char *tagname, int namelen);
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateInternal(
-        CMUTIL_Mem_st *memst, CMUTIL_XmlNodeKind type, const char *tagname);
+        CMUTIL_Mem *memst, CMUTIL_XmlNodeKind type, const char *tagname);
 CMUTIL_XmlNode *CMUTIL_XmlParseStringInternal(
-        CMUTIL_Mem_st *memst, const char *xmlstr, int len);
+        CMUTIL_Mem *memst, const char *xmlstr, int len);
 CMUTIL_XmlNode *CMUTIL_XmlParseInternal(
-        CMUTIL_Mem_st *memst, CMUTIL_String *str);
+        CMUTIL_Mem *memst, CMUTIL_String *str);
 CMUTIL_XmlNode *CMUTIL_XmlParseFileInternal(
-        CMUTIL_Mem_st *memst, const char *fpath);
+        CMUTIL_Mem *memst, const char *fpath);
 
 CMUTIL_Socket *CMUTIL_SocketConnectInternal(
-        CMUTIL_Mem_st *memst, const char *host, int port, long timeout,
+        CMUTIL_Mem *memst, const char *host, int port, long timeout,
         CMUTIL_Bool silent);
 CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
-        CMUTIL_Mem_st *memst, const char *host, int port, int qcnt,
+        CMUTIL_Mem *memst, const char *host, int port, int qcnt,
         CMUTIL_Bool silent);
 
 CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat);
@@ -140,7 +136,7 @@ CMUTIL_Bool CMUTIL_PatternMatchN(const char *pat, const char *fname);
 
 
 CMUTIL_Pool *CMUTIL_PoolCreateInternal(
-        CMUTIL_Mem_st *memst,
+        CMUTIL_Mem *memst,
         int initcnt, int maxcnt,
         void *(*createproc)(void *),
         void (*destroyproc)(void *, void *),
@@ -150,19 +146,19 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
         void *udata, CMUTIL_Timer *timer);
 
 CMUTIL_String *CMUTIL_StringCreateInternal(
-        CMUTIL_Mem_st *memst,
+        CMUTIL_Mem *memst,
         int initcapacity,
         const char *initcontent);
 CMUTIL_StringArray *CMUTIL_StringArrayCreateInternal(
-        CMUTIL_Mem_st *memst, int initcapacity);
+        CMUTIL_Mem *memst, int initcapacity);
 CMUTIL_CSConv *CMUTIL_CSConvCreateInternal(
-        CMUTIL_Mem_st *memst, const char *fromcs, const char *tocs);
+        CMUTIL_Mem *memst, const char *fromcs, const char *tocs);
 CMUTIL_StringArray *CMUTIL_StringSplitInternal(
-        CMUTIL_Mem_st *memst, const char *haystack, const char *needle);
+        CMUTIL_Mem *memst, const char *haystack, const char *needle);
 
 CMUTIL_Library *CMUTIL_LibraryCreateInternal(
-        CMUTIL_Mem_st *memst, const char *path);
-CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem_st *memst, const char *path);
+        CMUTIL_Mem *memst, const char *path);
+CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path);
 
 #endif // FUNCTIONS_H
 

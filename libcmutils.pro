@@ -1,6 +1,6 @@
-CONFIG -= qt
-TARGET = cmutils
 TEMPLATE = lib
+TARGET = cmutils
+CONFIG -= qt
 
 DEFINES += CMUTILS_LIBRARY
 

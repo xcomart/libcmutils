@@ -33,7 +33,7 @@ typedef struct CMUTIL_Array_Internal {
     CMUTIL_Bool		issorted;
     int				(*comparator)(const void*,const void*);
     void			(*freecb)(void*);
-    CMUTIL_Mem_st	*memst;
+    CMUTIL_Mem	    *memst;
 } CMUTIL_Array_Internal;
 
 CMUTIL_STATIC void CMUTIL_ArrayCheckSize(
@@ -370,7 +370,7 @@ static CMUTIL_Array g_cmutil_array = {
 };
 
 CMUTIL_Array *CMUTIL_ArrayCreateInternal(
-        CMUTIL_Mem_st *mem,
+        CMUTIL_Mem *mem,
         int initcapacity,
         int(*comparator)(const void*,const void*),
         void(*freecb)(void*))
@@ -395,7 +395,7 @@ CMUTIL_Array *CMUTIL_ArrayCreateEx(
         void(*freecb)(void*))
 {
     return CMUTIL_ArrayCreateInternal(
-                __CMUTIL_Mem, initcapacity, comparator, freecb);
+                CMUTIL_GetMem(), initcapacity, comparator, freecb);
 }
 
 

@@ -31,7 +31,7 @@
 #define MEM_BLOCK_SZ 45
 
 
-static CMUTIL_Mem_st g_cmutil_memdebug_system = {
+static CMUTIL_Mem g_cmutil_memdebug_system = {
     malloc,
     calloc,
     realloc,
@@ -39,11 +39,12 @@ static CMUTIL_Mem_st g_cmutil_memdebug_system = {
     free
 };
 
-CMUTIL_Mem_st *__CMUTIL_Mem = &g_cmutil_memdebug_system;
+static CMUTIL_Mem *__CMUTIL_Mem = &g_cmutil_memdebug_system;
 
 static CMUTIL_MemOper g_cmutil_memoper = CMUTIL_MemSystem;
 static CMUTIL_StackWalker *g_cmutil_memstackwalker = NULL;
 static CMUTIL_Mutex *g_cmutil_memlog_mutex = NULL;
+
 
 CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
 {
@@ -353,7 +354,7 @@ CMUTIL_STATIC char *CMUTIL_MemRcyStrdup(const char *str)
     }
 }
 
-static CMUTIL_Mem_st g_cmutil_memdebug = {
+CMUTIL_Mem g_cmutil_memdebug = {
     CMUTIL_MemRcyAlloc,
     CMUTIL_MemRcyCalloc,
     CMUTIL_MemRcyRealloc,
@@ -432,4 +433,9 @@ void CMUTIL_MemDebugClear()
         __CMUTIL_Mem = &g_cmutil_memdebug_system;
         g_cmutil_memoper = CMUTIL_MemSystem;
     }
+}
+
+CMUTIL_Mem *CMUTIL_GetMem()
+{
+    return __CMUTIL_Mem;
 }

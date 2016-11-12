@@ -29,7 +29,7 @@ typedef struct CMUTIL_ConfItem {
     char			*comment;
     CMUTIL_ConfType	type;
     int				index;
-    CMUTIL_Mem_st	*memst;
+    CMUTIL_Mem	*memst;
 } CMUTIL_ConfItem;
 
 typedef struct CMUTIL_Config_Internal {
@@ -37,7 +37,7 @@ typedef struct CMUTIL_Config_Internal {
     CMUTIL_Array	*sequence;
     CMUTIL_Map		*revconf;
     int maxkeylen;
-    CMUTIL_Mem_st	*memst;
+    CMUTIL_Mem	*memst;
 } CMUTIL_Config_Internal;
 
 CMUTIL_STATIC char *NextTermBefore(
@@ -208,7 +208,7 @@ static CMUTIL_Config g_cmutil_config = {
     CMUTIL_ConfigDestroy
 };
 
-CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem_st *memst)
+CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem *memst)
 {
     CMUTIL_Config_Internal *res =
         (CMUTIL_Config_Internal*)memst->Alloc(sizeof(CMUTIL_Config_Internal));
@@ -225,11 +225,11 @@ CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem_st *memst)
 
 CMUTIL_Config *CMUTIL_ConfigCreate()
 {
-    return CMUTIL_ConfigCreateInternal(__CMUTIL_Mem);
+    return CMUTIL_ConfigCreateInternal(CMUTIL_GetMem());
 }
 
 CMUTIL_Config *CMUTIL_ConfigLoadInternal(
-        CMUTIL_Mem_st *memst, const char *fconf)
+        CMUTIL_Mem *memst, const char *fconf)
 {
     FILE *f = fopen(fconf, "rb");
     CMUTIL_Config_Internal *res = NULL;
@@ -303,5 +303,5 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
 
 CMUTIL_Config *CMUTIL_ConfigLoad(const char *fconf)
 {
-    return CMUTIL_ConfigLoadInternal(__CMUTIL_Mem, fconf);
+    return CMUTIL_ConfigLoadInternal(CMUTIL_GetMem(), fconf);
 }

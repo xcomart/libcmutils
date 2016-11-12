@@ -182,11 +182,11 @@ typedef enum CMUTIL_Bool {
 /**
  * Unused variable wrapper for avoiding compile warning.
  */
-#define CMUTIL_UNUSED(a,...)    CMUTIL_UnusedP((void*)(long)(a), ## __VA_ARGS__)
+#define CMUTIL_UNUSED(a,...)    CMUTIL_UnusedP((void*)(int64)(a), ## __VA_ARGS__)
 CMUTIL_API void CMUTIL_UnusedP(void*,...);
 
 /**
- * An wrapper macro for CMUTIL_CALL.
+ * A wrapper macro for CMUTIL_CALL.
  */
 #define __CMUTIL_CALL(a,b,...)  (a)->b((a), ## __VA_ARGS__)
 
@@ -296,7 +296,7 @@ CMUTIL_API void CMUTIL_Clear();
 /**
  * Memory operation interface.
  */
-struct CMUTIL_Mem_st {
+typedef struct CMUTIL_Mem {
     void *(*Alloc)(
             size_t size);
     void *(*Calloc)(
@@ -309,42 +309,42 @@ struct CMUTIL_Mem_st {
             const char *str);
     void (*Free)(
             void *ptr);
-};
+} CMUTIL_Mem;
 
 /**
  * @brief Global memory operator structure.
  * This object will be initialized with appropriate memory operators in
  * <tt>CMUTIL_Init</tt>.
  */
-extern struct CMUTIL_Mem_st *__CMUTIL_Mem;
+CMUTIL_API CMUTIL_Mem *CMUTIL_GetMem();
 
 /**
  * @brief Allocate new memory.
  * Use this macro instead of malloc for debugging memory operations.
  */
-#define CMAlloc     __CMUTIL_Mem->Alloc
+#define CMAlloc     CMUTIL_GetMem()->Alloc
 
 /**
  * @brief Allocate new memory with zero filled.
  * Use this macro instead of calloc.
  */
-#define CMCalloc    __CMUTIL_Mem->Calloc
+#define CMCalloc    CMUTIL_GetMem()->Calloc
 
 /**
  * @brief Reallocate memory with given size preserving previous data.
  */
-#define CMRealloc   __CMUTIL_Mem->Realloc
+#define CMRealloc   CMUTIL_GetMem()->Realloc
 
 /**
  * @brief String duplication.
  */
-#define CMStrdup    __CMUTIL_Mem->Strdup
+#define CMStrdup    CMUTIL_GetMem()->Strdup
 
 /**
  * @brief Deallocate memory which allocated with
  *  CMAlloc, CMCalloc, CMRealloc and CMStrdup.
  */
-#define CMFree      __CMUTIL_Mem->Free
+#define CMFree      CMUTIL_GetMem()->Free
 
 /**
  * @}

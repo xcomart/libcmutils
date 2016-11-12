@@ -116,16 +116,16 @@ int gettimeofday(struct timeval *tv/*in*/, struct timezone *tz/*in*/)
 //*****************************************************************************
 
 typedef struct CMUTIL_Cond_Internal {
-    CMUTIL_Cond			base;		// condition API interface
+    CMUTIL_Cond         base;       // condition API interface
 #if defined(MSWIN)
-    HANDLE				cond;		// event handle for windows
+    HANDLE              cond;       // event handle for windows
 #else
-    int					state;		// condition state
-    CMUTIL_Bool			manualrst;	// manual-reset indicator
-    MUTEX_T				mutex;		// condition mutex
-    COND_T				cond;		// condition variable
+    int                 state;      // condition state
+    CMUTIL_Bool         manualrst;  // manual-reset indicator
+    MUTEX_T             mutex;      // condition mutex
+    COND_T              cond;       // condition variable
 #endif
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem          *memst;
 } CMUTIL_Cond_Internal;
 
 /// \brief Wait for this condition is set.
@@ -279,7 +279,7 @@ static CMUTIL_Cond g_cmutil_cond = {
 };
 
 CMUTIL_Cond *CMUTIL_CondCreateInternal(
-        CMUTIL_Mem_st *memst, CMUTIL_Bool manual_reset)
+        CMUTIL_Mem *memst, CMUTIL_Bool manual_reset)
 {
     CMUTIL_Cond_Internal *res = memst->Alloc(sizeof(CMUTIL_Cond_Internal));
 #if !defined(MSWIN) && !defined(USE_THREADS_H_)
@@ -322,7 +322,7 @@ CMUTIL_Cond *CMUTIL_CondCreateInternal(
 ///			nonsignaled after a single waiting thread has been released.
 CMUTIL_Cond *CMUTIL_CondCreate(CMUTIL_Bool manual_reset)
 {
-    return CMUTIL_CondCreateInternal(__CMUTIL_Mem, manual_reset);
+    return CMUTIL_CondCreateInternal(CMUTIL_GetMem(), manual_reset);
 }
 
 
@@ -331,13 +331,13 @@ CMUTIL_Cond *CMUTIL_CondCreate(CMUTIL_Bool manual_reset)
 //*****************************************************************************
 
 typedef struct CMUTIL_Mutex_Internal {
-    CMUTIL_Mutex		base;
+    CMUTIL_Mutex        base;
 #if defined(MSWIN)
-    CRITICAL_SECTION	mutex;
+    CRITICAL_SECTION    mutex;
 #else
-    MUTEX_T				mutex;
+    MUTEX_T             mutex;
 #endif
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem          *memst;
 } CMUTIL_Mutex_Internal;
 
 /// \brief Lock this mutex object.
@@ -419,7 +419,7 @@ CMUTIL_Mutex __g_cmutil_mutex = {
         CMUTIL_MutexDestroy
 };
 
-CMUTIL_Mutex *CMUTIL_MutexCreateInternal(CMUTIL_Mem_st *memst)
+CMUTIL_Mutex *CMUTIL_MutexCreateInternal(CMUTIL_Mem *memst)
 {
     CMUTIL_Mutex_Internal *res =
             memst->Alloc(sizeof(CMUTIL_Mutex_Internal));
@@ -456,7 +456,7 @@ CMUTIL_Mutex *CMUTIL_MutexCreateInternal(CMUTIL_Mem_st *memst)
 /// This function creates a 'recursive lockable' mutex object.
 CMUTIL_Mutex *CMUTIL_MutexCreate()
 {
-    return CMUTIL_MutexCreateInternal(__CMUTIL_Mem);
+    return CMUTIL_MutexCreateInternal(CMUTIL_GetMem());
 }
 
 
@@ -467,20 +467,20 @@ CMUTIL_Mutex *CMUTIL_MutexCreate()
 //*****************************************************************************
 
 typedef struct CMUTIL_Thread_Internal {
-    CMUTIL_Thread		base;
-    void				*udata;
-    void				*retval;
-    void				*(*proc)(void*);
-    CMUTIL_Bool			isrunning;
+    CMUTIL_Thread       base;
+    void                *udata;
+    void                *retval;
+    void                *(*proc)(void*);
+    CMUTIL_Bool         isrunning;
 #if defined(MSWIN)
-    HANDLE				thread;
+    HANDLE              thread;
 #else
-    THREAD_T			thread;
+    THREAD_T            thread;
 #endif
-    unsigned int		id;
-    char				*name;
-    uint64				sysid;
-    CMUTIL_Mem_st		*memst;
+    unsigned int        id;
+    char                *name;
+    uint64              sysid;
+    CMUTIL_Mem          *memst;
 } CMUTIL_Thread_Internal;
 
 typedef struct CMUTIL_Thread_Global_Context {
@@ -505,11 +505,12 @@ void CMUTIL_ThreadInit()
 {
     g_main_thread_sysid = CMUTIL_ThreadSystemSelfId();
     g_cmutil_thread_context =
-            __CMUTIL_Mem->Alloc(sizeof(CMUTIL_Thread_Global_Context));
+            CMUTIL_GetMem()->Alloc(sizeof(CMUTIL_Thread_Global_Context));
     memset(g_cmutil_thread_context, 0x0, sizeof(CMUTIL_Thread_Global_Context));
-    g_cmutil_thread_context->mutex = CMUTIL_MutexCreateInternal(__CMUTIL_Mem);
+    g_cmutil_thread_context->mutex =
+            CMUTIL_MutexCreateInternal(CMUTIL_GetMem());
     g_cmutil_thread_context->threads = CMUTIL_ArrayCreateInternal(
-                __CMUTIL_Mem, 10, CMUTIL_ThreadComparator, NULL);
+                CMUTIL_GetMem(), 10, CMUTIL_ThreadComparator, NULL);
 }
 
 void CMUTIL_ThreadClear()
@@ -633,7 +634,7 @@ static CMUTIL_Thread g_cmutil_thread = {
 };
 
 CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
-        CMUTIL_Mem_st *memst, void*(*proc)(void*), void *udata,
+        CMUTIL_Mem *memst, void*(*proc)(void*), void *udata,
         const char *name)
 {
     CMUTIL_Thread_Internal *ithread =
@@ -657,7 +658,7 @@ CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
 CMUTIL_Thread *CMUTIL_ThreadCreate(
         void*(*proc)(void*), void *udata, const char *name)
 {
-    return CMUTIL_ThreadCreateInternal(__CMUTIL_Mem, proc, udata, name);
+    return CMUTIL_ThreadCreateInternal(CMUTIL_GetMem(), proc, udata, name);
 }
 
 unsigned int CMUTIL_ThreadSelfId()
@@ -702,7 +703,7 @@ CMUTIL_Thread *CMUTIL_ThreadSelf()
     CMUTIL_Thread_Internal q, *r;
     if (thmain.memst == NULL) {
         thmain.sysid = g_main_thread_sysid;
-        thmain.memst = __CMUTIL_Mem;
+        thmain.memst = CMUTIL_GetMem();
     }
     q.sysid = CMUTIL_ThreadSystemSelfId();
     if (q.sysid == thmain.sysid) return (CMUTIL_Thread*)&thmain;
@@ -741,7 +742,7 @@ typedef struct CMUTIL_Semaphore_Internal {
 #else
     sem_t                   semp;
 #endif
-    CMUTIL_Mem_st           *memst;
+    CMUTIL_Mem              *memst;
 } CMUTIL_Semaphore_Internal;
 
 CMUTIL_STATIC CMUTIL_Bool CMUTIL_SemaphoreAcquire(
@@ -814,7 +815,7 @@ static CMUTIL_Semaphore g_cmutil_semaphore = {
 };
 
 CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
-        CMUTIL_Mem_st *memst, int initcnt)
+        CMUTIL_Mem *memst, int initcnt)
 {
     int ir = 0;
     CMUTIL_Semaphore_Internal *isem =
@@ -845,7 +846,7 @@ CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
 
 CMUTIL_Semaphore *CMUTIL_SemaphoreCreate(int initcnt)
 {
-    return CMUTIL_SemaphoreCreateInternal(__CMUTIL_Mem, initcnt);
+    return CMUTIL_SemaphoreCreateInternal(CMUTIL_GetMem(), initcnt);
 }
 
 
@@ -874,7 +875,7 @@ typedef struct CMUTIL_RWLock_Internal {
     pthread_rwlock_t	rwlock;
 #endif
 #endif
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_RWLock_Internal;
 
 CMUTIL_STATIC void CMUTIL_RWLockReadLock(CMUTIL_RWLock *rwlock)
@@ -989,7 +990,7 @@ static CMUTIL_RWLock g_cmutil_rwlock = {
         CMUTIL_RWLockDestroy
 };
 
-CMUTIL_RWLock *CMUTIL_RWLockCreateInternal(CMUTIL_Mem_st *memst)
+CMUTIL_RWLock *CMUTIL_RWLockCreateInternal(CMUTIL_Mem *memst)
 {
     CMUTIL_RWLock_Internal *irwlock =
             memst->Alloc(sizeof(CMUTIL_RWLock_Internal));
@@ -1026,7 +1027,7 @@ CMUTIL_RWLock *CMUTIL_RWLockCreateInternal(CMUTIL_Mem_st *memst)
 
 CMUTIL_RWLock *CMUTIL_RWLockCreate()
 {
-    return CMUTIL_RWLockCreateInternal(__CMUTIL_Mem);
+    return CMUTIL_RWLockCreateInternal(CMUTIL_GetMem());
 }
 
 
@@ -1059,7 +1060,7 @@ typedef struct CMUTIL_Timer_Internal {
     CMUTIL_Bool				running;	// timer running indicator
     long					precision;	// timer precision
     int						numthrs;	// number of worker thread
-    CMUTIL_Mem_st			*memst;
+    CMUTIL_Mem			*memst;
 } CMUTIL_Timer_Internal;
 
 CMUTIL_STATIC CMUTIL_Bool CMUTIL_TimerTaskCancelPrivate(
@@ -1349,7 +1350,7 @@ static CMUTIL_Timer g_cmutil_timer = {
 };
 
 CMUTIL_Timer *CMUTIL_TimerCreateInternal(
-        CMUTIL_Mem_st *memst, long precision, int threads)
+        CMUTIL_Mem *memst, long precision, int threads)
 {
     int i;
     CMUTIL_Timer_Internal *res = memst->Alloc(sizeof(CMUTIL_Timer_Internal));
@@ -1395,6 +1396,6 @@ CMUTIL_Timer *CMUTIL_TimerCreateInternal(
 
 CMUTIL_Timer *CMUTIL_TimerCreateEx(long precision, int threads)
 {
-    return CMUTIL_TimerCreateInternal(__CMUTIL_Mem, precision, threads);
+    return CMUTIL_TimerCreateInternal(CMUTIL_GetMem(), precision, threads);
 }
 

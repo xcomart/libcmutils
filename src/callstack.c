@@ -300,7 +300,7 @@ struct CMUTIL_StackWalker_Internal {
     BOOL (*GetModuleInfo)(
         CMUTIL_StackWalker_Internal *walker, DWORD64 baseAddr,
         IMAGEHLP_MODULE64_V2 *pModuleInfo);
-    CMUTIL_Mem_st *memst;
+    CMUTIL_Mem *memst;
 };
 
 CMUTIL_STATIC BOOL CMUTIL_StackWalkerGetModuleListTH32(
@@ -850,7 +850,7 @@ static CMUTIL_StackWalker_Internal g_cmutil_stackwalker = {
     NULL
 };
 
-CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(CMUTIL_Mem_st *memst)
+CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(CMUTIL_Mem *memst)
 {
     CMUTIL_StackWalker_Internal *res =
             memst->Alloc(sizeof(CMUTIL_StackWalker_Internal));
@@ -861,7 +861,7 @@ CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(CMUTIL_Mem_st *memst)
 
 CMUTIL_StackWalker *CMUTIL_StackWalkerCreate()
 {
-    return CMUTIL_StackWalkerCreateInternal(__CMUTIL_Mem);
+    return CMUTIL_StackWalkerCreateInternal(CMUTIL_GetMem());
 }
 
 #else
@@ -869,8 +869,8 @@ CMUTIL_StackWalker *CMUTIL_StackWalkerCreate()
 #include <execinfo.h>
 
 typedef struct CMUTIL_StackWalker_Internal {
-    CMUTIL_StackWalker	base;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_StackWalker  base;
+    CMUTIL_Mem          *memst;
 } CMUTIL_StackWalker_Internal;
 
 void CMUTIL_CallStackInit()
@@ -1015,7 +1015,7 @@ static CMUTIL_StackWalker_Internal g_cmutil_stackwalker = {
     NULL
 };
 
-CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(CMUTIL_Mem_st *memst)
+CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(CMUTIL_Mem *memst)
 {
     CMUTIL_StackWalker_Internal *res =
             memst->Alloc(sizeof(CMUTIL_StackWalker_Internal));
@@ -1026,7 +1026,7 @@ CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(CMUTIL_Mem_st *memst)
 
 CMUTIL_StackWalker *CMUTIL_StackWalkerCreate()
 {
-    return CMUTIL_StackWalkerCreateInternal(__CMUTIL_Mem);
+    return CMUTIL_StackWalkerCreateInternal(CMUTIL_GetMem());
 }
 
 #endif
