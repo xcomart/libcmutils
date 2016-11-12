@@ -37,7 +37,7 @@ typedef struct CMUTIL_Pool_Internal {
     void				(*destroyf)(void*,void*);
     CMUTIL_Bool			(*testf)(void*,void*);
     CMUTIL_TimerTask	*pingtester;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_Pool_Internal;
 
 CMUTIL_STATIC void *CMUTIL_PoolCheckOut(
@@ -158,7 +158,7 @@ static CMUTIL_Pool g_cmutil_pool = {
 };
 
 CMUTIL_Pool *CMUTIL_PoolCreateInternal(
-        CMUTIL_Mem_st *memst,
+        CMUTIL_Mem *memst,
         int initcnt, int maxcnt,
         void *(*createproc)(void *),
         void (*destroyproc)(void *, void *),
@@ -203,7 +203,7 @@ CMUTIL_Pool *CMUTIL_PoolCreate(
         void *udata, CMUTIL_Timer *timer)
 {
     return CMUTIL_PoolCreateInternal(
-                __CMUTIL_Mem, initcnt, maxcnt,
+                CMUTIL_GetMem(), initcnt, maxcnt,
                 createproc, destroyproc, testproc,
                 pinginterval, testonborrow, udata, timer);
 }

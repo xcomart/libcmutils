@@ -34,7 +34,7 @@ struct CMUTIL_String_Internal {
     char			*data;
     int				capacity;
     int				size;
-    CMUTIL_Mem_st	*memst;
+    CMUTIL_Mem	*memst;
 };
 
 CMUTIL_STATIC void CMUTIL_StringCheckSize(
@@ -331,7 +331,7 @@ static CMUTIL_String g_cmutil_string = {
 };
 
 CMUTIL_String *CMUTIL_StringCreateInternal(
-        CMUTIL_Mem_st *memst,
+        CMUTIL_Mem *memst,
         int initcapacity,
         const char *initcontent)
 {
@@ -354,7 +354,7 @@ CMUTIL_String *CMUTIL_StringCreateEx(
         const char *initcontent)
 {
     return CMUTIL_StringCreateInternal(
-                __CMUTIL_Mem, initcapacity, initcontent);
+                CMUTIL_GetMem(), initcapacity, initcontent);
 }
 
 
@@ -367,7 +367,7 @@ CMUTIL_String *CMUTIL_StringCreateEx(
 typedef struct CMUTIL_StringArray_Internal {
     CMUTIL_StringArray	base;
     CMUTIL_Array		*array;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_StringArray_Internal;
 
 CMUTIL_STATIC void CMUTIL_StringArrayAdd(
@@ -477,7 +477,7 @@ static CMUTIL_StringArray g_cmutil_stringarray = {
 };
 
 CMUTIL_StringArray *CMUTIL_StringArrayCreateInternal(
-        CMUTIL_Mem_st *memst, int initcapacity)
+        CMUTIL_Mem *memst, int initcapacity)
 {
     CMUTIL_StringArray_Internal *res =
             memst->Alloc(sizeof(CMUTIL_StringArray_Internal));
@@ -490,7 +490,7 @@ CMUTIL_StringArray *CMUTIL_StringArrayCreateInternal(
 
 CMUTIL_StringArray *CMUTIL_StringArrayCreateEx(int initcapacity)
 {
-    return CMUTIL_StringArrayCreateInternal(__CMUTIL_Mem, initcapacity);
+    return CMUTIL_StringArrayCreateInternal(CMUTIL_GetMem(), initcapacity);
 }
 
 
@@ -503,11 +503,11 @@ typedef struct CMUTIL_CSConv_Internal {
     CMUTIL_CSConv		base;
     char				*frcs;
     char				*tocs;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_CSConv_Internal;
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_CSConvConv(
-        CMUTIL_Mem_st *memst, CMUTIL_String *instr,
+        CMUTIL_Mem *memst, CMUTIL_String *instr,
         const char *frcs, const char *tocs)
 {
     CMUTIL_String *res = NULL;
@@ -585,7 +585,7 @@ static const CMUTIL_CSConv g_cmutil_csconv = {
 };
 
 CMUTIL_CSConv *CMUTIL_CSConvCreateInternal(
-        CMUTIL_Mem_st *memst, const char *fromcs, const char *tocs)
+        CMUTIL_Mem *memst, const char *fromcs, const char *tocs)
 {
     CMUTIL_CSConv_Internal *res = memst->Alloc(sizeof(CMUTIL_CSConv_Internal));
     memset(res, 0x0, sizeof(CMUTIL_CSConv_Internal));
@@ -598,7 +598,7 @@ CMUTIL_CSConv *CMUTIL_CSConvCreateInternal(
 
 CMUTIL_CSConv *CMUTIL_CSConvCreate(const char *fromcs, const char *tocs)
 {
-    return CMUTIL_CSConvCreateInternal(__CMUTIL_Mem, fromcs, tocs);
+    return CMUTIL_CSConvCreateInternal(CMUTIL_GetMem(), fromcs, tocs);
 }
 
 
@@ -641,7 +641,7 @@ char* CMUTIL_StrTrim(char *inp)
 }
 
 CMUTIL_StringArray *CMUTIL_StringSplitInternal(
-        CMUTIL_Mem_st *memst, const char *haystack, const char *needle)
+        CMUTIL_Mem *memst, const char *haystack, const char *needle)
 {
     char buf[4096];
     CMUTIL_StringArray *res = NULL;
@@ -683,7 +683,7 @@ CMUTIL_StringArray *CMUTIL_StringSplitInternal(
 
 CMUTIL_StringArray *CMUTIL_StringSplit(const char *haystack, const char *needle)
 {
-    return CMUTIL_StringSplitInternal(__CMUTIL_Mem, haystack, needle);
+    return CMUTIL_StringSplitInternal(CMUTIL_GetMem(), haystack, needle);
 }
 
 const char *CMUTIL_StrNextToken(

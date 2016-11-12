@@ -35,7 +35,7 @@ typedef struct CMUTIL_Map_Internal {
     int				size;
     CMUTIL_Array	*keyset;
     void			(*freecb)(void*);
-    CMUTIL_Mem_st	*memst;
+    CMUTIL_Mem	*memst;
 } CMUTIL_Map_Internal;
 
 CMUTIL_STATIC int CMUTIL_MapHash(const char *in, int bucketsz)
@@ -323,7 +323,7 @@ static CMUTIL_Map g_cmutil_map = {
 };
 
 CMUTIL_Map *CMUTIL_MapCreateInternal(
-        CMUTIL_Mem_st *memst, int bucketsize, void(*freecb)(void*))
+        CMUTIL_Mem *memst, int bucketsize, void(*freecb)(void*))
 {
     CMUTIL_Map_Internal *imap = memst->Alloc(sizeof(CMUTIL_Map_Internal));
     memset(imap, 0x0, sizeof(CMUTIL_Map_Internal));
@@ -343,5 +343,5 @@ CMUTIL_Map *CMUTIL_MapCreateInternal(
 
 CMUTIL_Map *CMUTIL_MapCreateEx(int bucketsize, void(*freecb)(void*))
 {
-    return CMUTIL_MapCreateInternal(__CMUTIL_Mem, bucketsize, freecb);
+    return CMUTIL_MapCreateInternal(CMUTIL_GetMem(), bucketsize, freecb);
 }

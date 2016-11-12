@@ -40,7 +40,7 @@ typedef struct CMUTIL_Library_Internal {
     void				*library;
     CMUTIL_Mutex		*mutex;
     CMUTIL_Map			*procs;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_Library_Internal;
 
 CMUTIL_STATIC void *CMUTIL_LibraryGetProcedure(
@@ -89,7 +89,7 @@ static CMUTIL_Library g_cmutil_library = {
 };
 
 CMUTIL_Library *CMUTIL_LibraryCreateInternal(
-        CMUTIL_Mem_st *memst, const char *path)
+        CMUTIL_Mem *memst, const char *path)
 {
     char slib[1024];
     CMUTIL_Library_Internal *res =
@@ -115,14 +115,14 @@ CMUTIL_Library *CMUTIL_LibraryCreateInternal(
 
 CMUTIL_Library *CMUTIL_LibraryCreate(const char *path)
 {
-    return CMUTIL_LibraryCreateInternal(__CMUTIL_Mem, path);
+    return CMUTIL_LibraryCreateInternal(CMUTIL_GetMem(), path);
 }
 
 
 typedef struct CMUTIL_FileList_Internal {
     CMUTIL_FileList		base;
     CMUTIL_Array		*files;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_FileList_Internal;
 
 typedef struct CMUTIL_File_Internal {
@@ -130,7 +130,7 @@ typedef struct CMUTIL_File_Internal {
     char				*path;
     char				*name;
     CMUTIL_Bool			isref;
-    CMUTIL_Mem_st		*memst;
+    CMUTIL_Mem		*memst;
 } CMUTIL_File_Internal;
 
 CMUTIL_STATIC int CMUTIL_FileListCount(CMUTIL_FileList *flist)
@@ -171,7 +171,7 @@ static CMUTIL_FileList g_cmutil_filelist = {
 };
 
 CMUTIL_STATIC CMUTIL_FileList_Internal *CMUTIL_FileListCreate(
-        CMUTIL_Mem_st *memst)
+        CMUTIL_Mem *memst)
 {
     CMUTIL_FileList_Internal *res =
             memst->Alloc(sizeof(CMUTIL_FileList_Internal));
@@ -409,7 +409,7 @@ static CMUTIL_File g_cmutil_file = {
     CMUTIL_FileDestroy
 };
 
-CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem_st *memst, const char *path)
+CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path)
 {
     if (path) {
         char rpath[2048];
@@ -445,7 +445,7 @@ CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem_st *memst, const char *path)
 
 CMUTIL_File *CMUTIL_FileCreate(const char *path)
 {
-    return CMUTIL_FileCreateInternal(__CMUTIL_Mem, path);
+    return CMUTIL_FileCreateInternal(CMUTIL_GetMem(), path);
 }
 
 #if defined(MSWIN)
