@@ -59,21 +59,34 @@ void CMUTIL_MemDebugInit(CMUTIL_MemOper memoper);
 void CMUTIL_MemDebugClear();
 
 
-CMUTIL_Array *CMUTIL_ArrayCreateInternal(CMUTIL_Mem *mem,
+CMUTIL_Array *CMUTIL_ArrayCreateInternal(
+        CMUTIL_Mem *mem,
         int initcapacity,
         int(*comparator)(const void*,const void*),
         void(*freecb)(void*));
 
-CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(CMUTIL_Mem *memst);
+CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(
+        CMUTIL_Mem *memst);
 
-CMUTIL_Cond *CMUTIL_CondCreateInternal(CMUTIL_Mem *memst, CMUTIL_Bool manual_reset);
-CMUTIL_Mutex *CMUTIL_MutexCreateInternal(CMUTIL_Mem *memst);
-CMUTIL_Thread *CMUTIL_ThreadCreateInternal(CMUTIL_Mem *memst, void*(*proc)(void*), void *udata,
+CMUTIL_Cond *CMUTIL_CondCreateInternal(
+        CMUTIL_Mem *memst,
+        CMUTIL_Bool manual_reset);
+CMUTIL_Mutex *CMUTIL_MutexCreateInternal(
+        CMUTIL_Mem *memst);
+CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
+        CMUTIL_Mem *memst,
+        void*(*proc)(void*),
+        void *udata,
         const char *name);
-CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(CMUTIL_Mem *memst, int initcnt);
-CMUTIL_RWLock *CMUTIL_RWLockCreateInternal(CMUTIL_Mem *memst);
+CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
+        CMUTIL_Mem *memst,
+        int initcnt);
+CMUTIL_RWLock *CMUTIL_RWLockCreateInternal(
+        CMUTIL_Mem *memst);
 CMUTIL_Timer *CMUTIL_TimerCreateInternal(
-        CMUTIL_Mem *memst, long precision, int threads);
+        CMUTIL_Mem *memst,
+        long precision,
+        int threads);
 
 CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_Config *CMUTIL_ConfigLoadInternal(

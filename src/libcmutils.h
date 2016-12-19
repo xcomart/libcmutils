@@ -99,12 +99,6 @@ extern "C" {
  * 64 bit signed integer definition.
  */
 #if !defined(int64)
-//# if defined(_MSC_VER)
-//typedef __int64 int64;
-//# else
-//typedef long long int64;
-//# endif
-//# define int64 int64
 # define int64 int64_t
 #endif
 
@@ -112,12 +106,6 @@ extern "C" {
  * 64 bit unsigned integer definition.
  */
 #if !defined(uint64)
-//# if defined(_MSC_VER)
-//typedef unsigned __int64 uint64;
-//# else
-//typedef unsigned long long uint64;
-//# endif
-//# define uint64 uint64
 # define uint64 uint64_t
 #endif
 
@@ -147,15 +135,8 @@ extern "C" {
  * 64 bit signed / unsigned integer printf format string.
  */
 #if !defined(PRINT64I)
-//# if defined(_MSC_VER)
-//#  define PRINT64I  "%I64d"
-//#  define PRINT64U  "%I64u"
-//# else
-//#  define PRINT64I  "%lld"
-//#  define PRINT64U  "%llu"
-//# endif
-# define PRINT64I  PRIi64
-# define PRINT64U  PRIu64
+# define PRINT64I  "%"PRIi64
+# define PRINT64U  "%"PRIu64
 #endif
 
 /**
@@ -286,7 +267,8 @@ typedef enum CMUTIL_MemOper {
  *  CMUTIL_MemRelease, CMUTIL_MemDebug and CMUTIL_MemRecycle.
  *
  */
-CMUTIL_API void CMUTIL_Init(CMUTIL_MemOper memoper);
+CMUTIL_API void CMUTIL_Init(
+        CMUTIL_MemOper memoper);
 
 /**
  * @brief Clear allocated resource for this library.
@@ -297,6 +279,20 @@ CMUTIL_API void CMUTIL_Clear();
  * Memory operation interface.
  */
 typedef struct CMUTIL_Mem {
+    /**
+     * @brief Allocate memory.
+     *
+     * Allocates <code>size<code> bytes and returns a pointer to the allocated
+     * memory. The memory is not initialized. If size is 0, then this function
+     * returns either NULL, or a unique pointer value that can later be
+     * successfully passed to <code>Free</code>.
+     *
+     * @param size  Count of bytes to be allocated.
+     * @return A pointer to the allocated memory, which is suitably aligned for
+     *  any built-in type. On error this function returns NULL. NULL may also
+     *  be returned by a successfull call to this function with a
+     *  <code>size</code> of zero.
+     */
     void *(*Alloc)(
             size_t size);
     void *(*Calloc)(
