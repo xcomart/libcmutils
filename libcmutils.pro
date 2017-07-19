@@ -12,7 +12,7 @@ win32 {
 }
 
 CONFIG(debug, debug|release) {
-	DEFINES += DEBUG
+    DEFINES += DEBUG
     DESTDIR = $$BUILD_DIR/$$LIB_DIR/debug
 }
 
@@ -22,19 +22,27 @@ CONFIG(release, debug|release) {
 }
 
 unix {
-	target.path = /usr/lib
-	INSTALLS += target
+    target.path = /usr/lib
+    INSTALLS += target
 }
 win32 {
-	LIBS += -lws2_32
-#    COPY_CMD = copy
+    LIBS += -lws2_32
+}
+
+win32-msvc* {
+    COPY_CMD = copy
+    DEFINES += _CRT_SECURE_NO_WARNINGS _WINSOCK_DEPRECATED_NO_WARNINGS
 }
 
 !linux {
-	LIBS += -liconv
+    !win32-msvc* {
+        LIBS += -liconv
+    }
 }
 
-QMAKE_CFLAGS += -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
+!win32-msvc* {
+    QMAKE_CFLAGS += -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
+}
 
 SOURCES += \
     src/arrays.c \
@@ -81,9 +89,11 @@ DISTFILES += \
     demo/Makefile.in \
     VERSION
 
-INCLUDE_TARGET.commands = $$COPY_CMD ../libcmutils/src/libcmutils.h $$BUILD_DIR/include
+!win32-msvc* {
+    INCLUDE_TARGET.commands = $$COPY_CMD ./src/libcmutils.h $$BUILD_DIR/include
 
-QMAKE_EXTRA_TARGETS += INCLUDE_TARGET
+    QMAKE_EXTRA_TARGETS += INCLUDE_TARGET
 
-POST_TARGETDEPS += INCLUDE_TARGET
+    POST_TARGETDEPS += INCLUDE_TARGET
+}
 

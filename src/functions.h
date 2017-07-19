@@ -55,6 +55,8 @@ void CMUTIL_CallStackInit();
 void CMUTIL_CallStackClear();
 void CMUTIL_NetworkInit();
 void CMUTIL_NetworkClear();
+void CMUTIL_StringBaseInit();
+void CMUTIL_StringBaseClear();
 void CMUTIL_MemDebugInit(CMUTIL_MemOper memoper);
 void CMUTIL_MemDebugClear();
 
@@ -117,7 +119,8 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJsonInternal(
 CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem *memst);
 
 CMUTIL_Map *CMUTIL_MapCreateInternal(
-        CMUTIL_Mem *memst, int bucketsize, void(*freecb)(void*));
+        CMUTIL_Mem *memst, int bucketsize,
+        CMUTIL_Bool isucase, void(*freecb)(void*));
 
 CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem *memst);

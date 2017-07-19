@@ -28,6 +28,7 @@ void CMUTIL_Init(CMUTIL_MemOper memoper)
         CMUTIL_CallStackInit();
         CMUTIL_MemDebugInit(memoper);
         CMUTIL_ThreadInit();
+        CMUTIL_StringBaseInit();
         CMUTIL_XmlInit();
         CMUTIL_NetworkInit();
         CMUTIL_LogInit();
@@ -43,6 +44,7 @@ void CMUTIL_Clear()
             CMUTIL_LogClear();
             CMUTIL_NetworkClear();
             CMUTIL_XmlClear();
+            CMUTIL_StringBaseClear();
             CMUTIL_ThreadClear();
             CMUTIL_MemDebugClear();
             CMUTIL_CallStackClear();

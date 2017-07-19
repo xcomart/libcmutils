@@ -150,7 +150,7 @@ CMUTIL_STATIC void CMUTIL_JsonToStringInternal(
 CMUTIL_STATIC void CMUTIL_JsonToString(
         CMUTIL_Json *json, CMUTIL_String *buf, CMUTIL_Bool pretty)
 {
-    return CMUTIL_JsonToStringInternal(json, buf, pretty, 0);
+    CMUTIL_JsonToStringInternal(json, buf, pretty, 0);
 }
 
 CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonValueClone(CMUTIL_Json *json)
@@ -292,14 +292,16 @@ CMUTIL_STATIC void CMUTIL_JsonValueSetDouble(
 CMUTIL_STATIC void CMUTIL_JsonValueSetString(
         CMUTIL_JsonValue *jval, const char *value)
 {
-    CMUTIL_JsonValueSetBase(jval, value, strlen(value), CMUTIL_JsonValueString);
+    CMUTIL_JsonValueSetBase(
+                jval, value, (int)strlen(value), CMUTIL_JsonValueString);
 }
 
 CMUTIL_STATIC void CMUTIL_JsonValueSetBoolean(
         CMUTIL_JsonValue *jval, CMUTIL_Bool value)
 {
     const char *sval = value? "true":"false";
-    CMUTIL_JsonValueSetBase(jval, sval, strlen(sval), CMUTIL_JsonValueBoolean);
+    CMUTIL_JsonValueSetBase(
+                jval, sval, (int)strlen(sval), CMUTIL_JsonValueBoolean);
 }
 
 CMUTIL_STATIC void CMUTIL_JsonValueSetNull(CMUTIL_JsonValue *jval)
@@ -505,7 +507,8 @@ CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst)
     memset(res, 0x0, sizeof(CMUTIL_JsonObject_Internal));
     memcpy(res, &g_cmutil_jsonobject, sizeof(CMUTIL_JsonObject));
     res->memst = memst;
-    res->map = CMUTIL_MapCreateInternal(memst, 256, CMUTIL_JsonDestroyInternal);
+    res->map = CMUTIL_MapCreateInternal(
+                memst, 256, CMUTIL_False, CMUTIL_JsonDestroyInternal);
     return (CMUTIL_JsonObject*)res;
 }
 

@@ -20,13 +20,189 @@
 #include "functions.h"
 
 #include <ctype.h>
-#include <iconv.h>
+
+#if defined(_MSC_VER)
+struct CMUTIL_CSPair {
+    char    *csname;
+    int     cpno;
+} g_msvc_cspiars[] = {
+     {"IBM037",37}  // IBM EBCDIC US-Canada
+    ,{"IBM437",437}  // OEM United States
+    ,{"IBM500",500}  // IBM EBCDIC International
+    ,{"ASMO-708",708}  // Arabic (ASMO 708)
+    ,{"DOS-720",720}  // Arabic (Transparent ASMO); Arabic (DOS)
+    ,{"IBM737",737}  // OEM Greek (formerly 437G); Greek (DOS)
+    ,{"IBM775",775}  // OEM Baltic; Baltic (DOS)
+    ,{"IBM850",850}  // OEM Multilingual Latin 1; Western European (DOS)
+    ,{"IBM852",852}  // OEM Latin 2; Central European (DOS)
+    ,{"IBM855",855}  // OEM Cyrillic (primarily Russian)
+    ,{"IBM857",857}  // OEM Turkish; Turkish (DOS)
+    ,{"IBM00858",858}  // OEM Multilingual Latin 1 + Euro symbol
+    ,{"IBM860",860}  // OEM Portuguese; Portuguese (DOS)
+    ,{"IBM861",861}  // OEM Icelandic; Icelandic (DOS)
+    ,{"DOS-862",862}  // OEM Hebrew; Hebrew (DOS)
+    ,{"IBM863",863}  // OEM French Canadian; French Canadian (DOS)
+    ,{"IBM864",864}  // OEM Arabic; Arabic (864)
+    ,{"IBM865",865}  // OEM Nordic; Nordic (DOS)
+    ,{"CP866",866}  // OEM Russian; Cyrillic (DOS)
+    ,{"IBM869",869}  // OEM Modern Greek; Greek, Modern (DOS)
+    ,{"IBM870",870}  // IBM EBCDIC Multilingual/ROECE (Latin 2); IBM EBCDIC Multilingual Latin 2
+    ,{"WINDOWS-874",874}  // ANSI/OEM Thai (ISO 8859-11); Thai (Windows)
+    ,{"CP875",875}  // IBM EBCDIC Greek Modern
+    ,{"SHIFT_JIS",932}  // ANSI/OEM Japanese; Japanese (Shift-JIS)
+    ,{"GB2312",936}  // ANSI/OEM Simplified Chinese (PRC, Singapore); Chinese Simplified (GB2312)
+    ,{"KS_C_5601-1987",949}  // ANSI/OEM Korean (Unified Hangul Code)
+    ,{"CP949",949}  // ANSI/OEM Korean (Unified Hangul Code)
+    ,{"BIG5",950}  // ANSI/OEM Traditional Chinese (Taiwan; Hong Kong SAR, PRC); Chinese Traditional (Big5)
+    ,{"IBM1026",1026}  // IBM EBCDIC Turkish (Latin 5)
+    ,{"IBM01047",1047}  // IBM EBCDIC Latin 1/Open System
+    ,{"IBM01140",1140}  // IBM EBCDIC US-Canada (037 + Euro symbol); IBM EBCDIC (US-Canada-Euro)
+    ,{"IBM01141",1141}  // IBM EBCDIC Germany (20273 + Euro symbol); IBM EBCDIC (Germany-Euro)
+    ,{"IBM01142",1142}  // IBM EBCDIC Denmark-Norway (20277 + Euro symbol); IBM EBCDIC (Denmark-Norway-Euro)
+    ,{"IBM01143",1143}  // IBM EBCDIC Finland-Sweden (20278 + Euro symbol); IBM EBCDIC (Finland-Sweden-Euro)
+    ,{"IBM01144",1144}  // IBM EBCDIC Italy (20280 + Euro symbol); IBM EBCDIC (Italy-Euro)
+    ,{"IBM01145",1145}  // IBM EBCDIC Latin America-Spain (20284 + Euro symbol); IBM EBCDIC (Spain-Euro)
+    ,{"IBM01146",1146}  // IBM EBCDIC United Kingdom (20285 + Euro symbol); IBM EBCDIC (UK-Euro)
+    ,{"IBM01147",1147}  // IBM EBCDIC France (20297 + Euro symbol); IBM EBCDIC (France-Euro)
+    ,{"IBM01148",1148}  // IBM EBCDIC International (500 + Euro symbol); IBM EBCDIC (International-Euro)
+    ,{"IBM01149",1149}  // IBM EBCDIC Icelandic (20871 + Euro symbol); IBM EBCDIC (Icelandic-Euro)
+    ,{"UTF-16",1200}  // Unicode UTF-16, little endian byte order (BMP of ISO 10646); available only to managed applications
+    ,{"UNICODEFFFE",1201}  // Unicode UTF-16, big endian byte order; available only to managed applications
+    ,{"WINDOWS-1250",1250}  // ANSI Central European; Central European (Windows)
+    ,{"WINDOWS-1251",1251}  // ANSI Cyrillic; Cyrillic (Windows)
+    ,{"WINDOWS-1252",1252}  // ANSI Latin 1; Western European (Windows)
+    ,{"WINDOWS-1253",1253}  // ANSI Greek; Greek (Windows)
+    ,{"WINDOWS-1254",1254}  // ANSI Turkish; Turkish (Windows)
+    ,{"WINDOWS-1255",1255}  // ANSI Hebrew; Hebrew (Windows)
+    ,{"WINDOWS-1256",1256}  // ANSI Arabic; Arabic (Windows)
+    ,{"WINDOWS-1257",1257}  // ANSI Baltic; Baltic (Windows)
+    ,{"WINDOWS-1258",1258}  // ANSI/OEM Vietnamese; Vietnamese (Windows)
+    ,{"JOHAB",1361}  // Korean (Johab)
+    ,{"MACINTOSH",10000}  // MAC Roman; Western European (Mac)
+    ,{"X-MAC-JAPANESE",10001}  // Japanese (Mac)
+    ,{"X-MAC-CHINESETRAD",10002}  // MAC Traditional Chinese (Big5); Chinese Traditional (Mac)
+    ,{"X-MAC-KOREAN",10003}  // Korean (Mac)
+    ,{"X-MAC-ARABIC",10004}  // Arabic (Mac)
+    ,{"X-MAC-HEBREW",10005}  // Hebrew (Mac)
+    ,{"X-MAC-GREEK",10006}  // Greek (Mac)
+    ,{"X-MAC-CYRILLIC",10007}  // Cyrillic (Mac)
+    ,{"X-MAC-CHINESESIMP",10008}  // MAC Simplified Chinese (GB 2312); Chinese Simplified (Mac)
+    ,{"X-MAC-ROMANIAN",10010}  // Romanian (Mac)
+    ,{"X-MAC-UKRAINIAN",10017}  // Ukrainian (Mac)
+    ,{"X-MAC-THAI",10021}  // Thai (Mac)
+    ,{"X-MAC-CE",10029}  // MAC Latin 2; Central European (Mac)
+    ,{"X-MAC-ICELANDIC",10079}  // Icelandic (Mac)
+    ,{"X-MAC-TURKISH",10081}  // Turkish (Mac)
+    ,{"X-MAC-CROATIAN",10082}  // Croatian (Mac)
+    ,{"UTF-32",12000}  // Unicode UTF-32, little endian byte order; available only to managed applications
+    ,{"UTF-32BE",12001}  // Unicode UTF-32, big endian byte order; available only to managed applications
+    ,{"X-CHINESE_CNS",20000}  // CNS Taiwan; Chinese Traditional (CNS)
+    ,{"X-CP20001",20001}  // TCA Taiwan
+    ,{"X_CHINESE-ETEN",20002}  // Eten Taiwan; Chinese Traditional (Eten)
+    ,{"X-CP20003",20003}  // IBM5550 Taiwan
+    ,{"X-CP20004",20004}  // TeleText Taiwan
+    ,{"X-CP20005",20005}  // Wang Taiwan
+    ,{"X-IA5",20105}  // IA5 (IRV International Alphabet No. 5, 7-bit); Western European (IA5)
+    ,{"X-IA5-GERMAN",20106}  // IA5 German (7-bit)
+    ,{"X-IA5-SWEDISH",20107}  // IA5 Swedish (7-bit)
+    ,{"X-IA5-NORWEGIAN",20108}  // IA5 Norwegian (7-bit)
+    ,{"US-ASCII",20127}  // US-ASCII (7-bit)
+    ,{"X-CP20261",20261}  // T.61
+    ,{"X-CP20269",20269}  // ISO 6937 Non-Spacing Accent
+    ,{"IBM273",20273}  // IBM EBCDIC Germany
+    ,{"IBM277",20277}  // IBM EBCDIC Denmark-Norway
+    ,{"IBM278",20278}  // IBM EBCDIC Finland-Sweden
+    ,{"IBM280",20280}  // IBM EBCDIC Italy
+    ,{"IBM284",20284}  // IBM EBCDIC Latin America-Spain
+    ,{"IBM285",20285}  // IBM EBCDIC United Kingdom
+    ,{"IBM290",20290}  // IBM EBCDIC Japanese Katakana Extended
+    ,{"IBM297",20297}  // IBM EBCDIC France
+    ,{"IBM420",20420}  // IBM EBCDIC Arabic
+    ,{"IBM423",20423}  // IBM EBCDIC Greek
+    ,{"IBM424",20424}  // IBM EBCDIC Hebrew
+    ,{"X-EBCDIC-KOREANEXTENDED",20833}  // IBM EBCDIC Korean Extended
+    ,{"IBM-THAI",20838}  // IBM EBCDIC Thai
+    ,{"KOI8-R",20866}  // Russian (KOI8-R); Cyrillic (KOI8-R)
+    ,{"IBM871",20871}  // IBM EBCDIC Icelandic
+    ,{"IBM880",20880}  // IBM EBCDIC Cyrillic Russian
+    ,{"IBM905",20905}  // IBM EBCDIC Turkish
+    ,{"IBM00924",20924}  // IBM EBCDIC Latin 1/Open System (1047 + Euro symbol)
+    ,{"EUC-JP",20932}  // Japanese (JIS 0208-1990 and 0212-1990)
+    ,{"X-CP20936",20936}  // Simplified Chinese (GB2312); Chinese Simplified (GB2312-80)
+    ,{"X-CP20949",20949}  // Korean Wansung
+    ,{"CP1025",21025}  // IBM EBCDIC Cyrillic Serbian-Bulgarian
+    ,{"KOI8-U",21866}  // Ukrainian (KOI8-U); Cyrillic (KOI8-U)
+    ,{"ISO-8859-1",28591}  // ISO 8859-1 Latin 1; Western European (ISO)
+    ,{"ISO-8859-2",28592}  // ISO 8859-2 Central European; Central European (ISO)
+    ,{"ISO-8859-3",28593}  // ISO 8859-3 Latin 3
+    ,{"ISO-8859-4",28594}  // ISO 8859-4 Baltic
+    ,{"ISO-8859-5",28595}  // ISO 8859-5 Cyrillic
+    ,{"ISO-8859-6",28596}  // ISO 8859-6 Arabic
+    ,{"ISO-8859-7",28597}  // ISO 8859-7 Greek
+    ,{"ISO-8859-8",28598}  // ISO 8859-8 Hebrew; Hebrew (ISO-Visual)
+    ,{"ISO-8859-9",28599}  // ISO 8859-9 Turkish
+    ,{"ISO-8859-13",28603}  // ISO 8859-13 Estonian
+    ,{"ISO-8859-15",28605}  // ISO 8859-15 Latin 9
+    ,{"X-EUROPA",29001}  // Europa 3
+    ,{"ISO-8859-8-I",38598}  // ISO 8859-8 Hebrew; Hebrew (ISO-Logical)
+    ,{"ISO-2022-JP",50220}  // ISO 2022 Japanese with no halfwidth Katakana; Japanese (JIS)
+    ,{"CSISO2022JP",50221}  // ISO 2022 Japanese with halfwidth Katakana; Japanese (JIS-Allow 1 byte Kana)
+    ,{"ISO-2022-JP",50222}  // ISO 2022 Japanese JIS X 0201-1989; Japanese (JIS-Allow 1 byte Kana - SO/SI)
+    ,{"ISO-2022-KR",50225}  // ISO 2022 Korean
+    ,{"X-CP50227",50227}  // ISO 2022 Simplified Chinese; Chinese Simplified (ISO 2022)
+    ,{"EUC-JP",51932}  // EUC Japanese
+    ,{"EUC-CN",51936}  // EUC Simplified Chinese; Chinese Simplified (EUC)
+    ,{"EUC-KR",51949}  // EUC Korean
+    ,{"EUCKR",51949}  // EUC Korean
+    ,{"HZ-GB-2312",52936}  // HZ-GB2312 Simplified Chinese; Chinese Simplified (HZ)
+    ,{"GB18030",54936}  // Windows XP and later: GB18030 Simplified Chinese (4 byte); Chinese Simplified (GB18030)
+    ,{"X-ISCII-DE",57002}  // ISCII Devanagari
+    ,{"X-ISCII-BE",57003}  // ISCII Bangla
+    ,{"X-ISCII-TA",57004}  // ISCII Tamil
+    ,{"X-ISCII-TE",57005}  // ISCII Telugu
+    ,{"X-ISCII-AS",57006}  // ISCII Assamese
+    ,{"X-ISCII-OR",57007}  // ISCII Odia
+    ,{"X-ISCII-KA",57008}  // ISCII Kannada
+    ,{"X-ISCII-MA",57009}  // ISCII Malayalam
+    ,{"X-ISCII-GU",57010}  // ISCII Gujarati
+    ,{"X-ISCII-PA",57011}  // ISCII Punjabi
+    ,{"UTF-7",65000}  // Unicode (UTF-7)
+    ,{"UTF-8",65001}  // Unicode (UTF-8)
+    ,{"UTF8",65001}  // Unicode (UTF-8)
+    ,{NULL, 0}
+};
+static CMUTIL_Map *g_cmutil_csmap = NULL;
+#else
+# include <iconv.h>
+#endif
 
 CMUTIL_LogDefine("cmutil.string")
 
 //*****************************************************************************
 // CMUTIL_String implementation
 //*****************************************************************************
+
+void CMUTIL_StringBaseInit()
+{
+#if defined(_MSC_VER)
+    struct CMUTIL_CSPair *pair = NULL;
+    g_cmutil_csmap = CMUTIL_MapCreateEx(CMUTIL_MAP_DEFAULT, CMUTIL_True, NULL);
+    pair = g_msvc_cspiars;
+    while (pair) {
+        CMUTIL_CALL(g_cmutil_csmap, Put, pair->csname, pair);
+        pair++;
+    }
+#endif
+}
+
+void CMUTIL_StringBaseClear()
+{
+#if defined(_MSC_VER)
+    CMUTIL_CALL(g_cmutil_csmap, Destroy);
+#endif
+}
+
+
 
 typedef struct CMUTIL_String_Internal CMUTIL_String_Internal;
 struct CMUTIL_String_Internal {
@@ -500,10 +676,10 @@ CMUTIL_StringArray *CMUTIL_StringArrayCreateEx(int initcapacity)
 //*****************************************************************************
 
 typedef struct CMUTIL_CSConv_Internal {
-    CMUTIL_CSConv		base;
-    char				*frcs;
-    char				*tocs;
-    CMUTIL_Mem		*memst;
+    CMUTIL_CSConv   base;
+    char            *frcs;
+    char            *tocs;
+    CMUTIL_Mem      *memst;
 } CMUTIL_CSConv_Internal;
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_CSConvConv(
@@ -513,6 +689,36 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_CSConvConv(
     CMUTIL_String *res = NULL;
 
     if (instr) {
+#if defined(_MSC_VER)
+        struct CMUTIL_CSPair *pair1, *pair2;
+        pair1 = CMUTIL_CALL(g_cmutil_csmap, Get, frcs);
+        pair2 = CMUTIL_CALL(g_cmutil_csmap, Get, tocs);
+        if (pair1 && pair2) {
+            // convert mbcs to widechar and convert widechar to mbcs
+            WCHAR *wstr = NULL;
+            int cvsize;
+            int size = CMUTIL_CALL(instr, GetSize);
+            char *rbuf = NULL;
+            wstr = memst->Alloc(sizeof(WCHAR) * size);
+            cvsize = MultiByteToWideChar(
+                        pair1->cpno, 0, CMUTIL_CALL(instr, GetCString),
+                        size, wstr, size);
+            if (cvsize > 0) {
+                rbuf = memst->Alloc(cvsize * 4);
+                cvsize = WideCharToMultiByte(
+                            pair2->cpno, 0, wstr, cvsize, rbuf, cvsize*4,
+                            NULL, NULL);
+            }
+            if (cvsize > 0) {
+                CMUTIL_String_Internal *pres = NULL;
+                res = CMUTIL_StringCreateInternal(memst, cvsize, NULL);
+                pres = (CMUTIL_String_Internal*)res;
+                memcpy(pres->data, rbuf, cvsize);
+                *(pres->data + cvsize) = 0x0;
+                pres->size = cvsize;
+            }
+        }
+#else
         iconv_t icv;
         size_t insz, outsz, osz, ressz;
         char *obuf, *osave, *src;
@@ -548,6 +754,7 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_CSConvConv(
                 *(pres->data + pres->size) = 0x0;
             }
         }
+#endif
     }
     return res;
 }

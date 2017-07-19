@@ -117,7 +117,7 @@ void CMUTIL_XmlInit()
 {
     struct CMUTIL_EscapePair *pair = g_cmutil_xml_escapes;
     g_cmutil_xml_escape_map = CMUTIL_MapCreateInternal(
-                CMUTIL_GetMem(), 10, NULL);
+                CMUTIL_GetMem(), 10, CMUTIL_False, NULL);
 
     while (pair->key) {
         CMUTIL_CALL(g_cmutil_xml_escape_map, Put, pair->key, pair->val);
@@ -372,7 +372,7 @@ CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
     res->tagname = CMUTIL_StringCreateInternal(memst, namelen, NULL);
     CMUTIL_CALL(res->tagname, AddNString, tagname, namelen);
     res->attributes = CMUTIL_MapCreateInternal(
-                memst, 50, CMUTIL_XmlStringDestroyer);
+                memst, 50, CMUTIL_False, CMUTIL_XmlStringDestroyer);
     res->children = CMUTIL_ArrayCreateInternal(
                 memst, 5, NULL, CMUTIL_XmlNodeDestroyer);
     return (CMUTIL_XmlNode*)res;

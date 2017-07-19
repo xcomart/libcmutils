@@ -346,7 +346,7 @@ void CMUTIL_LogInit()
 {
     int i;
     g_cmutil_log_item_map = CMUTIL_MapCreateInternal(
-                CMUTIL_GetMem(), 50, NULL);
+                CMUTIL_GetMem(), 50, CMUTIL_False, NULL);
     for (i = 0; i < LogType_Length; i++)
         g_cmutil_log_type_arr[i] = i;
 
@@ -601,7 +601,8 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
 {
     int i;
     CMUTIL_Map *map = CMUTIL_MapCreateInternal(
-                item->memst, 10, CMUTIL_LogAppenderStringDestroyer);
+                item->memst, 10, CMUTIL_False,
+                CMUTIL_LogAppenderStringDestroyer);
     CMUTIL_StringArray *args = CMUTIL_StringSplitInternal(
                 item->memst, extra, ",");
     for (i = 0; i < CMUTIL_CALL(args, GetSize); i++) {
@@ -1665,7 +1666,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem *memst)
     res->base.Destroy = CMUTIL_LogSystemDestroy;
     res->memst = memst;
     res->appenders = CMUTIL_MapCreateInternal(
-                memst, 256, CMUTIL_LogAppenderDestroyer);
+                memst, 256, CMUTIL_False, CMUTIL_LogAppenderDestroyer);
     res->cloggers = CMUTIL_ArrayCreateInternal(
                 memst, 5, CMUTIL_ConfLoggerComparator,
                 CMUTIL_ConfLoggerDestroyer);
@@ -1762,7 +1763,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessOneAppender(
     const char *sname = NULL, *spattern = NULL;
     CMUTIL_LogAppender *appender = NULL;
     CMUTIL_Bool async = CMUTIL_False;
-    long asyncBufsz = 256;
+    int64 asyncBufsz = 256;
 
     if (CMUTIL_CALL(json, GetType) != CMUTIL_JsonTypeObject) {
         printf("invalid configuration structure.\n");
@@ -1853,7 +1854,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessOneAppender(
     }
 
     if (appender) {
-        if (async) CMUTIL_CALL(appender, SetAsync, asyncBufsz);
+        if (async) CMUTIL_CALL(appender, SetAsync, (int)asyncBufsz);
         CMUTIL_CALL(&(lsys->base), AddAppender, appender);
         return CMUTIL_True;
     } else {

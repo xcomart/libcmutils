@@ -113,7 +113,7 @@ extern "C" {
  * 64 bit signed / unsigned integer max values.
  */
 #if !defined(INT64_MAX)
-# define INT64_MAX      i64(0x7FFFFFFFFFFFFFFF)
+# define INT64_MAX  i64(0x7FFFFFFFFFFFFFFF)
 #endif
 #if !defined(UINT64_MAX)
 # define UINT64_MAX ui64(0xFFFFFFFFFFFFFFFF)
@@ -876,15 +876,70 @@ struct CMUTIL_Array {
      *         NULL if there is no item in this array.
      */
     void *(*Top)(CMUTIL_Array *array);
+
+    /**
+     * @brief Get the bottom element from this array like stack operation.
+     *
+     * Get the item at beginning of this array.
+     *
+     * @param array This dynamic array object.
+     * @return An item at the beginning of this array
+     *         if the size of this array is bigger than zero.
+     *         NULL if there is no item in this array.
+     */
     void *(*Bottom)(CMUTIL_Array *array);
+
+    /**
+     * @brief Get iterator of all item in this array.
+     *
+     * @param array This dynamic array object.
+     * @return An {@link CMUTIL_Iterator CMUTIL_Iterator} object of
+     *         all item in this array.
+     * @see {@link CMUTIL_Iterator CMUTIL_Iterator}
+     */
     CMUTIL_Iterator *(*Iterator)(CMUTIL_Array *array);
+
+    /**
+     * @brief Clear this array object.
+     *
+     * Clear all item in this array object.
+     * If <code>freecb</code> parameter is supplied, this callback will be
+     * called to all items in this array.
+     *
+     * @param array This dynamic array object.
+     */
     void (*Clear)(CMUTIL_Array *array);
+
+    /**
+     * @brief Destroy this array object.
+     *
+     * Destory this object and it's internal allocations.
+     * If <code>freecb</code> parameter is supplied, this callback will be
+     * called to all items in this array.
+     *
+     * @param array This dynamic array object.
+     */
     void (*Destroy)(CMUTIL_Array *array);
 };
 
+/**
+ * Default initial capacity of dynamic array.
+ */
 #define CMUTIL_ARRAY_DEFAULT    10
+
+/**
+ * @brief Creates an unsorted dynamic array.
+ *
+ * @return A new dynamic array.
+ */
 #define CMUTIL_ArrayCreate()    \
         CMUTIL_ArrayCreateEx(CMUTIL_ARRAY_DEFAULT, NULL, NULL)
+
+/**
+ * @brief CMUTIL_ArrayCreateEx
+ * @param initcapacity
+ * @return
+ */
 CMUTIL_API CMUTIL_Array *CMUTIL_ArrayCreateEx(
         int initcapacity,
         int (*comparator)(const void*,const void*),
@@ -1009,8 +1064,10 @@ struct CMUTIL_Map {
 };
 
 #define CMUTIL_MAP_DEFAULT	256
-#define CMUTIL_MapCreate()	CMUTIL_MapCreateEx(CMUTIL_MAP_DEFAULT, NULL)
-CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(int bucketsize, void(*freecb)(void*));
+#define CMUTIL_MapCreate()	CMUTIL_MapCreateEx(\
+        CMUTIL_MAP_DEFAULT, CMUTIL_False, NULL)
+CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
+        int bucketsize, CMUTIL_Bool isucase, void(*freecb)(void*));
 
 
 typedef struct CMUTIL_List CMUTIL_List;
