@@ -108,7 +108,7 @@ CMUTIL_Library *CMUTIL_LibraryCreateInternal(
     res->library = dlopen(slib, RTLD_NOW);
 #endif
     res->mutex = CMUTIL_MutexCreateInternal(memst);
-    res->procs = CMUTIL_MapCreateInternal(memst, 10, NULL);
+    res->procs = CMUTIL_MapCreateInternal(memst, 10, CMUTIL_False, NULL);
 
     return (CMUTIL_Library*)res;
 }

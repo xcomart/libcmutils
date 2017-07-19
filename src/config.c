@@ -82,7 +82,7 @@ CMUTIL_STATIC int AppendTrimmedLine(CMUTIL_String *rstr, char *in, char *spaces)
 
 }
 
-CMUTIL_STATIC void CNConfItemFree(void *data)
+CMUTIL_STATIC void ConfItemDestroy(void *data)
 {
     if (data) {
         CMUTIL_ConfItem *item = (CMUTIL_ConfItem*)data;
@@ -112,7 +112,7 @@ CMUTIL_STATIC void CMUTIL_ConfigDestroy(CMUTIL_Config *conf)
 }
 
 #define DOFAILED	if (!*p) do { \
-        failed = 1; CNConfItemFree(item); goto FAILED; } while(0)
+        failed = 1; ConfItemDestroy(item); goto FAILED; } while(0)
 
 void CMUTIL_ConfigSave(CMUTIL_Config *conf, const char *confpath)
 {
@@ -216,10 +216,11 @@ CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem *memst)
     memcpy(res, &g_cmutil_config, sizeof(CMUTIL_Config));
     res->memst = memst;
     res->confs = CMUTIL_MapCreateInternal(
-                memst, CMUTIL_MAP_DEFAULT, memst->Free);
+                memst, CMUTIL_MAP_DEFAULT, CMUTIL_False, memst->Free);
     res->sequence = CMUTIL_ArrayCreateInternal(
-                memst, 100, NULL, CNConfItemFree);
-    res->revconf = CMUTIL_MapCreateInternal(memst, CMUTIL_MAP_DEFAULT, NULL);
+                memst, 100, NULL, ConfItemDestroy);
+    res->revconf = CMUTIL_MapCreateInternal(
+                memst, CMUTIL_MAP_DEFAULT, CMUTIL_False, NULL);
     return (CMUTIL_Config*)res;
 }
 
