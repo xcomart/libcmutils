@@ -142,8 +142,18 @@ CMUTIL_XmlNode *CMUTIL_XmlParseFileInternal(
 CMUTIL_Socket *CMUTIL_SocketConnectInternal(
         CMUTIL_Mem *memst, const char *host, int port, long timeout,
         CMUTIL_Bool silent);
+CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
+        CMUTIL_Mem *memst,
+        const char *cert, const char *key, const char *ca,
+        const char *servername,
+        const char *host, int port, long timeout,
+        CMUTIL_Bool silent);
 CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
         CMUTIL_Mem *memst, const char *host, int port, int qcnt,
+        CMUTIL_Bool silent);
+CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreateInternal(
+        CMUTIL_Mem *memst, const char *host, int port, int qcnt,
+        const char *cert, const char *key, const char *ca,
         CMUTIL_Bool silent);
 
 CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat);

@@ -28,6 +28,14 @@ static WSADATA wsa_data;
 # include <netinet/tcp.h>
 #endif
 
+#if defined(CMUTIL_SUPPORT_SSL)
+# if defined(CMUTIL_SSL_USE_OPENSSL)
+#  include <openssl/ssl.h>
+# else
+#  include <gnutls/gnutls.h>
+# endif
+#endif
+
 CMUTIL_LogDefine("cmutils.network")
 
 #if defined(APPLE)
@@ -137,7 +145,7 @@ typedef struct CMUTIL_Socket_Internal {
     SOCKET				sock;
     struct sockaddr_in	peer;
     CMUTIL_Bool			silent;
-    CMUTIL_Mem		*memst;
+    CMUTIL_Mem          *memst;
 } CMUTIL_Socket_Internal;
 
 CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
@@ -663,24 +671,22 @@ CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
     return res;
 }
 
-CMUTIL_Socket *CMUTIL_SocketConnectInternal(
-        CMUTIL_Mem *memst, const char *host, int port, long timeout,
+CMUTIL_Bool CMUTIL_SocketConnectBase(
+        CMUTIL_Socket_Internal *res, const char *host, int port, long timeout,
         CMUTIL_Bool silent)
 {
     unsigned char ip[4];
     unsigned int in[4];
     unsigned rc, i;
 
-    CMUTIL_Socket_Internal *res = CMUTIL_SocketCreate(memst, silent);
-
     rc = sscanf(host, "%u.%u.%u.%u", &(in[0]), &(in[1]), &(in[2]), &(in[3]));
     if (rc == 4) {
         for (i=0 ; i<4 ; i++) {
-            if (in[i] > 255) goto FAILED;
+            if (in[i] > 255) return CMUTIL_False;
             ip[i] = (unsigned char)in[i];
         }
         if (!CMUTIL_SocketConnectByIP(ip, port, res, timeout, 1, silent)) {
-            goto FAILED;
+            return CMUTIL_False;
         }
 
     } else {
@@ -689,10 +695,10 @@ CMUTIL_Socket *CMUTIL_SocketConnectInternal(
         struct hostent hp;
 
         if (gethostbyname_r(host, &hp, buf, sizeof(buf), NULL, NULL) == 0)
-            goto FAILED;
+            return CMUTIL_False;
 
         if ((short) hp.h_addrtype != AF_INET)
-            goto FAILED;
+            return CMUTIL_False;
 
         for (i=0 ; hp.h_addr_list[i] != NULL ; i++)
         {
@@ -703,16 +709,26 @@ CMUTIL_Socket *CMUTIL_SocketConnectInternal(
         }
 
         if (hp.h_addr_list[i] == NULL)
-            goto FAILED;
+            return CMUTIL_False;
 #if defined(MSWIN)
         CMUTIL_UNUSED(buf);
 #endif
     }
 
-    return (CMUTIL_Socket*)res;
-FAILED:
-    CMUTIL_CALL((CMUTIL_Socket*)res, Close);
-    return NULL;
+    return CMUTIL_True;
+}
+
+CMUTIL_Socket *CMUTIL_SocketConnectInternal(
+        CMUTIL_Mem *memst, const char *host, int port, long timeout,
+        CMUTIL_Bool silent)
+{
+    CMUTIL_Socket_Internal *res = CMUTIL_SocketCreate(memst, silent);
+    if (CMUTIL_SocketConnectBase(res, host, port, timeout, silent)) {
+        return (CMUTIL_Socket*)res;
+    } else {
+        CMUTIL_CALL((CMUTIL_Socket*)res, Close);
+        return NULL;
+    }
 }
 
 CMUTIL_Socket *CMUTIL_SocketConnect(
@@ -726,27 +742,19 @@ typedef struct CMUTIL_ServerSocket_Internal {
     CMUTIL_ServerSocket	base;
     SOCKET				ssock;
     CMUTIL_Bool			silent;
-    CMUTIL_Mem		*memst;
+    CMUTIL_Mem          *memst;
 } CMUTIL_ServerSocket_Internal;
 
-CMUTIL_STATIC CMUTIL_Socket *CMUTIL_ServerSocketAccept(
-        CMUTIL_ServerSocket *ssock, long timeout)
+CMUTIL_STATIC CMUTIL_Bool CMUTIL_ServerSocketAcceptInternal(
+        CMUTIL_ServerSocket *ssock, CMUTIL_Socket *sock, long timeout)
 {
     CMUTIL_ServerSocket_Internal *issock = (CMUTIL_ServerSocket_Internal*)ssock;
     int width, rc;
     fd_set rfds;
     socklen_t len;
     struct timeval tv;
-    CMUTIL_Socket_Internal *res = CMUTIL_SocketCreate(
-                issock->memst, issock->silent);
+    CMUTIL_Socket_Internal *res = (CMUTIL_Socket_Internal*)sock;
 
-    /*
-    Kernel object handles are process specific.
-    That is, a process must either create the object
-    or open an existing object to obtain a kernel object handle.
-    The per-process limit on kernel handles is 2^24.
-    So SOCKET can be casted to 32bit integer in 64bit windows.
-    */
     width = (int)(issock->ssock + 1);
     tv.tv_sec = timeout / 1000;
     tv.tv_usec = (timeout % 1000) * 1000;
@@ -758,7 +766,7 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_ServerSocketAccept(
     if (rc <= 0) {
         if (!issock->silent)
             CMLogErrorS("select failed.(%d:%s)", errno, strerror(errno));
-        goto FAILED;
+        return CMUTIL_False;
     }
 
     len = sizeof(struct sockaddr_in);
@@ -766,13 +774,25 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_ServerSocketAccept(
     if (res->sock == INVALID_SOCKET) {
         if (!issock->silent)
             CMLogErrorS("accept failed.(%d:%s)", errno, strerror(errno));
-        goto FAILED;
+        return CMUTIL_False;
     }
 
-    return (CMUTIL_Socket*)res;
-FAILED:
-    CMUTIL_CALL((CMUTIL_Socket*)res, Close);
-    return NULL;
+    return CMUTIL_True;
+}
+
+CMUTIL_STATIC CMUTIL_Socket *CMUTIL_ServerSocketAccept(
+        CMUTIL_ServerSocket *ssock, long timeout)
+{
+    CMUTIL_ServerSocket_Internal *issock = (CMUTIL_ServerSocket_Internal*)ssock;
+    CMUTIL_Socket_Internal *res = CMUTIL_SocketCreate(
+                issock->memst, issock->silent);
+
+    if (CMUTIL_ServerSocketAcceptInternal(ssock, (CMUTIL_Socket*)res, timeout))
+        return (CMUTIL_Socket*)res;
+    else {
+        CMUTIL_CALL((CMUTIL_Socket*)res, Close);
+        return NULL;
+    }
 }
 
 CMUTIL_STATIC void CMUTIL_ServerSocketClose(CMUTIL_ServerSocket *ssock)
@@ -790,14 +810,12 @@ static CMUTIL_ServerSocket g_cmutil_serversocket = {
     CMUTIL_ServerSocketClose
 };
 
-CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
-        CMUTIL_Mem *memst, const char *host, int port, int qcnt,
-        CMUTIL_Bool silent)
+CMUTIL_STATIC CMUTIL_Bool CMUTIL_ServerSocketCreateBase(
+        CMUTIL_ServerSocket_Internal *res, const char *host, int port, int qcnt)
 {
     struct sockaddr_in addr;
     unsigned short s_port = (unsigned short)port;
     SOCKET sock = INVALID_SOCKET;
-    CMUTIL_ServerSocket_Internal *res = NULL;
     int rc, one=1;
     unsigned long arg;
 
@@ -814,14 +832,14 @@ CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
 
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == INVALID_SOCKET) {
-        if (!silent)
+        if (!res->silent)
             CMLogErrorS("cannot create socket", errno, strerror(errno));
         goto FAILED;
     }
 
     rc = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &one, sizeof(one));
     if (rc == SOCKET_ERROR) {
-        if (!silent)
+        if (!res->silent)
             CMLogErrorS("setsockopt failed.(%d:%s)", errno, strerror(errno));
         goto FAILED;
     }
@@ -829,51 +847,59 @@ CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
 #if defined(SUNOS)
     rc = fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK);
     if (rc < 0) {
-        if (!silent)
+        if (!res->silent)
             CMLogErrorS("fnctl failed.(%d:%s)", errno, strerror(errno));
-        closesocket(sock);
-        return NULL;
+        goto FAILED;
     }
 #else
     arg = 1;
     rc = ioctlsocket(sock, FIONBIO, &arg);
     if (rc < 0) {
-        if (!silent)
+        if (!res->silent)
             CMLogErrorS("ioctl failed.(%d:%s)", errno, strerror(errno));
-        closesocket(sock);
-        return NULL;
+        goto FAILED;
     }
 #endif
 
     rc = bind(sock, (struct sockaddr *) &addr, sizeof(addr));
     if (rc == SOCKET_ERROR) {
-        if (!silent)
+        if (!res->silent)
             CMLogErrorS("bind failed.(%d:%s)", errno, strerror(errno));
         goto FAILED;
     }
 
     rc = listen(sock, qcnt);
     if (rc == SOCKET_ERROR) {
-        if (!silent)
+        if (!res->silent)
             CMLogErrorS("listen failed.(%d:%s)", errno, strerror(errno));
         goto FAILED;
     }
 
-    res = memst->Alloc(sizeof(CMUTIL_ServerSocket_Internal));
-    memset(res, 0x0, sizeof(CMUTIL_ServerSocket_Internal));
     res->ssock = sock;
-    res->memst = memst;
-    res->silent = silent;
-
-    memcpy(res, &g_cmutil_serversocket, sizeof(CMUTIL_ServerSocket));
-    return (CMUTIL_ServerSocket*)res;
+    return CMUTIL_True;
 
 FAILED:
     if (sock != INVALID_SOCKET)
         closesocket(sock);
-    if (res)
+    return CMUTIL_False;
+}
+
+CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
+        CMUTIL_Mem *memst, const char *host, int port, int qcnt,
+        CMUTIL_Bool silent)
+{
+    CMUTIL_ServerSocket_Internal *res =
+            memst->Alloc(sizeof(CMUTIL_ServerSocket_Internal));
+    memset(res, 0x0, sizeof(CMUTIL_ServerSocket_Internal));
+    res->memst = memst;
+    res->silent = silent;
+    memcpy(res, &g_cmutil_serversocket, sizeof(CMUTIL_ServerSocket));
+    if (CMUTIL_ServerSocketCreateBase(res, host, port, qcnt)) {
+        return (CMUTIL_ServerSocket*)res;
+    } else {
         CMUTIL_CALL((CMUTIL_ServerSocket*)res, Close);
-    return NULL;
+        return NULL;
+    }
 }
 
 CMUTIL_ServerSocket *CMUTIL_ServerSocketCreate(
@@ -881,4 +907,693 @@ CMUTIL_ServerSocket *CMUTIL_ServerSocketCreate(
 {
     return CMUTIL_ServerSocketCreateInternal(
                 CMUTIL_GetMem(), host, port, qcnt, CMUTIL_False);
+}
+
+#if defined(CMUTIL_SUPPORT_SSL)
+# if defined(CMUTIL_SSL_USE_OPENSSL)
+#  include <openssl/ssl.h>
+# else
+#  include <gnutls/gnutls.h>
+# endif // !CMUTIL_SSL_USE_OPENSSL
+
+typedef struct CMUTIL_SSLServerSocket_Internal {
+    CMUTIL_ServerSocket_Internal    base;
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+    SSL_CTX                         *sslctx;
+#else
+    gnutls_certificate_credentials_t cred;
+    gnutls_priority_t               priority_cache;
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+} CMUTIL_SSLServerSocket_Internal;
+
+typedef struct CMUTIL_SSLSocket_Internal {
+    CMUTIL_Socket_Internal  base;
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+    SSL                     *session;
+    // for client side certification
+    SSL_CTX                 sslctx;
+#else
+    gnutls_session_t        session;
+    // for client side certification
+    gnutls_certificate_credentials_t cred;
+# if GNUTLS_VERSION_NUMBER < 0x030506
+    gnutls_dh_params_t      dh_params;
+# endif
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+    // for server peer connection
+    CMUTIL_SSLServerSocket_Internal *server;
+} CMUTIL_SSLSocket_Internal;
+
+CMUTIL_STATIC CMUTIL_SSLSocket_Internal *CMUTIL_SSLSocketCreate(
+        CMUTIL_Mem *memst, CMUTIL_Bool silent);
+
+CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketCheckReadBuffer(
+        CMUTIL_Socket *sock, long timeout)
+{
+    CMUTIL_SSLSocket_Internal *si = (CMUTIL_SSLSocket_Internal*)sock;
+    int width, ir;
+    fd_set rfds;
+    struct timeval tv;
+    SOCKET fd;
+
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+    fd = (SOCKET)SSL_get_fd(session->session);
+    if (SSL_pending(si->session) > 0)
+        return CMUTIL_SocketOk;
+#else
+    fd = si->base.sock;
+    if (gnutls_record_check_pending(si->session) > 0)
+        return CMUTIL_SocketOk;
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+
+    width = fd + 1;
+    FD_ZERO(&rfds);
+    FD_SET(fd, &rfds);
+
+    tv.tv_sec = timeout;
+    tv.tv_usec = 0;
+
+    ir = select(width, &rfds, NULL, NULL, &tv);
+    if (ir < 0) {
+        return CMUTIL_SocketSelectFailed;
+    } else if (ir == 0) {
+        return CMUTIL_SocketTimeout;
+    } else {
+        return CMUTIL_SocketOk;
+    }
+}
+
+CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketCheckWriteBuffer(
+        CMUTIL_Socket *sock, long timeout)
+{
+    CMUTIL_SSLSocket_Internal *si = (CMUTIL_SSLSocket_Internal*)sock;
+    int width, ir;
+    fd_set wfds;
+    struct timeval tv;
+    SOCKET fd;
+
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+    fd = (SOCKET)SSL_get_fd(session->session);
+#else
+    fd = si->base.sock;
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+
+    width = fd + 1;
+    FD_ZERO(&wfds);
+    FD_SET(fd, &wfds);
+
+    tv.tv_sec = timeout;
+    tv.tv_usec = 0;
+
+    ir = select(width, NULL, &wfds, NULL, &tv);
+    if (ir < 0) {
+        return CMUTIL_SocketSelectFailed;
+    } else if (ir == 0) {
+        return CMUTIL_SocketTimeout;
+    } else {
+        return CMUTIL_SocketOk;
+    }
+}
+
+CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketRead(
+        CMUTIL_Socket *sock, CMUTIL_String *buffer, int size, long timeout)
+{
+    CMUTIL_SSLSocket_Internal *isck = (CMUTIL_SSLSocket_Internal*)sock;
+    CMUTIL_SocketResult res;
+    char buf[1024];
+    int rc, cnt = 0;
+    size_t rsz;
+#if defined(SSL_USE_OPENSSL)
+    int in_init=0;
+
+    while (size > 0 && cnt < timeout * 10) {
+        if (SSL_in_init(isck->session) &&
+                !SSL_total_renegotiations(isck->session)) {
+            in_init = 1;
+        } else {
+            if (in_init)
+                in_init = 0;
+        }
+
+        res = CMUTIL_CALL(sock, CheckReadBuffer, timeout);
+        if (res == CMUTIL_SocketOk) {
+            rsz = size > 1024? 1024:size;
+            rc = SSL_read(isck->session, buf, rsz);
+
+            switch (SSL_get_error(isck->session, rc))
+            {
+            case SSL_ERROR_NONE:
+                if (rc <= 0) {
+                    CMLogError("SSL read failed");
+                    return CMUTIL_SocketReceiveFailed;
+                }
+                CMUTIL_CALL(buffer, AddNString, buf, rc);
+                size -= rc;
+                if (size == 0)
+                    return CMUTIL_SocketOk;
+                break;
+            case SSL_ERROR_WANT_WRITE:
+            case SSL_ERROR_WANT_READ:
+            case SSL_ERROR_WANT_X509_LOOKUP:
+                cnt++;
+                usleep(100000);
+                break;
+            case SSL_ERROR_ZERO_RETURN:
+                CMLogError("peer closed connection");
+                return CMUTIL_SocketReceiveFailed;
+            default:
+                CMLogError("SSL read failed");
+                return CMUTIL_SocketReceiveFailed;
+            }
+        } else {
+            CMLogError("CheckReadBuffer() failed");
+            return res;
+        }
+
+    }
+#else
+
+    while (size > 0 && cnt < timeout * 10) {
+        int handshake_res = 0;
+
+        res = CMUTIL_CALL(sock, CheckReadBuffer, timeout);
+        if (res != CMUTIL_SocketOk) {
+            CMLogError("CheckReadBuffer() failed");
+            return res;
+        }
+
+        rsz = size > 1024? 1024:size;
+        rc = gnutls_record_recv(isck->session, buf, rsz);
+        switch (rc) {
+        case GNUTLS_E_REHANDSHAKE:
+            do {
+                handshake_res = gnutls_handshake(isck->session);
+            } while (handshake_res < 0 &&
+                     gnutls_error_is_fatal(handshake_res) == 0);
+            if (handshake_res < 0) {
+                CMLogError("handshake failed : %s", gnutls_strerror(rc));
+                return CMUTIL_SocketReceiveFailed;
+            }
+            break;
+        case GNUTLS_E_AGAIN:
+        case GNUTLS_E_INTERRUPTED:
+            cnt++;
+            usleep(100000);
+            break;
+        default:
+            if (rc < 0) {
+                if (gnutls_error_is_fatal(rc) == 0) {
+                    CMLogWarn("Warning : %s", gnutls_strerror(rc));
+                } else {
+                    CMLogError("receive failed : %s", gnutls_strerror(rc));
+                    return CMUTIL_SocketReceiveFailed;
+                }
+            } else if (rc == 0) {
+                CMLogError("peer closed connection");
+                return CMUTIL_SocketReceiveFailed;
+            } else {
+                CMUTIL_CALL(buffer, AddNString, buf, rc);
+                size -= rc;
+            }
+        }
+    }
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+    if (cnt < timeout * 10)
+        return CMUTIL_SocketOk;
+    else {
+        CMLogError("receive timed out.");
+        return CMUTIL_SocketTimeout;
+    }
+}
+
+CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLSocketReadSocket(
+        CMUTIL_Socket *sock, long timeout, CMUTIL_SocketResult *rval)
+{
+    CMUTIL_UNUSED(sock, timeout, rval);
+    CMLogError("socket passing not allowed in SSL socket");
+    *rval = CMUTIL_SocketReceiveFailed;
+    return NULL;
+}
+
+CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketWritePart(
+        CMUTIL_Socket *sock, CMUTIL_String *data,
+        int offset, int length, long timeout)
+{
+    CMUTIL_SSLSocket_Internal *isck = (CMUTIL_SSLSocket_Internal*)sock;
+    CMUTIL_SocketResult res;
+    int rc, size = length, cnt = 0;
+    const char *buf = CMUTIL_CALL(data, GetCString) + offset;
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+    int in_init=0;
+
+    while (size > 0 && cnt < timeout * 10) {
+        if (SSL_in_init(isck->session) &&
+                !SSL_total_renegotiations(isck->session)) {
+            in_init = 1;
+        } else {
+            if (in_init)
+                in_init = 0;
+        }
+
+        res = CMUTIL_CALL(sock, CheckWriteBuffer, timeout);
+        if (res == CMUTIL_SocketOk) {
+            rc = SSL_write(isck->session, buf, size);
+
+            switch (SSL_get_error(isck->session, rc))
+            {
+            case SSL_ERROR_NONE:
+                if (rc <= 0) {
+                    CMLogError("SSL write failed");
+                    return CMUTIL_SocketSendFailed;
+                }
+                buf += rc;
+                size -= rc;
+                if (size == 0)
+                    return CMUTIL_SocketOk;
+                break;
+            case SSL_ERROR_WANT_WRITE:
+            case SSL_ERROR_WANT_READ:
+            case SSL_ERROR_WANT_X509_LOOKUP:
+                cnt++;
+                usleep(100000);
+                break;
+            case SSL_ERROR_ZERO_RETURN:
+                CMLogError("peer closed connection");
+                return CMUTIL_SocketSendFailed;
+            default:
+                CMLogError("SSL write failed");
+                return CMUTIL_SocketSendFailed;
+            }
+        } else {
+            CMLogError("CheckWriteBuffer() failed");
+            return res;
+        }
+
+    }
+#else
+
+    while (size > 0 && cnt < timeout * 10) {
+        int handshake_res = 0;
+
+        res = CMUTIL_CALL(sock, CheckWriteBuffer, timeout);
+        if (res != CMUTIL_SocketOk)
+            return res;
+
+        rc = gnutls_record_send(isck->session, buf, size);
+        switch (rc) {
+        case GNUTLS_E_REHANDSHAKE:
+            do {
+                handshake_res = gnutls_handshake(isck->session);
+            } while (handshake_res < 0 &&
+                     gnutls_error_is_fatal(handshake_res) == 0);
+            if (handshake_res < 0) {
+                CMLogError("handshake failed : %s", gnutls_strerror(rc));
+                return CMUTIL_SocketSendFailed;
+            }
+            break;
+        case GNUTLS_E_AGAIN:
+        case GNUTLS_E_INTERRUPTED:
+            cnt++;
+            usleep(100000);
+            break;
+        default:
+            if (rc < 0) {
+                if (gnutls_error_is_fatal(rc) == 0) {
+                    CMLogWarn("Warning : %s", gnutls_strerror(rc));
+                } else {
+                    CMLogError("send failed : %s", gnutls_strerror(rc));
+                    return CMUTIL_SocketSendFailed;
+                }
+            } else if (rc == 0) {
+                CMLogError("peer closed connection");
+                return CMUTIL_SocketSendFailed;
+            } else {
+                buf += rc;
+                size -= rc;
+            }
+        }
+    }
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+    if (cnt < timeout * 10)
+        return CMUTIL_SocketOk;
+    else {
+        CMLogError("send timed out.");
+        return CMUTIL_SocketTimeout;
+    }
+}
+
+CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketWriteSocket(
+        CMUTIL_Socket *sock, CMUTIL_Socket *tobesent, pid_t pid, long timeout)
+{
+    CMUTIL_UNUSED(sock, tobesent, pid, timeout);
+    CMLogError("socket passing not allowed in SSL socket");
+    return CMUTIL_SocketReceiveFailed;
+}
+
+CMUTIL_STATIC void CMUTIL_SSLSocketClose(
+        CMUTIL_Socket *socket)
+{
+    CMUTIL_SSLSocket_Internal *isck = (CMUTIL_SSLSocket_Internal*)socket;
+    if (isck) {
+        if (isck->session) {
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+            //SSL_shutdown(isck->session);
+            isck->base.sock = SSL_get_fd(isck->session);
+            SSL_free(session->session);
+#else
+            //gnutls_bye(isck->session, GNUTLS_SHUT_WR);
+            gnutls_deinit(isck->session);
+            if (isck->cred)
+                gnutls_certificate_free_credentials(isck->cred);
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+        }
+        CMUTIL_CALL(socket, Close);
+    }
+}
+
+CMUTIL_Socket g_cmutil_sslsocket = {
+    CMUTIL_SSLSocketRead,
+    CMUTIL_SocketWrite,
+    CMUTIL_SSLSocketWritePart,
+    CMUTIL_SSLSocketCheckReadBuffer,
+    CMUTIL_SSLSocketCheckWriteBuffer,
+    CMUTIL_SSLSocketReadSocket,
+    CMUTIL_SSLSocketWriteSocket,
+    CMUTIL_SocketGetRemoteAddr,
+    CMUTIL_SSLSocketClose
+};
+
+CMUTIL_STATIC CMUTIL_SSLSocket_Internal *CMUTIL_SSLSocketCreate(
+        CMUTIL_Mem *memst, CMUTIL_Bool silent)
+{
+    CMUTIL_SSLSocket_Internal *res = NULL;
+    res = memst->Alloc(sizeof(CMUTIL_SSLSocket_Internal));
+    memset(res, 0x0, sizeof(CMUTIL_SSLSocket_Internal));
+    res->base.sock = INVALID_SOCKET;
+    res->base.silent = silent;
+    res->base.memst = memst;
+    memcpy(res, &g_cmutil_sslsocket, sizeof(CMUTIL_Socket));
+    return res;
+}
+
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+#define SSL_CHECK(x, b)    do { \
+    int rval = (x); \
+    if (rval <= 0) { \
+        if (!silent) { char buf[1024]; \
+        ERR_error_string(ERR_peek_last_error(), buf);   \
+        CMLogError("%s failed - %s", #x, buf); } \
+        goto b; \
+    }} while(0)
+#else
+#define SSL_CHECK(x, b)    do { \
+    int rval = (x); \
+    if (rval < 0) { \
+        if (!silent) CMLogError("%s failed : %s", #x, gnutls_strerror(rval)); \
+        goto b; \
+    }} while(0)
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+
+CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
+        CMUTIL_Mem *memst,
+        const char *cert, const char *key, const char *ca,
+        const char *servername,
+        const char *host, int port, long timeout,
+        CMUTIL_Bool silent)
+{
+    CMUTIL_SSLSocket_Internal *res = CMUTIL_SSLSocketCreate(memst, silent);
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+    static const SSL_METHOD *method = SSLv23_server_method();
+    if (ca || (cert && key)) {
+        res->sslctx = SSL_CTX_new(method);
+        if (res->sslctx == NULL) {
+            char buf[1024];
+            ERR_error_string(ERR_peek_last_error(), buf);
+            CMLogError("Unable to create SSL context : %s", buf);
+        }
+    }
+    if (ca)
+        SSL_CHECK(SSL_CTX_use_certificate_chain_file(
+                      res->sslctx, ca), CLEANUP);
+    if (cert && key) {
+        SSL_CHECK(SSL_CTX_use_certificate_file(
+                      res->sslctx, cert, SSL_FILETYPE_PEM), CLEANUP);
+        SSL_CHECK(SSL_CTX_use_PrivateKey_file(
+                      res->sslctx, key, SSL_FILETYPE_PEM), CLEANUP);
+        SSL_CHECK(SSL_CTX_check_private_key(res->sslctx), CLEANUP);
+    }
+
+    res->session = SSL_new(res->sslctx);
+    // TODO: server name setting
+#else
+    if (ca || (cert && key))
+        SSL_CHECK(gnutls_certificate_allocate_credentials(
+                      &res->cred), FAILEDPOINT);
+    if (ca)
+        SSL_CHECK(gnutls_certificate_set_x509_trust_file(
+                      res->cred, ca, GNUTLS_X509_FMT_PEM), FAILEDPOINT);
+    if (cert && key)
+        SSL_CHECK(gnutls_certificate_set_x509_key_file(
+                      res->cred, cert, key, GNUTLS_X509_FMT_PEM),
+                  FAILEDPOINT);
+
+    SSL_CHECK(gnutls_init(&res->session, GNUTLS_CLIENT), FAILEDPOINT);
+
+    if (servername) {
+        SSL_CHECK(gnutls_server_name_set(
+                      res->session, GNUTLS_NAME_DNS, servername,
+                      strlen(servername)), FAILEDPOINT);
+        gnutls_session_set_verify_cert(res->session, servername, 0);
+    }
+
+    SSL_CHECK(gnutls_set_default_priority(res->session), FAILEDPOINT);
+    if (res->cred) {
+        SSL_CHECK(gnutls_credentials_set(
+                      res->session, GNUTLS_CRD_CERTIFICATE, res->cred),
+                  FAILEDPOINT);
+    }
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+    if (CMUTIL_SocketConnectBase(
+                (CMUTIL_Socket_Internal*)res, host, port, timeout, silent)) {
+        int ir;
+        // handshake
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+        SSL_set_fd(res->session, res->base.sock);
+        SSL_CHECK(SSL_connect(res->session), FAILEPOINT);
+#else
+        gnutls_transport_set_int(res->session, res->base.sock);
+        gnutls_handshake_set_timeout(
+                    res->session, GNUTLS_DEFAULT_HANDSHAKE_TIMEOUT);
+        do {
+            ir = gnutls_handshake(res->session);
+        } while (ir < 0 && gnutls_error_is_fatal(ir) == 0);
+        if (ir < 0) {
+            if (!silent) {
+                if (ir == GNUTLS_E_CERTIFICATE_VERIFICATION_ERROR) {
+                    gnutls_datum_t out;
+                    int type;
+                    unsigned status;
+                    /* check certificate verification status */
+                    type = gnutls_certificate_type_get(res->session);
+                    status = gnutls_session_get_verify_cert_status(
+                                res->session);
+                    if (gnutls_certificate_verification_status_print(
+                                status, type, &out, 0) < 0) {
+                        CMLogError("server certificate verification failed.");
+                    } else {
+                        CMLogError("server certificate verification failed: %s",
+                                   out.data);
+                        gnutls_free(out.data);
+                    }
+                }
+                CMLogError("SSL handshake failed : %s", gnutls_strerror(ir));
+            }
+            goto FAILEDPOINT;
+        }
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+        return (CMUTIL_Socket*)res;
+    } else if (!silent) {
+        CMLogError("CMUTIL_SocketConnectBase() failed.");
+    }
+FAILEDPOINT:
+    CMUTIL_CALL((CMUTIL_Socket*)res, Close);
+    return NULL;
+}
+
+CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLServerSocketAccept(
+        CMUTIL_ServerSocket *server, long timeout)
+{
+#if !defined(CMUTIL_SSL_USE_OPENSSL)
+    int handshake_res;
+#endif
+    CMUTIL_SSLServerSocket_Internal *issock =
+            (CMUTIL_SSLServerSocket_Internal*)server;
+    CMUTIL_SSLSocket_Internal *res = CMUTIL_SSLSocketCreate(
+                issock->base.memst, CMUTIL_False);
+    CMUTIL_Bool silent = issock->base.silent;
+
+    if (CMUTIL_ServerSocketAcceptInternal(
+                server, (CMUTIL_Socket*)res, timeout)) {
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+        res->session = SSL_new(issock->sslctx);
+        SSL_set_fd(res->session, res->base.sock);
+        SSL_CHECK(SSL_accept(res->session), FAILEDPOINT);
+#else
+        SSL_CHECK(gnutls_init(&(res->session), GNUTLS_SERVER), FAILEDPOINT);
+        SSL_CHECK(gnutls_priority_set(
+                      res->session, issock->priority_cache), FAILEDPOINT);
+        SSL_CHECK(gnutls_credentials_set(
+                      res->session, GNUTLS_CRD_CERTIFICATE, issock->cred),
+                  FAILEDPOINT);
+
+        gnutls_handshake_set_timeout(
+                    res->session, GNUTLS_DEFAULT_HANDSHAKE_TIMEOUT);
+        gnutls_record_set_timeout(res->session, 10000);
+        gnutls_session_enable_compatibility_mode(res->session);
+        gnutls_transport_set_int(res->session, res->base.sock);
+
+        do {
+            handshake_res = gnutls_handshake(res->session);
+        } while (handshake_res < 0 &&
+                 gnutls_error_is_fatal(handshake_res) == 0);
+        SSL_CHECK(handshake_res, FAILEDPOINT);
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+    }
+    return (CMUTIL_Socket*)res;
+FAILEDPOINT:
+    CMUTIL_CALL((CMUTIL_Socket*)res, Close);
+    return NULL;
+}
+
+CMUTIL_STATIC void CMUTIL_SSLServerSocketClose(CMUTIL_ServerSocket *ssock)
+{
+    CMUTIL_SSLServerSocket_Internal *issock =
+            (CMUTIL_SSLServerSocket_Internal*)ssock;
+    if (issock) {
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+        if (issock->sslctx)
+            SSL_CTX_free(issock->sslctx);
+#else
+# if GNUTLS_VERSION_NUMBER < 0x030506
+        if (res->dh_params)
+            gnutls_dh_params_deinit(res->dh_params);
+# endif
+        if (issock->cred)
+            gnutls_certificate_free_credentials(issock->cred);
+        if (issock->priority_cache)
+            gnutls_priority_deinit(issock->priority_cache);
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+        CMUTIL_CALL(ssock, Close);
+    }
+}
+
+static CMUTIL_ServerSocket g_cmutil_sslserversocket = {
+    CMUTIL_SSLServerSocketAccept,
+    CMUTIL_SSLServerSocketClose
+};
+
+CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreateInternal(
+        CMUTIL_Mem *memst, const char *host, int port, int qcnt,
+        const char *cert, const char *key, const char *ca,
+        CMUTIL_Bool silent)
+{
+    CMUTIL_SSLServerSocket_Internal *res =
+            memst->Alloc(sizeof(CMUTIL_SSLServerSocket_Internal));
+    memset(res, 0x0, sizeof(CMUTIL_SSLServerSocket_Internal));
+    res->base.memst = memst;
+    res->base.silent = silent;
+    memcpy(res, &g_cmutil_sslserversocket, sizeof(CMUTIL_ServerSocket));
+    if (CMUTIL_ServerSocketCreateBase(
+                (CMUTIL_ServerSocket_Internal*)res, host, port, qcnt)) {
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+        static const SSL_METHOD *method = SSLv23_server_method();
+        res->sslctx = SSL_CTX_new(method);
+        if (res->sslctx == NULL && !silent) {
+            char buf[1024];
+            ERR_error_string(ERR_peek_last_error(), buf);
+            CMLogError("Unable to create SSL context : %s", buf);
+            goto FAILEDPOINT;
+        }
+        if (ca)
+            SSL_CHECK(SSL_CTX_use_certificate_chain_file(
+                          res->sslctx, ca), FAILEDPOINT);
+        SSL_CHECK(SSL_CTX_use_certificate_file(
+                      res->sslctx, cert, SSL_FILETYPE_PEM), FAILEDPOINT);
+        SSL_CHECK(SSL_CTX_use_PrivateKey_file(
+                      res->sslctx, key, SSL_FILETYPE_PEM), FAILEDPOINT);
+
+        SSL_CHECK(SSL_CTX_check_private_key(res->sslctx), FAILEDPOINT);
+#else
+        SSL_CHECK(gnutls_certificate_allocate_credentials(
+                      &(res->cred)), FAILEDPOINT);
+        // CA file(ex. "/etc/ssl/certs/ca-certificates.crt")
+        if (ca)
+            SSL_CHECK(gnutls_certificate_set_x509_trust_file(
+                          res->cred, ca, GNUTLS_X509_FMT_PEM), FAILEDPOINT);
+        // CERT file(ex. "cert.pem"), KEY file(ex. "key.pem")
+        SSL_CHECK(gnutls_certificate_set_x509_key_file(
+                      res->cred, cert, key,
+                      GNUTLS_X509_FMT_PEM), FAILEDPOINT);
+        SSL_CHECK(gnutls_priority_init(
+                      &(res->priority_cache), NULL, NULL), FAILEDPOINT);
+# if GNUTLS_VERSION_NUMBER >= 0x030506
+        /* only available since GnuTLS 3.5.6, on previous versions see
+         * gnutls_certificate_set_dh_params(). */
+        SSL_CHECK(gnutls_certificate_set_known_dh_params(
+                    res->cred, GNUTLS_SEC_PARAM_MEDIUM), FAILEDPOINT);
+# else
+        gnutls_dh_params_init(&res->dh_params);
+        gnutls_dh_params_generate2(res->dh_params, 1024);
+        gnutls_certificate_set_dh_params(res->cred, res->dh_params);
+# endif
+#endif
+        return (CMUTIL_ServerSocket*)res;
+    }
+FAILEDPOINT:
+    CMUTIL_CALL((CMUTIL_ServerSocket*)res, Close);
+    return NULL;
+}
+
+#else
+CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
+        CMUTIL_Mem *memst,
+        const char *cert, const char *key, const char *ca,
+        const char *servername,
+        const char *host, int port, long timeout,
+        CMUTIL_Bool silent)
+{
+    CMUTIL_UNUSED(memst, cert, key, ca, servername,
+                  host, port, timeout, silent);
+    CMLogError("SSL not enabled. recompile with CMUTIL_SUPPORT_SSL.");
+    return NULL;
+}
+
+CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreateInternal(
+        CMUTIL_Mem *memst, const char *host, int port, int qcnt,
+        const char *cert, const char *key, const char *ca,
+        CMUTIL_Bool silent)
+{
+    CMUTIL_UNUSED(memst, host, port, qcnt, cert, key, ca, silent);
+    CMLogError("SSL not enabled. recompile with CMUTIL_SUPPORT_SSL.");
+    return NULL;
+}
+#endif  // !CMUTIL_SUPPORT_SSL
+
+CMUTIL_Socket *CMUTIL_SSLSocketConnect(
+        const char *cert, const char *key, const char *ca,
+        const char *servername,
+        const char *host, int port, long timeout)
+{
+    return CMUTIL_SSLSocketConnectInternal(
+                CMUTIL_GetMem(), cert, key, ca, servername,
+                host, port, timeout, CMUTIL_False);
+}
+
+CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreate(
+        const char *cert, const char *key, const char *ca,
+        const char *host, int port, int qcnt)
+{
+    return CMUTIL_SSLServerSocketCreateInternal(
+                CMUTIL_GetMem(), host, port, qcnt,
+                cert, key, ca, CMUTIL_False);
 }

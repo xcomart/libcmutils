@@ -4,6 +4,8 @@ CONFIG -= qt
 
 DEFINES += CMUTILS_LIBRARY
 
+CONFIG += SUPPORT_SSL
+
 BUILD_DIR = ../build
 COPY_CMD = cp
 LIB_DIR = lib
@@ -11,14 +13,14 @@ win32 {
     LIB_DIR = bin
 }
 
+DESTDIR = $$BUILD_DIR/$$LIB_DIR
+
 CONFIG(debug, debug|release) {
     DEFINES += DEBUG
-    DESTDIR = $$BUILD_DIR/$$LIB_DIR/debug
 }
 
-CONFIG(release, debug|release) {
-    DEFINES += DEBUG
-    DESTDIR = $$BUILD_DIR/$$LIB_DIR/release
+!win32-msvc* {
+    CONFIG += link_pkgconfig
 }
 
 unix {
@@ -40,8 +42,13 @@ win32-msvc* {
     }
 }
 
-!win32-msvc* {
-    QMAKE_CFLAGS += -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
+contains (CONFIG, SUPPORT_SSL) {
+    DEFINES += CMUTIL_SUPPORT_SSL
+#    DEFINES += CMUTIL_SSL_USE_OPENSSL
+    !win32-msvc* {
+        PKGCONFIG += gnutls
+#        PKGCONFIG += openssl
+    }
 }
 
 SOURCES += \
@@ -90,7 +97,8 @@ DISTFILES += \
     VERSION
 
 !win32-msvc* {
-    INCLUDE_TARGET.commands = $$COPY_CMD ./src/libcmutils.h $$BUILD_DIR/include
+    INCLUDE_TARGET.commands += mkdir -p $$BUILD_DIR/include;\
+            $$COPY_CMD ../libcmutils/src/libcmutils.h $$BUILD_DIR/include/.
 
     QMAKE_EXTRA_TARGETS += INCLUDE_TARGET
 
