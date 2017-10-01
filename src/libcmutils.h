@@ -1559,6 +1559,11 @@ struct CMUTIL_Socket {
 CMUTIL_API CMUTIL_Socket *CMUTIL_SocketConnect(
         const char *host, int port, long timeout);
 
+CMUTIL_API CMUTIL_Socket *CMUTIL_SSLSocketConnect(
+        const char *cert, const char *key, const char *ca,
+        const char *servername,
+        const char *host, int port, long timeout);
+
 typedef struct CMUTIL_ServerSocket CMUTIL_ServerSocket;
 struct CMUTIL_ServerSocket {
     CMUTIL_Socket *(*Accept)(CMUTIL_ServerSocket *server, long timeout);
@@ -1566,6 +1571,10 @@ struct CMUTIL_ServerSocket {
 };
 
 CMUTIL_API CMUTIL_ServerSocket *CMUTIL_ServerSocketCreate(
+        const char *host, int port, int qcnt);
+
+CMUTIL_API CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreate(
+        const char *cert, const char *key, const char *ca,
         const char *host, int port, int qcnt);
 
 
