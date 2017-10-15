@@ -23,13 +23,9 @@ CMUTIL_LogDefine("cmutils.pool")
 
 typedef struct CMUTIL_Pool_Internal {
     CMUTIL_Pool			base;
-    CMUTIL_Bool			intimer;
     CMUTIL_Timer		*timer;
     CMUTIL_Semaphore	*semp;
-    int					totcnt;
-    int					maxcnt;
     long				pingintv;
-    CMUTIL_Bool			testonb;
     CMUTIL_List			*avail;
     CMUTIL_Mutex		*avlmtx;
     void				*udata;
@@ -37,18 +33,22 @@ typedef struct CMUTIL_Pool_Internal {
     void				(*destroyf)(void*,void*);
     CMUTIL_Bool			(*testf)(void*,void*);
     CMUTIL_TimerTask	*pingtester;
-    CMUTIL_Mem		*memst;
+    CMUTIL_Mem          *memst;
+    CMUTIL_Bool			intimer;
+    uint				totcnt;
+    uint				maxcnt;
+    CMUTIL_Bool			testonb;
 } CMUTIL_Pool_Internal;
 
 CMUTIL_STATIC void *CMUTIL_PoolCheckOut(
         CMUTIL_Pool *pool, long millisec)
 {
     CMUTIL_Pool_Internal *ipool = (CMUTIL_Pool_Internal*)pool;
-    if (CMUTIL_CALL(ipool->semp, Acquire, millisec)) {
+    if (CMCall(ipool->semp, Acquire, millisec)) {
         void *res = NULL;
-        CMUTIL_CALL(ipool->avlmtx, Lock);
-        if (CMUTIL_CALL(ipool->avail, GetSize) > 0) {
-            res = CMUTIL_CALL(ipool->avail, RemoveFront);
+        CMCall(ipool->avlmtx, Lock);
+        if (CMCall(ipool->avail, GetSize) > 0) {
+            res = CMCall(ipool->avail, RemoveFront);
         } else {
             res = ipool->createf(ipool->udata);
             if (res == NULL)
@@ -56,13 +56,13 @@ CMUTIL_STATIC void *CMUTIL_PoolCheckOut(
             else
                 ipool->totcnt++;
         }
-        CMUTIL_CALL(ipool->avlmtx, Unlock);
+        CMCall(ipool->avlmtx, Unlock);
         if (res && ipool->testonb) {
             if (!ipool->testf(res, ipool->udata)) {
                 ipool->destroyf(res, ipool->udata);
                 res = ipool->createf(ipool->udata);
                 if (res == NULL) {
-                    CMUTIL_CALL(ipool->semp, Release);
+                    CMCall(ipool->semp, Release);
                     CMLogError("resource creation failed.");
                 }
             }
@@ -78,27 +78,27 @@ CMUTIL_STATIC void CMUTIL_PoolRelease(
         CMUTIL_Pool *pool, void *resource)
 {
     CMUTIL_Pool_Internal *ipool = (CMUTIL_Pool_Internal*)pool;
-    CMUTIL_CALL(ipool->avlmtx, Lock);
-    CMUTIL_CALL(ipool->avail, AddTail, resource);
-    CMUTIL_CALL(ipool->avlmtx, Unlock);
-    CMUTIL_CALL(ipool->semp, Release);
+    CMCall(ipool->avlmtx, Lock);
+    CMCall(ipool->avail, AddTail, resource);
+    CMCall(ipool->avlmtx, Unlock);
+    CMCall(ipool->semp, Release);
 }
 
 CMUTIL_STATIC void CMUTIL_PoolAddResource(
         CMUTIL_Pool *pool, void *resource)
 {
-    CMUTIL_Bool incmax = CMUTIL_False;
+    CMUTIL_Bool incmax = CMFalse;
     CMUTIL_Pool_Internal *ipool = (CMUTIL_Pool_Internal*)pool;
-    CMUTIL_CALL(ipool->avlmtx, Lock);
-    CMUTIL_CALL(ipool->avail, AddTail, resource);
+    CMCall(ipool->avlmtx, Lock);
+    CMCall(ipool->avail, AddTail, resource);
     ipool->totcnt++;
     if (ipool->totcnt > ipool->maxcnt) {
-        incmax = CMUTIL_True;
+        incmax = CMTrue;
         ipool->maxcnt++;
     }
-    CMUTIL_CALL(ipool->avlmtx, Unlock);
+    CMCall(ipool->avlmtx, Unlock);
     if (incmax)
-        CMUTIL_CALL(ipool->semp, Release);
+        CMCall(ipool->semp, Release);
 }
 
 CMUTIL_STATIC void CMUTIL_PoolDestroy(
@@ -106,22 +106,22 @@ CMUTIL_STATIC void CMUTIL_PoolDestroy(
 {
     CMUTIL_Pool_Internal *ipool = (CMUTIL_Pool_Internal*)pool;
     if (ipool) {
-        if (CMUTIL_CALL(ipool->avail, GetSize) < ipool->totcnt)
+        if (CMCall(ipool->avail, GetSize) < ipool->totcnt)
             CMLogWarn("pool resources are not returned.");
         if (ipool->intimer && ipool->timer)
-            CMUTIL_CALL(ipool->timer, Destroy);
+            CMCall(ipool->timer, Destroy);
         if (!ipool->intimer && ipool->pingtester)
-            CMUTIL_CALL(ipool->pingtester, Cancel);
+            CMCall(ipool->pingtester, Cancel);
         if (ipool->semp)
-            CMUTIL_CALL(ipool->semp, Destroy);
+            CMCall(ipool->semp, Destroy);
         if (ipool->avlmtx)
-            CMUTIL_CALL(ipool->avlmtx, Destroy);
+            CMCall(ipool->avlmtx, Destroy);
         if (ipool->avail) {
-            while (CMUTIL_CALL(ipool->avail, GetSize) > 0) {
-                void *rsrc = CMUTIL_CALL(ipool->avail, RemoveFront);
+            while (CMCall(ipool->avail, GetSize) > 0) {
+                void *rsrc = CMCall(ipool->avail, RemoveFront);
                 ipool->destroyf(rsrc, ipool->udata);
             }
-            CMUTIL_CALL(ipool->avail, Destroy);
+            CMCall(ipool->avail, Destroy);
         }
         CMFree(ipool);
     }
@@ -131,13 +131,14 @@ CMUTIL_STATIC void CMUTIL_PoolPingTester(void *p)
 {
     CMUTIL_Pool_Internal *ipool = (CMUTIL_Pool_Internal*)p;
     CMUTIL_Pool *pool = (CMUTIL_Pool*)ipool;
-    int i, size = CMUTIL_CALL(ipool->avail, GetSize);
+    uint i;
+    size_t size = CMCall(ipool->avail, GetSize);
     for (i=0; i<size; i++) {
         /*
          * if "test on borrow" option is on,
          * test will automatically performed when checkout.
          */
-        void *rsrc = CMUTIL_CALL(pool, CheckOut, 1);
+        void *rsrc = CMCall(pool, CheckOut, 1);
         if (!ipool->testonb) {
             if (!ipool->testf(rsrc, ipool->udata)) {
                 rsrc = ipool->createf(ipool->udata);
@@ -146,7 +147,7 @@ CMUTIL_STATIC void CMUTIL_PoolPingTester(void *p)
             }
         }
         if (rsrc)
-            CMUTIL_CALL(pool, Release, rsrc);
+            CMCall(pool, Release, rsrc);
     }
 }
 
@@ -173,7 +174,7 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
     memcpy(res, &g_cmutil_pool, sizeof(CMUTIL_Pool));
     res->avail = CMUTIL_ListCreateInternal(memst, NULL);
     for (i=0; i<initcnt; i++)
-        CMUTIL_CALL(res->avail, AddTail, createproc(udata));
+        CMCall(res->avail, AddTail, createproc(udata));
     res->semp = CMUTIL_SemaphoreCreateInternal(memst, maxcnt);
     res->avlmtx = CMUTIL_MutexCreateInternal(memst);
     res->createf = createproc;
@@ -186,9 +187,9 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
         res->timer = timer;
     else {
         res->timer = CMUTIL_TimerCreateInternal(memst, 1000, 1);
-        res->intimer = CMUTIL_True;
+        res->intimer = CMTrue;
     }
-    res->pingtester = CMUTIL_CALL(
+    res->pingtester = CMCall(
                 res->timer, ScheduleDelayRepeat, pinginterval, pinginterval,
                 CMUTIL_PoolPingTester, res);
     return (CMUTIL_Pool*)res;

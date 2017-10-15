@@ -40,16 +40,16 @@ typedef struct CMUTIL_Library_Internal {
     void				*library;
     CMUTIL_Mutex		*mutex;
     CMUTIL_Map			*procs;
-    CMUTIL_Mem		*memst;
+    CMUTIL_Mem          *memst;
 } CMUTIL_Library_Internal;
 
 CMUTIL_STATIC void *CMUTIL_LibraryGetProcedure(
-        CMUTIL_Library *lib, const char *proc_name)
+        const CMUTIL_Library *lib, const char *proc_name)
 {
-    CMUTIL_Library_Internal *ilib = (CMUTIL_Library_Internal*)lib;
+    const CMUTIL_Library_Internal *ilib = (const CMUTIL_Library_Internal*)lib;
     void *proc = NULL;
-    CMUTIL_CALL(ilib->mutex, Lock);
-    proc = CMUTIL_CALL(ilib->procs, Get, proc_name);
+    CMCall(ilib->mutex, Lock);
+    proc = CMCall(ilib->procs, Get, proc_name);
     if (!proc) {
 #if defined(MSWIN)
         proc = GetProcAddress((HMODULE)ilib->library, proc_name);
@@ -57,9 +57,9 @@ CMUTIL_STATIC void *CMUTIL_LibraryGetProcedure(
         proc = dlsym(ilib->library, proc_name);
 #endif
         if (proc)
-            CMUTIL_CALL(ilib->procs, Put, proc_name, proc);
+            CMCall(ilib->procs, Put, proc_name, proc);
     }
-    CMUTIL_CALL(ilib->mutex, Unlock);
+    CMCall(ilib->mutex, Unlock);
     return proc;
 }
 
@@ -76,9 +76,9 @@ CMUTIL_STATIC void CMUTIL_LibraryDestroy(
 #endif
         }
         if (ilib->procs)
-            CMUTIL_CALL(ilib->procs, Destroy);
+            CMCall(ilib->procs, Destroy);
         if (ilib->mutex)
-            CMUTIL_CALL(ilib->mutex, Destroy);
+            CMCall(ilib->mutex, Destroy);
         ilib->memst->Free(ilib);
     }
 }
@@ -108,7 +108,7 @@ CMUTIL_Library *CMUTIL_LibraryCreateInternal(
     res->library = dlopen(slib, RTLD_NOW);
 #endif
     res->mutex = CMUTIL_MutexCreateInternal(memst);
-    res->procs = CMUTIL_MapCreateInternal(memst, 10, CMUTIL_False, NULL);
+    res->procs = CMUTIL_MapCreateInternal(memst, 10, CMFalse, NULL);
 
     return (CMUTIL_Library*)res;
 }
@@ -129,21 +129,24 @@ typedef struct CMUTIL_File_Internal {
     CMUTIL_File			base;
     char				*path;
     char				*name;
+    CMUTIL_Mem          *memst;
     CMUTIL_Bool			isref;
-    CMUTIL_Mem		*memst;
+    int                 dummy_padder;
 } CMUTIL_File_Internal;
 
-CMUTIL_STATIC int CMUTIL_FileListCount(CMUTIL_FileList *flist)
+CMUTIL_STATIC size_t CMUTIL_FileListCount(const CMUTIL_FileList *flist)
 {
-    CMUTIL_FileList_Internal *iflist = (CMUTIL_FileList_Internal*)flist;
-    return CMUTIL_CALL(iflist->files, GetSize);
+    const CMUTIL_FileList_Internal *iflist =
+            (const CMUTIL_FileList_Internal*)flist;
+    return CMCall(iflist->files, GetSize);
 }
 
 CMUTIL_STATIC CMUTIL_File *CMUTIL_FileListGetAt(
-        CMUTIL_FileList *flist, int index)
+        const CMUTIL_FileList *flist, uint index)
 {
-    CMUTIL_FileList_Internal *iflist = (CMUTIL_FileList_Internal*)flist;
-    return (CMUTIL_File*)CMUTIL_CALL(iflist->files, GetAt, index);
+    const CMUTIL_FileList_Internal *iflist =
+            (const CMUTIL_FileList_Internal*)flist;
+    return (CMUTIL_File*)CMCall(iflist->files, GetAt, index);
 }
 
 CMUTIL_STATIC void CMUTIL_FileListDestroy(CMUTIL_FileList *flist)
@@ -151,14 +154,15 @@ CMUTIL_STATIC void CMUTIL_FileListDestroy(CMUTIL_FileList *flist)
     CMUTIL_FileList_Internal *iflist = (CMUTIL_FileList_Internal*)flist;
     if (iflist) {
         if (iflist->files) {
-            int i, count = CMUTIL_CALL(iflist->files, GetSize);
+            uint i;
+            size_t count = CMCall(iflist->files, GetSize);
             for (i=0; i<count; i++) {
                 CMUTIL_File_Internal *file =
-                        (CMUTIL_File_Internal*)CMUTIL_CALL(flist, GetAt, i);
-                file->isref = CMUTIL_False;
-                CMUTIL_CALL((CMUTIL_File*)file, Destroy);
+                        (CMUTIL_File_Internal*)CMCall(flist, GetAt, i);
+                file->isref = CMFalse;
+                CMCall((CMUTIL_File*)file, Destroy);
             }
-            CMUTIL_CALL(iflist->files, Destroy);
+            CMCall(iflist->files, Destroy);
         }
         iflist->memst->Free(iflist);
     }
@@ -183,85 +187,85 @@ CMUTIL_STATIC CMUTIL_FileList_Internal *CMUTIL_FileListCreate(
 }
 
 
-CMUTIL_STATIC CMUTIL_String *CMUTIL_FileGetContents(CMUTIL_File *file)
+CMUTIL_STATIC CMUTIL_String *CMUTIL_FileGetContents(const CMUTIL_File *file)
 {
-    CMUTIL_File_Internal *ifile = (CMUTIL_File_Internal*)file;
-    FILE *f = fopen(CMUTIL_CALL(file, GetFullPath), "rb");
+    const CMUTIL_File_Internal *ifile = (const CMUTIL_File_Internal*)file;
+    FILE *f = fopen(CMCall(file, GetFullPath), "rb");
     if (f) {
         char buffer[1024];
         size_t rdsz = 0;
         CMUTIL_String *cont =
                 CMUTIL_StringCreateInternal(ifile->memst, 1024, NULL);
         while ((rdsz = fread(buffer, 1, 1024, f)) > 0)
-            CMUTIL_CALL(cont, AddNString, buffer, (int)rdsz);
+            CMCall(cont, AddNString, buffer, rdsz);
         fclose(f);
         return cont;
     }
     return NULL;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileDelete(CMUTIL_File *file)
+CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileDelete(const CMUTIL_File *file)
 {
-    return DeleteFile(CMUTIL_CALL(file, GetFullPath)) == 0 ?
-            CMUTIL_True:CMUTIL_False;
+    return DeleteFile(CMCall(file, GetFullPath)) == 0 ?
+            CMTrue:CMFalse;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsFile(CMUTIL_File *file)
+CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsFile(const CMUTIL_File *file)
 {
     struct stat s;
-    if ( stat(CMUTIL_CALL(file, GetFullPath), &s) == 0 ) {
+    if ( stat(CMCall(file, GetFullPath), &s) == 0 ) {
         return s.st_mode & S_IFDIR ?
-                CMUTIL_False:CMUTIL_True;
+                CMFalse:CMTrue;
     }
-    return CMUTIL_False;
+    return CMFalse;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsDirectory(CMUTIL_File *file)
+CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsDirectory(const CMUTIL_File *file)
 {
     struct stat s;
-    if ( stat(CMUTIL_CALL(file, GetFullPath), &s) == 0 ) {
+    if ( stat(CMCall(file, GetFullPath), &s) == 0 ) {
         return s.st_mode & S_IFDIR ?
-                CMUTIL_True:CMUTIL_False;
+                CMTrue:CMFalse;
     }
-    return CMUTIL_False;
+    return CMFalse;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsExists(CMUTIL_File *file)
+CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsExists(const CMUTIL_File *file)
 {
     struct stat s;
-    return stat(CMUTIL_CALL(file, GetFullPath), &s) == 0?
-            CMUTIL_True:CMUTIL_False;
+    return stat(CMCall(file, GetFullPath), &s) == 0?
+            CMTrue:CMFalse;
 }
 
-CMUTIL_STATIC long CMUTIL_FileLength(CMUTIL_File *file)
+CMUTIL_STATIC long CMUTIL_FileLength(const CMUTIL_File *file)
 {
     struct stat s;
-    return (long)(stat(CMUTIL_CALL(file, GetFullPath), &s) == 0?
+    return (long)(stat(CMCall(file, GetFullPath), &s) == 0?
             s.st_size:0);
 }
 
-CMUTIL_STATIC const char *CMUTIL_FileGetName(CMUTIL_File *file)
+CMUTIL_STATIC const char *CMUTIL_FileGetName(const CMUTIL_File *file)
 {
-    return ((CMUTIL_File_Internal*)file)->name;
+    return ((const CMUTIL_File_Internal*)file)->name;
 }
 
-CMUTIL_STATIC const char *CMUTIL_FileGetFullPath(CMUTIL_File *file)
+CMUTIL_STATIC const char *CMUTIL_FileGetFullPath(const CMUTIL_File *file)
 {
-    return ((CMUTIL_File_Internal*)file)->path;
+    return ((const CMUTIL_File_Internal*)file)->path;
 }
 
-CMUTIL_STATIC time_t CMUTIL_FileModifiedTime(CMUTIL_File *file)
+CMUTIL_STATIC time_t CMUTIL_FileModifiedTime(const CMUTIL_File *file)
 {
     struct stat s;
-    return stat(CMUTIL_CALL(file, GetFullPath), &s) == 0?
+    return stat(CMCall(file, GetFullPath), &s) == 0?
             CMUTIL_MODTIME(s):0;
 }
 
-CMUTIL_STATIC CMUTIL_FileList *CMUTIL_FileChildren(CMUTIL_File *file)
+CMUTIL_STATIC CMUTIL_FileList *CMUTIL_FileChildren(const CMUTIL_File *file)
 {
-    CMUTIL_File_Internal *ifile = (CMUTIL_File_Internal*)file;
+    const CMUTIL_File_Internal *ifile = (const CMUTIL_File_Internal*)file;
     CMUTIL_FileList_Internal *flist = CMUTIL_FileListCreate(ifile->memst);
-    const char *parent = CMUTIL_CALL(file, GetFullPath);
+    const char *parent = CMCall(file, GetFullPath);
     char pathbuf[2048];
 
 #if defined(MSWIN)
@@ -276,7 +280,7 @@ CMUTIL_STATIC CMUTIL_FileList *CMUTIL_FileChildren(CMUTIL_File *file)
                 sprintf(pathbuf, "%s\\%s", parent, fname);
                 CMUTIL_File *f = CMUTIL_FileCreateInternal(
                             ifile->memst, pathbuf);
-                ((CMUTIL_File_Internal*)f)->isref = CMUTIL_True;
+                ((CMUTIL_File_Internal*)f)->isref = CMTrue;
                 CMUTIL_CALL(flist->files, Add, f);
             }
         } while (FindNextFile(hFind, &ffd) != 0);
@@ -292,8 +296,8 @@ CMUTIL_STATIC CMUTIL_FileList *CMUTIL_FileChildren(CMUTIL_File *file)
                 sprintf(pathbuf, "%s/%s", parent, fname);
                 CMUTIL_File *f = CMUTIL_FileCreateInternal(
                             ifile->memst, pathbuf);
-                ((CMUTIL_File_Internal*)f)->isref = CMUTIL_True;
-                CMUTIL_CALL(flist->files, Add, f);
+                ((CMUTIL_File_Internal*)f)->isref = CMTrue;
+                CMCall(flist->files, Add, f);
             }
         }
         closedir(dirp);
@@ -325,8 +329,8 @@ CMUTIL_STATIC void CMUTIL_FileFindFileOper(
         if (CMUTIL_PatternMatch(pattern, fname)) {
             CMUTIL_File *f = CMUTIL_FileCreateInternal(
                         flist->memst, filepath);
-            ((CMUTIL_File_Internal*)f)->isref = CMUTIL_True;
-            CMUTIL_CALL(flist->files, Add, f);
+            ((CMUTIL_File_Internal*)f)->isref = CMTrue;
+            CMCall(flist->files, Add, f);
         }
     }
 }
@@ -373,12 +377,12 @@ CMUTIL_STATIC void CMUTIL_FileFindInternal(
 }
 
 CMUTIL_STATIC CMUTIL_FileList *CMUTIL_FileFind(
-        CMUTIL_File *file, const char *pattern, CMUTIL_Bool recursive)
+        const CMUTIL_File *file, const char *pattern, CMUTIL_Bool recursive)
 {
-    CMUTIL_File_Internal *ifile = (CMUTIL_File_Internal*)file;
+    const CMUTIL_File_Internal *ifile = (const CMUTIL_File_Internal*)file;
     CMUTIL_FileList_Internal *flist = CMUTIL_FileListCreate(ifile->memst);
     CMUTIL_FileFindInternal(
-                flist, CMUTIL_CALL(file, GetFullPath), pattern, recursive);
+                flist, CMCall(file, GetFullPath), pattern, recursive);
     return (CMUTIL_FileList*)flist;
 }
 
@@ -454,7 +458,7 @@ CMUTIL_File *CMUTIL_FileCreate(const char *path)
 # define MKDIR			mkdir
 #endif
 
-CMUTIL_Bool CMUTIL_PathCreate(const char *path, int mode)
+CMUTIL_Bool CMUTIL_PathCreate(const char *path, uint mode)
 {
     int retval, i;
 
@@ -464,7 +468,7 @@ CMUTIL_Bool CMUTIL_PathCreate(const char *path, int mode)
 
         // existing directory.
         if (errno == EEXIST)
-            return CMUTIL_True;
+            return CMTrue;
 
         // no parent directory.
         p = strrchr(path, '/'); q = strrchr(path, '\\');
@@ -473,16 +477,16 @@ CMUTIL_Bool CMUTIL_PathCreate(const char *path, int mode)
         else if (q)
             p = q;
         if (NULL == p)
-            return CMUTIL_False;
+            return CMFalse;
 
         // no permission or path cannot be created.
         if (++i > 2)
-            return CMUTIL_False;
-        strncat(subpath, path, p - path);     /* Appends NULL */
+            return CMFalse;
+        strncat(subpath, path, (ulong)(p - path));     /* Appends NULL */
         CMUTIL_FileCreate(subpath);
     }
 #if defined(MSWIN)
     CMUTIL_UNUSED(mode);
 #endif
-    return retval;
+    return retval == 0? CMTrue:CMFalse;
 }

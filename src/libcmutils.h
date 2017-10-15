@@ -31,8 +31,8 @@
  *
  * Copyright 2016 Dennis Soungjin Park <xcomart@gmail.com>, all rights reserved.
  */
-#ifndef __LIBCMUTILS_H__
-#define __LIBCMUTILS_H__
+#ifndef LIBCMUTILS_H__
+#define LIBCMUTILS_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,8 +63,9 @@ extern "C" {
 #include <stdarg.h>
 #include <stdint.h>
 
-#define __STDC_FORMAT_MACROS /* for 64bit integer related macros */
+#define __STDC_FORMAT_MACROS 1 /* for 64bit integer related macros */
 #include <inttypes.h>
+#include <sys/types.h>
 
 #ifndef CMUTIL_API
 # if defined(MSWIN)
@@ -94,20 +95,6 @@ extern "C" {
  * CMUTIL library uses platform independent data types for multi-platform
  * support.
  */
-
-/**
- * 64 bit signed integer definition.
- */
-#if !defined(int64)
-# define int64 int64_t
-#endif
-
-/**
- * 64 bit unsigned integer definition.
- */
-#if !defined(uint64)
-# define uint64 uint64_t
-#endif
 
 /**
  * 64 bit signed / unsigned integer max values.
@@ -143,8 +130,8 @@ extern "C" {
  * @brief Boolean definition for this library.
  */
 typedef enum CMUTIL_Bool {
-    CMUTIL_True         =0x0001,
-    CMUTIL_False        =0x0000
+    CMTrue         =0x0001,
+    CMFalse        =0x0000
 } CMUTIL_Bool;
 
 /**
@@ -163,13 +150,13 @@ typedef enum CMUTIL_Bool {
 /**
  * Unused variable wrapper for avoiding compile warning.
  */
-#define CMUTIL_UNUSED(a,...)    CMUTIL_UnusedP((void*)(int64)(a), ## __VA_ARGS__)
+#define CMUTIL_UNUSED(a,...) CMUTIL_UnusedP((void*)(int64_t)(a), ## __VA_ARGS__)
 CMUTIL_API void CMUTIL_UnusedP(void*,...);
 
 /**
  * A wrapper macro for CMUTIL_CALL.
  */
-#define __CMUTIL_CALL(a,b,...)  (a)->b((a), ## __VA_ARGS__)
+#define CMUTIL_CALL__(a,b,...)  (a)->b((a), ## __VA_ARGS__)
 
 /**
  * @brief Method caller for this library.
@@ -190,18 +177,20 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
  * </code>
  *
  * As you see instance variable used redundently in method call,
- * we created an macro CMUTIL_CALL for this inconvinience.
+ * we created an macro CMCall because this inconvinience.
  * As a result below code will produce the same result with above code.
  * <code>
  * // Create CMUTIL_XX object instance.
  * CMUTIL_XX *obj = CMUTIL_XXCreate();
  * // Call method FooBar with arguments(arg1, arg2).
- * CMUTIL_CALL(obj, FooBar, arg1, arg2);
+ * CMCall(obj, FooBar, arg1, arg2);
  * // Destroy instance.
- * CMUTIL_CALL(obj, Destroy);
+ * CMCall(obj, Destroy);
  * </code>
  */
-#define CMUTIL_CALL __CMUTIL_CALL
+#define CMCall CMUTIL_CALL__
+// for backward compatibility
+#define CMUTIL_CALL CMUTIL_CALL__
 
 /**
  * @defgroup CMUTILS_Initialization Initialization and memory operations.
@@ -374,8 +363,8 @@ struct CMUTIL_Cond {
      *     interval elapses. If millisec is zero, the function does not
      *     enter a wait state if this condition is not set, it always
      *     returns immediately.
-     * @return CMUTIL_True if this condition is set in given interval,
-     *     CMUTIL_False otherwise.
+     * @return CMTrue if this condition is set in given interval,
+     *     CMFalse otherwise.
      */
     CMUTIL_Bool (*TimedWait)(
             CMUTIL_Cond *cond,
@@ -433,10 +422,10 @@ struct CMUTIL_Cond {
  * Creates a manual or auto resetting condition object.
  *
  * @param manual_reset
- *     If this parameter is CMUTIL_True, the function creates a
+ *     If this parameter is CMTrue, the function creates a
  *     manual-reset condition object, which requires the use of the Reset
  *     method to set the event state to nonsignaled. If this parameter is
- *     CMUTIL_False, the function creates an auto-reset condition
+ *     CMFalse, the function creates an auto-reset condition
  *     object, and system automatically resets the event state to
  *     nonsignaled after a single waiting thread has been released.
  * @return Created conditional object.
@@ -479,8 +468,8 @@ struct CMUTIL_Mutex {
     /**
      * @brief Try to lock given mutex object.
      * @param  mutex   a mutex object to be tested.
-     * @return CMUTIL_True if mutex locked successfully,
-     *         CMUTIL_False if lock failed.
+     * @return CMTrue if mutex locked successfully,
+     *         CMFalse if lock failed.
      */
     CMUTIL_Bool (*TryLock)(CMUTIL_Mutex *mutex);
 
@@ -535,23 +524,23 @@ struct CMUTIL_Thread {
      * @brief This thread is running or not.
      *
      * @param thread This thread object.
-     * @return CMUTIL_True if this thread is running,
-     *         CMUTIL_False if this thread is not running.
+     * @return CMTrue if this thread is running,
+     *         CMFalse if this thread is not running.
      */
-    CMUTIL_Bool (*IsRunning)(CMUTIL_Thread *thread);
+    CMUTIL_Bool (*IsRunning)(const CMUTIL_Thread *thread);
 
     /**
      * @brief Get the ID fo this thread. Returned ID is not system thread ID.
      *     just internal thread index.
      * @return ID of this thread.
      */
-    unsigned int(*GetId)(CMUTIL_Thread *thread);
+    uint (*GetId)(const CMUTIL_Thread *thread);
 
     /**
      * @brief Get the name of this thread.
      * @return Name of this thread.
      */
-    const char *(*GetName)(CMUTIL_Thread *thread);
+    const char *(*GetName)(const CMUTIL_Thread *thread);
 };
 
 /**
@@ -576,7 +565,7 @@ CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadCreate(
  *     just internal thread index.
  * @return ID of current thread.
  */
-CMUTIL_API unsigned int CMUTIL_ThreadSelfId();
+CMUTIL_API uint CMUTIL_ThreadSelfId();
 
 /**
  * @brief Get current thread context.
@@ -588,7 +577,7 @@ CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadSelf();
  * @brief Get system dependent thread id.
  * @return System dependent thread id.
  */
-CMUTIL_API uint64 CMUTIL_ThreadSystemSelfId();
+CMUTIL_API uint64_t CMUTIL_ThreadSystemSelfId();
 
 /**
  * @brief Platform independent semaphore object.
@@ -605,10 +594,11 @@ struct CMUTIL_Semaphore {
      *
      * @param semaphore This semaphore object.
      * @param millisec Waiting time to acquire an ownership in millisecond.
-     * @return CMUTIL_True if an ownership acquired successfully in time,
-     *         CMUTIL_False if failed to acquire ownership in time.
+     * @return CMTrue if an ownership acquired successfully in time,
+     *         CMFalse if failed to acquire ownership in time.
      */
-    CMUTIL_Bool (*Acquire)(CMUTIL_Semaphore *semaphore, long millisec);
+    CMUTIL_Bool (*Acquire)(
+            CMUTIL_Semaphore *semaphore, long millisec);
 
     /**
      * @brief Release an ownership to semaphore.
@@ -618,7 +608,8 @@ struct CMUTIL_Semaphore {
      * Acquire method will get the ownership and be unblocked.
      * @param semaphore This semaphore object.
      */
-    void (*Release)(CMUTIL_Semaphore *semaphore);
+    void (*Release)(
+            CMUTIL_Semaphore *semaphore);
 
     /**
      * @brief Destroy all resources related with this object.
@@ -651,7 +642,8 @@ struct CMUTIL_RWLock {
      * there are no writers blocked on the lock.
      * @param rwlock This read-write lock object.
      */
-    void (*ReadLock)(CMUTIL_RWLock *rwlock);
+    void (*ReadLock)(
+            CMUTIL_RWLock *rwlock);
 
     /**
      * @brief Read unlock for this object.
@@ -659,7 +651,8 @@ struct CMUTIL_RWLock {
      * This method shall release a read lock held on given object.
      * @param rwlock This read-write lock object.
      */
-    void (*ReadUnlock)(CMUTIL_RWLock *rwlock);
+    void (*ReadUnlock)(
+            CMUTIL_RWLock *rwlock);
 
     /**
      * @brief Write lock for this object.
@@ -672,7 +665,8 @@ struct CMUTIL_RWLock {
      * (whether a read or write lock).
      * @param rwlock This read-write lock object.
      */
-    void (*WriteLock)(CMUTIL_RWLock *rwlock);
+    void (*WriteLock)(
+            CMUTIL_RWLock *rwlock);
 
     /**
      * @brief Write unlock for this object.
@@ -680,7 +674,8 @@ struct CMUTIL_RWLock {
      * This method shall release a write lock held on given object.
      * @param rwlock This read-write lock object.
      */
-    void (*WriteUnlock)(CMUTIL_RWLock *rwlock);
+    void (*WriteUnlock)(
+            CMUTIL_RWLock *rwlock);
 
     /**
      * @brief Destroy all resources related with this object.
@@ -703,17 +698,19 @@ struct CMUTIL_Iterator {
     /**
      * @brief Check iterator has next element.
      * @param iter This iterator object.
-     * @return CMUTIL_True if this iterator has next element.
-     *         CMUTIL_False if there is no more elements.
+     * @return CMTrue if this iterator has next element.
+     *         CMFalse if there is no more elements.
      */
-    CMUTIL_Bool (*HasNext)(CMUTIL_Iterator *iter);
+    CMUTIL_Bool (*HasNext)(
+            const CMUTIL_Iterator *iter);
 
     /**
      * @brief Get next element from this iterator.
      * @param iter This iterator object.
      * @return Next element.
      */
-    void *(*Next)(CMUTIL_Iterator *iter);
+    void *(*Next)(
+            CMUTIL_Iterator *iter);
 
     /**
      * @brief Destroy this iterator.
@@ -721,7 +718,8 @@ struct CMUTIL_Iterator {
      * This method must be called after use this iterator.
      * @param iter This iterator object.
      */
-    void (*Destroy)(CMUTIL_Iterator *iter);
+    void (*Destroy)(
+            CMUTIL_Iterator *iter);
 };
 
 
@@ -773,7 +771,7 @@ struct CMUTIL_Array {
      * @return Inserted item if this array is not a sorted array.
      *         NULL if this array is a sorted array.
      */
-    void *(*InsertAt)(CMUTIL_Array *array, void *item, int index);
+    void *(*InsertAt)(CMUTIL_Array *array, void *item, uint index);
 
     /**
      * @brief Remove an item from this array.
@@ -785,7 +783,7 @@ struct CMUTIL_Array {
      * @return Removed item if given index is a valid index.
      *         NULL if given index is invalid.
      */
-    void *(*RemoveAt)(CMUTIL_Array *array, int index);
+    void *(*RemoveAt)(CMUTIL_Array *array, uint index);
 
     /**
      * @brief Replace an item at the position of this array.
@@ -802,7 +800,7 @@ struct CMUTIL_Array {
      *         NULL if this array is a sorted array or given index is not a
      *         valid index or the old item is NULL.
      */
-    void *(*SetAt)(CMUTIL_Array *array, void *item, int index);
+    void *(*SetAt)(CMUTIL_Array *array, void *item, uint index);
 
     /**
      * @brief Get an item from this array.
@@ -816,7 +814,7 @@ struct CMUTIL_Array {
      *         given index is valid one.
      *         NULL if given index is invalid.
      */
-    void *(*GetAt)(CMUTIL_Array *array, int index);
+    void *(*GetAt)(const CMUTIL_Array *array, uint index);
 
     /**
      * @brief Find an item from this array.
@@ -831,7 +829,7 @@ struct CMUTIL_Array {
      * @return A found item from this array if the item found. NULL if
      *         this array is not a sorted array or item not found.
      */
-    void *(*Find)(CMUTIL_Array *array, const void *compval, int *index);
+    void *(*Find)(const CMUTIL_Array *array, const void *compval, uint *index);
 
     /**
      * @brief The size of this array.
@@ -839,7 +837,7 @@ struct CMUTIL_Array {
      * @param array This dynamic array object.
      * @return The size of this array.
      */
-    int  (*GetSize)(CMUTIL_Array *array);
+    size_t  (*GetSize)(const CMUTIL_Array *array);
 
     /**
      * @brief Push an item to this array like stack operation.
@@ -849,8 +847,8 @@ struct CMUTIL_Array {
      *
      * @param array This dynamic array object.
      * @param item A new item to be pushed to this array.
-     * @return CMUTIL_True if push operation performed successfully.
-     *         CMUTIL_False otherwise.
+     * @return CMTrue if push operation performed successfully.
+     *         CMFalse otherwise.
      */
     CMUTIL_Bool (*Push)(CMUTIL_Array *array, void *item);
 
@@ -875,7 +873,7 @@ struct CMUTIL_Array {
      *         if the size of this array is bigger than zero.
      *         NULL if there is no item in this array.
      */
-    void *(*Top)(CMUTIL_Array *array);
+    void *(*Top)(const CMUTIL_Array *array);
 
     /**
      * @brief Get the bottom element from this array like stack operation.
@@ -887,7 +885,7 @@ struct CMUTIL_Array {
      *         if the size of this array is bigger than zero.
      *         NULL if there is no item in this array.
      */
-    void *(*Bottom)(CMUTIL_Array *array);
+    void *(*Bottom)(const CMUTIL_Array *array);
 
     /**
      * @brief Get iterator of all item in this array.
@@ -897,7 +895,7 @@ struct CMUTIL_Array {
      *         all item in this array.
      * @see {@link CMUTIL_Iterator CMUTIL_Iterator}
      */
-    CMUTIL_Iterator *(*Iterator)(CMUTIL_Array *array);
+    CMUTIL_Iterator *(*Iterator)(const CMUTIL_Array *array);
 
     /**
      * @brief Clear this array object.
@@ -941,57 +939,60 @@ struct CMUTIL_Array {
  * @return
  */
 CMUTIL_API CMUTIL_Array *CMUTIL_ArrayCreateEx(
-        int initcapacity,
+        size_t initcapacity,
         int (*comparator)(const void*,const void*),
         void(*freecb)(void*));
 
 
 typedef struct CMUTIL_String CMUTIL_String;
 struct CMUTIL_String {
-    int (*AddString)(
+    size_t (*AddString)(
             CMUTIL_String *string, const char *tobeadded);
-    int (*AddNString)(
-            CMUTIL_String *string, const char *tobeadded, int size);
-    int (*AddChar)(
+    size_t (*AddNString)(
+            CMUTIL_String *string, const char *tobeadded, size_t size);
+    size_t (*AddChar)(
             CMUTIL_String *string, char tobeadded);
-    int (*AddPrint)(
+    size_t (*AddPrint)(
             CMUTIL_String *string, const char *fmt, ...);
-    int (*AddVPrint)(
+    size_t (*AddVPrint)(
             CMUTIL_String *string, const char *fmt, va_list args);
-    int (*AddAnother)(
+    size_t (*AddAnother)(
             CMUTIL_String *string, CMUTIL_String *tobeadded);
-    int (*InsertString)(
-            CMUTIL_String *string, const char *tobeadded, int at);
-    int (*InsertNString)(
-            CMUTIL_String *string, const char *tobeadded, int at, int size);
-    int (*InsertPrint)(
-            CMUTIL_String *string, int idx, const char *fmt, ...);
-    int (*InsertVPrint)(
-            CMUTIL_String *string, int idx, const char *fmt, va_list args);
-    int (*InsertAnother)(
-            CMUTIL_String *string, int idx, CMUTIL_String *tobeadded);
+    size_t (*InsertString)(
+            CMUTIL_String *string, const char *tobeadded, uint at);
+    size_t (*InsertNString)(
+            CMUTIL_String *string,
+            const char *tobeadded, uint at, size_t size);
+    size_t (*InsertPrint)(
+            CMUTIL_String *string, uint idx, const char *fmt, ...);
+    size_t (*InsertVPrint)(
+            CMUTIL_String *string, uint idx,
+            const char *fmt, va_list args);
+    size_t (*InsertAnother)(
+            CMUTIL_String *string, uint idx, CMUTIL_String *tobeadded);
     void (*CutTailOff)(
-            CMUTIL_String *string, int length);
+            CMUTIL_String *string, size_t length);
     CMUTIL_String *(*Substring)(
-            CMUTIL_String *string, int offset, int length);
+            const CMUTIL_String *string, uint offset, size_t length);
     CMUTIL_String *(*ToLower)(
-            CMUTIL_String *string);
+            const CMUTIL_String *string);
     void (*SelfToLower)(
             CMUTIL_String *string);
     CMUTIL_String *(*ToUpper)(
-            CMUTIL_String *string);
+            const CMUTIL_String *string);
     void (*SelfToUpper)(
             CMUTIL_String *string);
     CMUTIL_String *(*Replace)(
-            CMUTIL_String *string, const char *needle, const char *alter);
-    int (*GetSize)(
-            CMUTIL_String *string);
+            const CMUTIL_String *string,
+            const char *needle, const char *alter);
+    size_t (*GetSize)(
+            const CMUTIL_String *string);
     const char *(*GetCString)(
-            CMUTIL_String *string);
+            const CMUTIL_String *string);
     void (*Clear)(
             CMUTIL_String *string);
     CMUTIL_String *(*Clone)(
-            CMUTIL_String *string);
+            const CMUTIL_String *string);
     void (*Destroy)(
             CMUTIL_String *string);
 };
@@ -1000,7 +1001,7 @@ struct CMUTIL_String {
 #define CMUTIL_StringCreate()   \
         CMUTIL_StringCreateEx(CMUTIL_STRING_DEFAULT, NULL)
 CMUTIL_API CMUTIL_String *CMUTIL_StringCreateEx(
-        int initcapacity,
+        size_t initcapacity,
         const char *initcontent);
 
 
@@ -1011,23 +1012,23 @@ struct CMUTIL_StringArray {
     void (*AddCString)(
             CMUTIL_StringArray *array, const char *string);
     void (*InsertAt)(
-            CMUTIL_StringArray *array, CMUTIL_String *string, int index);
+            CMUTIL_StringArray *array, CMUTIL_String *string, uint index);
     void (*InsertAtCString)(
-            CMUTIL_StringArray *array, const char *string, int index);
+            CMUTIL_StringArray *array, const char *string, uint index);
     CMUTIL_String *(*RemoveAt)(
-            CMUTIL_StringArray *array, int index);
+            CMUTIL_StringArray *array, uint index);
     CMUTIL_String *(*SetAt)(
-            CMUTIL_StringArray *array, CMUTIL_String *string, int index);
+            CMUTIL_StringArray *array, CMUTIL_String *string, uint index);
     CMUTIL_String *(*SetAtCString)(
-            CMUTIL_StringArray *array, const char *string, int index);
+            CMUTIL_StringArray *array, const char *string, uint index);
     CMUTIL_String *(*GetAt)(
-            CMUTIL_StringArray *array, int index);
+            const CMUTIL_StringArray *array, uint index);
     const char *(*GetCString)(
-            CMUTIL_StringArray *array, int index);
-    int (*GetSize)(
-            CMUTIL_StringArray *array);
+            const CMUTIL_StringArray *array, uint index);
+    size_t (*GetSize)(
+            const CMUTIL_StringArray *array);
     CMUTIL_Iterator *(*Iterator)(
-            CMUTIL_StringArray *array);
+            const CMUTIL_StringArray *array);
     void (*Destroy)(
             CMUTIL_StringArray *array);
 };
@@ -1035,7 +1036,8 @@ struct CMUTIL_StringArray {
 #define CMUTIL_STRINGARRAY_DEFAULT	32
 #define CMUTIL_StringArrayCreate()	\
         CMUTIL_StringArrayCreateEx(CMUTIL_STRINGARRAY_DEFAULT)
-CMUTIL_API CMUTIL_StringArray *CMUTIL_StringArrayCreateEx(int initcapacity);
+CMUTIL_API CMUTIL_StringArray *CMUTIL_StringArrayCreateEx(
+        size_t initcapacity);
 
 CMUTIL_API char *CMUTIL_StrRTrim(char *inp);
 CMUTIL_API char *CMUTIL_StrLTrim(char *inp);
@@ -1051,36 +1053,36 @@ CMUTIL_API int CMUTIL_StringHexToBytes(char *dest, const char *src, int len);
 typedef struct CMUTIL_Map CMUTIL_Map;
 struct CMUTIL_Map {
     void *(*Put)(CMUTIL_Map *map, const char* key, void* value);
-    void (*PutAll)(CMUTIL_Map *map, CMUTIL_Map *src);
-    void *(*Get)(CMUTIL_Map *map, const char* key);
+    void (*PutAll)(CMUTIL_Map *map, const CMUTIL_Map *src);
+    void *(*Get)(const CMUTIL_Map *map, const char* key);
     void *(*Remove)(CMUTIL_Map *map, const char* key);
-    CMUTIL_StringArray *(*GetKeys)(CMUTIL_Map *map);
-    int (*GetSize)(CMUTIL_Map *map);
-    CMUTIL_Iterator *(*Iterator)(CMUTIL_Map *map);
+    CMUTIL_StringArray *(*GetKeys)(const CMUTIL_Map *map);
+    size_t (*GetSize)(const CMUTIL_Map *map);
+    CMUTIL_Iterator *(*Iterator)(const CMUTIL_Map *map);
     void (*Clear)(CMUTIL_Map *map);
     void (*ClearLink)(CMUTIL_Map *map);
     void (*Destroy)(CMUTIL_Map *map);
-    void (*PrintTo)(CMUTIL_Map *map, CMUTIL_String *out);
+    void (*PrintTo)(const CMUTIL_Map *map, CMUTIL_String *out);
 };
 
 #define CMUTIL_MAP_DEFAULT	256
 #define CMUTIL_MapCreate()	CMUTIL_MapCreateEx(\
-        CMUTIL_MAP_DEFAULT, CMUTIL_False, NULL)
+        CMUTIL_MAP_DEFAULT, CMFalse, NULL)
 CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
-        int bucketsize, CMUTIL_Bool isucase, void(*freecb)(void*));
+        uint bucketsize, CMUTIL_Bool isucase, void(*freecb)(void*));
 
 
 typedef struct CMUTIL_List CMUTIL_List;
 struct CMUTIL_List {
     void (*AddFront)(CMUTIL_List *list, void *data);
     void (*AddTail)(CMUTIL_List *list, void *data);
-    void *(*GetFront)(CMUTIL_List *list);
-    void *(*GetTail)(CMUTIL_List *list);
+    void *(*GetFront)(const CMUTIL_List *list);
+    void *(*GetTail)(const CMUTIL_List *list);
     void *(*RemoveFront)(CMUTIL_List *list);
     void *(*RemoveTail)(CMUTIL_List *list);
     void *(*Remove)(CMUTIL_List *list, void *data);
-    int (*GetSize)(CMUTIL_List *list);
-    CMUTIL_Iterator *(*Iterator)(CMUTIL_List *list);
+    size_t (*GetSize)(const CMUTIL_List *list);
+    CMUTIL_Iterator *(*Iterator)(const CMUTIL_List *list);
     void (*Destroy)(CMUTIL_List *list);
 };
 
@@ -1100,32 +1102,34 @@ typedef enum CMUTIL_XmlNodeKind {
 
 typedef struct CMUTIL_XmlNode CMUTIL_XmlNode;
 struct CMUTIL_XmlNode {
-    CMUTIL_StringArray *(*GetAttributeNames)(CMUTIL_XmlNode *node);
+    CMUTIL_StringArray *(*GetAttributeNames)(const CMUTIL_XmlNode *node);
     CMUTIL_String *(*GetAttribute)(
-            CMUTIL_XmlNode *node, const char *key);
+            const CMUTIL_XmlNode *node, const char *key);
     void (*SetAttribute)(
             CMUTIL_XmlNode *node, const char *key, const char *value);
-    int (*ChildCount)(CMUTIL_XmlNode *node);
+    size_t (*ChildCount)(const CMUTIL_XmlNode *node);
     void (*AddChild)(CMUTIL_XmlNode *node, CMUTIL_XmlNode *child);
-    CMUTIL_XmlNode *(*ChildAt)(CMUTIL_XmlNode *node, int index);
-    CMUTIL_XmlNode *(*GetParent)(CMUTIL_XmlNode *node);
-    const char *(*GetName)(CMUTIL_XmlNode *node);
+    CMUTIL_XmlNode *(*ChildAt)(const CMUTIL_XmlNode *node, uint index);
+    CMUTIL_XmlNode *(*GetParent)(const CMUTIL_XmlNode *node);
+    const char *(*GetName)(const CMUTIL_XmlNode *node);
     void (*SetName)(CMUTIL_XmlNode *node, const char *name);
-    CMUTIL_XmlNodeKind (*GetType)(CMUTIL_XmlNode *node);
-    CMUTIL_String *(*ToDocument)(CMUTIL_XmlNode *node, CMUTIL_Bool beutify);
-    void (*SetUserData)(CMUTIL_XmlNode *node, void *udata, void(*freef)(void*));
-    void *(*GetUserData)(CMUTIL_XmlNode *node);
+    CMUTIL_XmlNodeKind (*GetType)(const CMUTIL_XmlNode *node);
+    CMUTIL_String *(*ToDocument)(
+            const CMUTIL_XmlNode *node, CMUTIL_Bool beutify);
+    void (*SetUserData)(
+            CMUTIL_XmlNode *node, void *udata, void(*freef)(void*));
+    void *(*GetUserData)(const CMUTIL_XmlNode *node);
     void (*Destroy)(CMUTIL_XmlNode *node);
 };
 
 CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlParse(CMUTIL_String *str);
 CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlParseString(
-        const char *xmlstr, int len);
+        const char *xmlstr, size_t len);
 CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlParseFile(const char *fpath);
 CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlNodeCreate(
         CMUTIL_XmlNodeKind type, const char *tagname);
 CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLen(
-        CMUTIL_XmlNodeKind type, const char *tagname, int len);
+        CMUTIL_XmlNodeKind type, const char *tagname, size_t len);
 
 
 
@@ -1133,9 +1137,9 @@ CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLen(
 typedef struct CMUTIL_CSConv CMUTIL_CSConv;
 struct CMUTIL_CSConv {
     CMUTIL_String *(*Forward)(
-            CMUTIL_CSConv *conv, CMUTIL_String *instr);
+            const CMUTIL_CSConv *conv, CMUTIL_String *instr);
     CMUTIL_String *(*Backward)(
-            CMUTIL_CSConv *conv, CMUTIL_String *instr);
+            const CMUTIL_CSConv *conv, CMUTIL_String *instr);
     void (*Destroy)(CMUTIL_CSConv *conv);
 };
 
@@ -1199,7 +1203,7 @@ CMUTIL_API CMUTIL_Pool *CMUTIL_PoolCreate(
 typedef struct CMUTIL_Library CMUTIL_Library;
 struct CMUTIL_Library {
     void *(*GetProcedure)(
-            CMUTIL_Library *lib,
+            const CMUTIL_Library *lib,
             const char *proc_name);
     void (*Destroy)(
             CMUTIL_Library *lib);
@@ -1211,36 +1215,36 @@ CMUTIL_API CMUTIL_Library *CMUTIL_LibraryCreate(const char *path);
 typedef struct CMUTIL_FileList CMUTIL_FileList;
 typedef struct CMUTIL_File CMUTIL_File;
 struct CMUTIL_FileList {
-    int (*Count)(
-            CMUTIL_FileList *flist);
+    size_t (*Count)(
+            const CMUTIL_FileList *flist);
     CMUTIL_File *(*GetAt)(
-            CMUTIL_FileList *flist,
-            int index);
+            const CMUTIL_FileList *flist,
+            uint index);
     void (*Destroy)(
             CMUTIL_FileList *flist);
 };
 
 struct CMUTIL_File {
     CMUTIL_String *(*GetContents)(
-            CMUTIL_File *file);
+            const CMUTIL_File *file);
     CMUTIL_Bool (*Delete)(
-            CMUTIL_File *file);
+            const CMUTIL_File *file);
     CMUTIL_Bool (*IsFile)(
-            CMUTIL_File *file);
+            const CMUTIL_File *file);
     CMUTIL_Bool (*IsDirectory)(
-            CMUTIL_File *file);
+            const CMUTIL_File *file);
     CMUTIL_Bool (*IsExists)(
-            CMUTIL_File *file);
+            const CMUTIL_File *file);
     long (*Length)(
-            CMUTIL_File *file);
+            const CMUTIL_File *file);
     const char *(*GetName)(
-            CMUTIL_File *file);
+            const CMUTIL_File *file);
     const char *(*GetFullPath)(
-            CMUTIL_File *file);
+            const CMUTIL_File *file);
     time_t (*ModifiedTime)(
-            CMUTIL_File *file);
+            const CMUTIL_File *file);
     CMUTIL_FileList *(*Children)(
-            CMUTIL_File *file);
+            const CMUTIL_File *file);
     /**
      * @brief Find all children which name is matched with given pattern.
      *
@@ -1352,23 +1356,24 @@ struct CMUTIL_File {
      * </pre>
      */
     CMUTIL_FileList *(*Find)(
-            CMUTIL_File *file, const char *pattern, CMUTIL_Bool recursive);
+            const CMUTIL_File *file,
+            const char *pattern, CMUTIL_Bool recursive);
     void (*Destroy)(
             CMUTIL_File *file);
 };
 
 CMUTIL_API CMUTIL_File *CMUTIL_FileCreate(const char *path);
 
-CMUTIL_Bool CMUTIL_PathCreate(const char *path, int mode);
+CMUTIL_Bool CMUTIL_PathCreate(const char *path, uint mode);
 
 typedef struct CMUTIL_Config CMUTIL_Config;
 struct CMUTIL_Config {
-    void (*Save)(CMUTIL_Config *conf, const char *path);
-    const char *(*Get)(CMUTIL_Config *conf, const char *key);
+    void (*Save)(const CMUTIL_Config *conf, const char *path);
+    const char *(*Get)(const CMUTIL_Config *conf, const char *key);
     void (*Set)(CMUTIL_Config *conf, const char *key, const char *value);
-    long (*GetLong)(CMUTIL_Config *conf, const char *key);
+    long (*GetLong)(const CMUTIL_Config *conf, const char *key);
     void (*SetLong)(CMUTIL_Config *conf, const char *key, long value);
-    double (*GetDouble)(CMUTIL_Config *conf, const char *key);
+    double (*GetDouble)(const CMUTIL_Config *conf, const char *key);
     void (*SetDouble)(CMUTIL_Config *conf, const char *key, double value);
     void(*Destroy)(CMUTIL_Config *conf);
 };
@@ -1399,7 +1404,7 @@ typedef struct CMUTIL_LogAppender CMUTIL_LogAppender;
 typedef struct CMUTIL_ConfLogger CMUTIL_ConfLogger;
 struct CMUTIL_ConfLogger {
     void(*AddAppender)(
-        CMUTIL_ConfLogger *logger,
+        const CMUTIL_ConfLogger *logger,
         CMUTIL_LogAppender *appender,
         CMUTIL_LogLevel level);
 };
@@ -1417,8 +1422,10 @@ struct CMUTIL_Logger {
 };
 
 struct CMUTIL_LogAppender {
-    const char *(*GetName)(CMUTIL_LogAppender *appender);
-    void(*SetAsync)(CMUTIL_LogAppender *appender, int buffersz);
+    const char *(*GetName)(
+            const CMUTIL_LogAppender *appender);
+    void(*SetAsync)(
+            CMUTIL_LogAppender *appender, size_t buffersz);
     void(*Append)(
         CMUTIL_LogAppender *appender,
         CMUTIL_Logger *logger,
@@ -1456,54 +1463,56 @@ CMUTIL_API CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreate(
         if (___logger == NULL) {                                        \
             CMUTIL_LogSystem *lsys = CMUTIL_LogSystemGet();             \
             if (lsys) ___logger =                                       \
-                CMUTIL_CALL(CMUTIL_LogSystemGet(), GetLogger, name);    \
+                CMCall(CMUTIL_LogSystemGet(), GetLogger, name);    \
         }                                                               \
         return ___logger;                                               \
     }
 
-#define __CMUTIL_Log(level,stack,f,...)	do {                            \
+#define CMUTIL_Log__(level,stack,f,...) do {                            \
     CMUTIL_Logger *logger = __CMUTIL_GetLogger();                       \
     if (logger)                                                         \
         logger->LogEx(logger, CMUTIL_LogLevel_##level,__FILE__,__LINE__,\
-                      CMUTIL_##stack,f,##__VA_ARGS__);                  \
+                      CM##stack,f,##__VA_ARGS__);                  \
     } while(0)
-#define __CMUTIL_Log2(level,stack,f,...)	do {                        \
+#define CMUTIL_Log2__(level,stack,f,...)	do {                        \
     CMUTIL_Logger *logger = __CMUTIL_GetLogger();                       \
     if (logger)                                                         \
         logger->LogEx(logger, level,__FILE__,__LINE__,                  \
                       CMUTIL_##stack,f,##__VA_ARGS__);                  \
     } while(0)
 
-#define CMLogTrace(f,...)   __CMUTIL_Log(Trace,False,f,##__VA_ARGS__)
-#define CMLogTraceS(f,...)  __CMUTIL_Log(Trace,True ,f,##__VA_ARGS__)
+#define CMLogTrace(f,...)   CMUTIL_Log__(Trace,False,f,##__VA_ARGS__)
+#define CMLogTraceS(f,...)  CMUTIL_Log__(Trace,True ,f,##__VA_ARGS__)
 
-#define CMLogDebug(f,...)   __CMUTIL_Log(Debug,False,f,##__VA_ARGS__)
-#define CMLogDebugS(f,...)  __CMUTIL_Log(Debug,True ,f,##__VA_ARGS__)
+#define CMLogDebug(f,...)   CMUTIL_Log__(Debug,False,f,##__VA_ARGS__)
+#define CMLogDebugS(f,...)  CMUTIL_Log__(Debug,True ,f,##__VA_ARGS__)
 
-#define CMLogInfo(f,...)    __CMUTIL_Log(Info ,False,f,##__VA_ARGS__)
-#define CMLogInfoS(f,...)   __CMUTIL_Log(Info ,True ,f,##__VA_ARGS__)
+#define CMLogInfo(f,...)    CMUTIL_Log__(Info ,False,f,##__VA_ARGS__)
+#define CMLogInfoS(f,...)   CMUTIL_Log__(Info ,True ,f,##__VA_ARGS__)
 
-#define CMLogWarn(f,...)    __CMUTIL_Log(Warn ,False,f,##__VA_ARGS__)
-#define CMLogWarnS(f,...)   __CMUTIL_Log(Warn ,True ,f,##__VA_ARGS__)
+#define CMLogWarn(f,...)    CMUTIL_Log__(Warn ,False,f,##__VA_ARGS__)
+#define CMLogWarnS(f,...)   CMUTIL_Log__(Warn ,True ,f,##__VA_ARGS__)
 
-#define CMLogError(f,...)   __CMUTIL_Log(Error,False,f,##__VA_ARGS__)
-#define CMLogErrorS(f,...)  __CMUTIL_Log(Error,True ,f,##__VA_ARGS__)
+#define CMLogError(f,...)   CMUTIL_Log__(Error,False,f,##__VA_ARGS__)
+#define CMLogErrorS(f,...)  CMUTIL_Log__(Error,True ,f,##__VA_ARGS__)
 
-#define CMLogFatal(f,...)   __CMUTIL_Log(Fatal,False,f,##__VA_ARGS__)
-#define CMLogFatalS(f,...)  __CMUTIL_Log(Fatal,True ,f,##__VA_ARGS__)
+#define CMLogFatal(f,...)   CMUTIL_Log__(Fatal,False,f,##__VA_ARGS__)
+#define CMLogFatalS(f,...)  CMUTIL_Log__(Fatal,True ,f,##__VA_ARGS__)
 
-#define CMLog(l,f,...)      __CMUTIL_Log2(l,False,f,##__VA_ARGS__)
-#define CMLogS(l,f,...)     __CMUTIL_Log2(l,True ,f,##__VA_ARGS__)
+#define CMLog(l,f,...)      CMUTIL_Log2__(l,False,f,##__VA_ARGS__)
+#define CMLogS(l,f,...)     CMUTIL_Log2__(l,True ,f,##__VA_ARGS__)
 
 typedef struct CMUTIL_LogSystem CMUTIL_LogSystem;
 struct CMUTIL_LogSystem {
-    void(*AddAppender)(CMUTIL_LogSystem *logsys, CMUTIL_LogAppender *appender);
+    void(*AddAppender)(
+            const CMUTIL_LogSystem *logsys, CMUTIL_LogAppender *appender);
     CMUTIL_ConfLogger *(*CreateLogger)(
-        CMUTIL_LogSystem *logsys,
+        const CMUTIL_LogSystem *logsys,
         const char *name,
         CMUTIL_LogLevel level,
         CMUTIL_Bool additivity);
-    CMUTIL_Logger *(*GetLogger)(CMUTIL_LogSystem *logsys, const char *name);
+    CMUTIL_Logger *(*GetLogger)(
+            const CMUTIL_LogSystem *logsys, const char *name);
     void(*Destroy)(CMUTIL_LogSystem *logsys);
 };
 
@@ -1515,9 +1524,11 @@ CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemGet();
 
 typedef struct CMUTIL_StackWalker CMUTIL_StackWalker;
 struct CMUTIL_StackWalker {
-    CMUTIL_StringArray *(*GetStack)(CMUTIL_StackWalker *walker, int skipdepth);
+    CMUTIL_StringArray *(*GetStack)(
+            const CMUTIL_StackWalker *walker, int skipdepth);
     void(*PrintStack)(
-        CMUTIL_StackWalker *walker, CMUTIL_String *outbuf, int skipdepth);
+            const CMUTIL_StackWalker *walker,
+            CMUTIL_String *outbuf, int skipdepth);
     void(*Destroy)(CMUTIL_StackWalker *walker);
 };
 
@@ -1536,22 +1547,25 @@ typedef enum CMUTIL_SocketResult {
 typedef struct CMUTIL_Socket CMUTIL_Socket;
 struct CMUTIL_Socket {
     CMUTIL_SocketResult (*Read)(
-            CMUTIL_Socket *socket,
-            CMUTIL_String *buffer, int size, long timeout);
+            const CMUTIL_Socket *socket,
+            CMUTIL_String *buffer, uint size, long timeout);
     CMUTIL_SocketResult (*Write)(
-            CMUTIL_Socket *socket, CMUTIL_String *data, long timeout);
+            const CMUTIL_Socket *socket, CMUTIL_String *data, long timeout);
     CMUTIL_SocketResult (*WritePart)(
-            CMUTIL_Socket *socket, CMUTIL_String *data,
-            int offset, int length, long timeout);
-    CMUTIL_SocketResult (*CheckReadBuffer)(CMUTIL_Socket *sock, long timeout);
-    CMUTIL_SocketResult (*CheckWriteBuffer)(CMUTIL_Socket *sock, long timeout);
+            const CMUTIL_Socket *socket, CMUTIL_String *data,
+            int offset, uint length, long timeout);
+    CMUTIL_SocketResult (*CheckReadBuffer)(
+            const CMUTIL_Socket *sock, long timeout);
+    CMUTIL_SocketResult (*CheckWriteBuffer)(
+            const CMUTIL_Socket *sock, long timeout);
     CMUTIL_Socket *(*ReadSocket)(
-            CMUTIL_Socket *socket, long timeout, CMUTIL_SocketResult *rval);
+            const CMUTIL_Socket *socket,
+            long timeout, CMUTIL_SocketResult *rval);
     CMUTIL_SocketResult (*WriteSocket)(
-            CMUTIL_Socket *socket,
+            const CMUTIL_Socket *socket,
             CMUTIL_Socket *tobesent, pid_t pid, long timeout);
     void (*GetRemoteAddr)(
-            CMUTIL_Socket *socket, char *hostbuf, int *port);
+            const CMUTIL_Socket *socket, char *hostbuf, int *port);
     void (*Close)(
             CMUTIL_Socket *socket);
 };
@@ -1566,7 +1580,8 @@ CMUTIL_API CMUTIL_Socket *CMUTIL_SSLSocketConnect(
 
 typedef struct CMUTIL_ServerSocket CMUTIL_ServerSocket;
 struct CMUTIL_ServerSocket {
-    CMUTIL_Socket *(*Accept)(CMUTIL_ServerSocket *server, long timeout);
+    CMUTIL_Socket *(*Accept)(
+            const CMUTIL_ServerSocket *server, long timeout);
     void (*Close)(CMUTIL_ServerSocket *server);
 };
 
@@ -1586,9 +1601,12 @@ typedef enum CMUTIL_JsonType {
 
 typedef struct CMUTIL_Json CMUTIL_Json;
 struct CMUTIL_Json {
-    void (*ToString)(CMUTIL_Json *json, CMUTIL_String *buf, CMUTIL_Bool pretty);
-    CMUTIL_JsonType (*GetType)(CMUTIL_Json *json);
-    CMUTIL_Json *(*Clone)(CMUTIL_Json *json);
+    void (*ToString)(
+            const CMUTIL_Json *json, CMUTIL_String *buf, CMUTIL_Bool pretty);
+    CMUTIL_JsonType (*GetType)(
+            const CMUTIL_Json *json);
+    CMUTIL_Json *(*Clone)(
+            const CMUTIL_Json *json);
     void (*Destroy)(CMUTIL_Json *json);
 };
 
@@ -1604,19 +1622,19 @@ typedef struct CMUTIL_JsonValue CMUTIL_JsonValue;
 struct CMUTIL_JsonValue {
     CMUTIL_Json	parent;
     CMUTIL_JsonValueType (*GetValueType)(
-            CMUTIL_JsonValue *jval);
-    int64 (*GetLong)(
-            CMUTIL_JsonValue *jval);
+            const CMUTIL_JsonValue *jval);
+    int64_t (*GetLong)(
+            const CMUTIL_JsonValue *jval);
     double (*GetDouble)(
-            CMUTIL_JsonValue *jval);
+            const CMUTIL_JsonValue *jval);
     CMUTIL_String *(*GetString)(
-            CMUTIL_JsonValue *jval);
+            const CMUTIL_JsonValue *jval);
     const char *(*GetCString)(
-            CMUTIL_JsonValue *jval);
+            const CMUTIL_JsonValue *jval);
     CMUTIL_Bool (*GetBoolean)(
-            CMUTIL_JsonValue *jval);
+            const CMUTIL_JsonValue *jval);
     void (*SetLong)(
-            CMUTIL_JsonValue *jval, int64 inval);
+            CMUTIL_JsonValue *jval, int64_t inval);
     void (*SetDouble)(
             CMUTIL_JsonValue *jval, double inval);
     void (*SetString)(
@@ -1633,23 +1651,23 @@ typedef struct CMUTIL_JsonObject CMUTIL_JsonObject;
 struct CMUTIL_JsonObject {
     CMUTIL_Json parent;
     CMUTIL_StringArray *(*GetKeys)(
-            CMUTIL_JsonObject *jobj);
+            const CMUTIL_JsonObject *jobj);
     CMUTIL_Json *(*Get)(
-            CMUTIL_JsonObject *jobj, const char *key);
-    int64 (*GetLong)(
-            CMUTIL_JsonObject *jobj, const char *key);
+            const CMUTIL_JsonObject *jobj, const char *key);
+    int64_t (*GetLong)(
+            const CMUTIL_JsonObject *jobj, const char *key);
     double (*GetDouble)(
-            CMUTIL_JsonObject *jobj, const char *key);
+            const CMUTIL_JsonObject *jobj, const char *key);
     CMUTIL_String *(*GetString)(
-            CMUTIL_JsonObject *jobj, const char *key);
+            const CMUTIL_JsonObject *jobj, const char *key);
     const char *(*GetCString)(
-            CMUTIL_JsonObject *jobj, const char *key);
+            const CMUTIL_JsonObject *jobj, const char *key);
     CMUTIL_Bool (*GetBoolean)(
-            CMUTIL_JsonObject *jobj, const char *key);
+            const CMUTIL_JsonObject *jobj, const char *key);
     void (*Put)(
             CMUTIL_JsonObject *jobj, const char *key, CMUTIL_Json *json);
     void (*PutLong)(
-            CMUTIL_JsonObject *jobj, const char *key, int64 value);
+            CMUTIL_JsonObject *jobj, const char *key, int64_t value);
     void (*PutDouble)(
             CMUTIL_JsonObject *jobj, const char *key, double value);
     void (*PutString)(
@@ -1667,24 +1685,24 @@ CMUTIL_API CMUTIL_JsonObject *CMUTIL_JsonObjectCreate();
 typedef struct CMUTIL_JsonArray CMUTIL_JsonArray;
 struct CMUTIL_JsonArray {
     CMUTIL_Json parent;
-    int (*GetSize)(
-            CMUTIL_JsonArray *jarr);
+    size_t (*GetSize)(
+            const CMUTIL_JsonArray *jarr);
     CMUTIL_Json *(*Get)(
-            CMUTIL_JsonArray *jarr, int index);
-    int64 (*GetLong)(
-            CMUTIL_JsonArray *jarr, int index);
+            const CMUTIL_JsonArray *jarr, uint index);
+    int64_t (*GetLong)(
+            const CMUTIL_JsonArray *jarr, uint index);
     double (*GetDouble)(
-            CMUTIL_JsonArray *jarr, int index);
+            const CMUTIL_JsonArray *jarr, uint index);
     CMUTIL_String *(*GetString)(
-            CMUTIL_JsonArray *jarr, int index);
+            const CMUTIL_JsonArray *jarr, uint index);
     const char *(*GetCString)(
-            CMUTIL_JsonArray *jarr, int index);
+            const CMUTIL_JsonArray *jarr, uint index);
     CMUTIL_Bool (*GetBoolean)(
-            CMUTIL_JsonArray *jarr, int index);
+            const CMUTIL_JsonArray *jarr, uint index);
     void (*Add)(
             CMUTIL_JsonArray *jarr, CMUTIL_Json *json);
     void (*AddLong)(
-            CMUTIL_JsonArray *jarr, int64 value);
+            CMUTIL_JsonArray *jarr, int64_t value);
     void (*AddDouble)(
             CMUTIL_JsonArray *jarr, double value);
     void (*AddString)(
@@ -1694,13 +1712,13 @@ struct CMUTIL_JsonArray {
     void (*AddNull)(
             CMUTIL_JsonArray *jarr);
     CMUTIL_Json *(*Remove)(
-            CMUTIL_JsonArray *jarr, int index);
+            CMUTIL_JsonArray *jarr, uint index);
 };
 
 CMUTIL_API CMUTIL_JsonArray *CMUTIL_JsonArrayCreate();
 
 CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
-#define CMUTIL_JsonDestroy(a)   CMUTIL_CALL((CMUTIL_Json*)(a), Destroy)
+#define CMUTIL_JsonDestroy(a)   CMCall((CMUTIL_Json*)(a), Destroy)
 
 CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
@@ -1708,5 +1726,5 @@ CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 }
 #endif
 
-#endif // __LIBCMUTILS_H__
+#endif // LIBCMUTILS_H__
 

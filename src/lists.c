@@ -33,9 +33,9 @@ typedef struct CMUTIL_List_Internal {
     CMUTIL_List			base;
     CMUTIL_ListItem		*head;
     CMUTIL_ListItem		*tail;
-    int					size;
+    size_t				size;
     void				(*freecb)(void*);
-    CMUTIL_Mem		*memst;
+    CMUTIL_Mem          *memst;
 } CMUTIL_List_Internal;
 
 CMUTIL_STATIC void CMUTIL_ListAddFront(CMUTIL_List *list, void *data)
@@ -70,17 +70,19 @@ CMUTIL_STATIC void CMUTIL_ListAddTail(CMUTIL_List *list, void *data)
     ilist->size++;
 }
 
-CMUTIL_STATIC void *CMUTIL_ListGetFront(CMUTIL_List *list)
+CMUTIL_STATIC void *CMUTIL_ListGetFront(const CMUTIL_List *list)
 {
-    CMUTIL_List_Internal *ilist = (CMUTIL_List_Internal*)list;
+    const CMUTIL_List_Internal *ilist =
+            (const CMUTIL_List_Internal*)list;
     if (list && ilist->head)
         return ilist->head->data;
     return NULL;
 }
 
-CMUTIL_STATIC void *CMUTIL_ListGetTail(CMUTIL_List *list)
+CMUTIL_STATIC void *CMUTIL_ListGetTail(const CMUTIL_List *list)
 {
-    CMUTIL_List_Internal *ilist = (CMUTIL_List_Internal*)list;
+    const CMUTIL_List_Internal *ilist =
+            (const CMUTIL_List_Internal*)list;
     if (list && ilist->tail)
         return ilist->tail->data;
     return NULL;
@@ -130,9 +132,9 @@ CMUTIL_STATIC void *CMUTIL_ListRemove(CMUTIL_List *list, void *data)
     while (item) {
         if (item->data == data) {
             if (item == ilist->head)
-                return CMUTIL_CALL(list, RemoveFront);
+                return CMCall(list, RemoveFront);
             if (item == ilist->tail)
-                return CMUTIL_CALL(list, RemoveTail);
+                return CMCall(list, RemoveTail);
             item->prev->next = item->next;
             item->next->prev = item->prev;
             ilist->memst->Free(item);
@@ -143,22 +145,23 @@ CMUTIL_STATIC void *CMUTIL_ListRemove(CMUTIL_List *list, void *data)
     return res;
 }
 
-CMUTIL_STATIC int CMUTIL_ListGetSize(CMUTIL_List *list)
+CMUTIL_STATIC size_t CMUTIL_ListGetSize(const CMUTIL_List *list)
 {
-    CMUTIL_List_Internal *ilist = (CMUTIL_List_Internal*)list;
+    const CMUTIL_List_Internal *ilist =
+            (const CMUTIL_List_Internal*)list;
     return ilist->size;
 }
 
 typedef struct CMUTIL_ListIter_st {
-    CMUTIL_Iterator			base;
-    CMUTIL_ListItem			*curr;
-    CMUTIL_List_Internal	*list;
+    CMUTIL_Iterator             base;
+    CMUTIL_ListItem             *curr;
+    const CMUTIL_List_Internal	*list;
 } CMUTIL_ListIter_st;
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_ListIterHasNext(CMUTIL_Iterator *iter)
+CMUTIL_STATIC CMUTIL_Bool CMUTIL_ListIterHasNext(const CMUTIL_Iterator *iter)
 {
-    CMUTIL_ListIter_st *iiter = (CMUTIL_ListIter_st*)iter;
-    return iiter->curr? CMUTIL_True:CMUTIL_False;
+    const CMUTIL_ListIter_st *iiter = (const CMUTIL_ListIter_st*)iter;
+    return iiter->curr? CMTrue:CMFalse;
 }
 
 CMUTIL_STATIC void *CMUTIL_ListIterNext(CMUTIL_Iterator *iter)
@@ -182,9 +185,9 @@ static CMUTIL_Iterator g_cmutil_list_iterator = {
     CMUTIL_ListIterDestroy
 };
 
-CMUTIL_STATIC CMUTIL_Iterator *CMUTIL_ListIterator(CMUTIL_List *list)
+CMUTIL_STATIC CMUTIL_Iterator *CMUTIL_ListIterator(const CMUTIL_List *list)
 {
-    CMUTIL_List_Internal *ilist = (CMUTIL_List_Internal*)list;
+    const CMUTIL_List_Internal *ilist = (const CMUTIL_List_Internal*)list;
     CMUTIL_ListIter_st *res = ilist->memst->Alloc(sizeof(CMUTIL_ListIter_st));
     memset(res, 0x0, sizeof(CMUTIL_ListIter_st));
     memcpy(res, &g_cmutil_list_iterator, sizeof(CMUTIL_Iterator));

@@ -28,16 +28,17 @@ typedef struct CMUTIL_ConfItem {
     char			*key;
     char			*comment;
     CMUTIL_ConfType	type;
-    int				index;
-    CMUTIL_Mem	*memst;
+    uint			index;
+    CMUTIL_Mem      *memst;
 } CMUTIL_ConfItem;
 
 typedef struct CMUTIL_Config_Internal {
     CMUTIL_Map		*confs;
     CMUTIL_Array	*sequence;
     CMUTIL_Map		*revconf;
-    int maxkeylen;
-    CMUTIL_Mem	*memst;
+    int             maxkeylen;
+    int             dummy_padder;
+    CMUTIL_Mem      *memst;
 } CMUTIL_Config_Internal;
 
 CMUTIL_STATIC char *NextTermBefore(
@@ -77,7 +78,7 @@ CMUTIL_STATIC int AppendTrimmedLine(CMUTIL_String *rstr, char *in, char *spaces)
     }
     *last = 0x0;
     if (last > in)
-        CMUTIL_CALL(rstr, AddNString, in, (int)(last - in));
+        CMCall(rstr, AddNString, in, (size_t)(last - in));
     return iscont;
 
 }
@@ -99,13 +100,13 @@ CMUTIL_STATIC void CMUTIL_ConfigDestroy(CMUTIL_Config *conf)
     if (conf) {
         CMUTIL_Config_Internal *iconf = (CMUTIL_Config_Internal*)conf;
         if (iconf->confs)
-            CMUTIL_CALL(iconf->confs, Destroy);
+            CMCall(iconf->confs, Destroy);
 
         if (iconf->sequence)
-            CMUTIL_CALL(iconf->sequence, Destroy);
+            CMCall(iconf->sequence, Destroy);
 
         if (iconf->revconf)
-            CMUTIL_CALL(iconf->revconf, Destroy);
+            CMCall(iconf->revconf, Destroy);
 
         iconf->memst->Free(iconf);
     }
@@ -114,19 +115,20 @@ CMUTIL_STATIC void CMUTIL_ConfigDestroy(CMUTIL_Config *conf)
 #define DOFAILED	if (!*p) do { \
         failed = 1; ConfItemDestroy(item); goto FAILED; } while(0)
 
-void CMUTIL_ConfigSave(CMUTIL_Config *conf, const char *confpath)
+void CMUTIL_ConfigSave(const CMUTIL_Config *conf, const char *confpath)
 {
     if (conf) {
-        CMUTIL_Config_Internal *iconf = (CMUTIL_Config_Internal*)conf;
+        const CMUTIL_Config_Internal *iconf =
+                (const CMUTIL_Config_Internal*)conf;
         FILE *f = NULL;
         char fmt[50];
-        int i;
+        uint i;
         f = fopen(confpath, "wb");
-        for (i = 0; i < CMUTIL_CALL(iconf->sequence, GetSize); i++) {
-            CMUTIL_ConfItem *item = (CMUTIL_ConfItem*)CMUTIL_CALL(
+        for (i = 0; i < CMCall(iconf->sequence, GetSize); i++) {
+            CMUTIL_ConfItem *item = (CMUTIL_ConfItem*)CMCall(
                     iconf->sequence, GetAt, i);
             if (item->type == ConfItem_Pair) {
-                char *v = (char*)CMUTIL_CALL(iconf->confs, Get, item->key);
+                char *v = (char*)CMCall(iconf->confs, Get, item->key);
                 if (item->comment) {
                     sprintf(fmt, "%%%ds = %%s %%s\n", iconf->maxkeylen);
                     fprintf(f, fmt, item->key, v, item->comment);
@@ -147,16 +149,16 @@ void CMUTIL_ConfigSave(CMUTIL_Config *conf, const char *confpath)
     }
 }
 
-const char *CMUTIL_ConfigGet(CMUTIL_Config *conf, const char *key)
+const char *CMUTIL_ConfigGet(const CMUTIL_Config *conf, const char *key)
 {
-    CMUTIL_Config_Internal *iconf = (CMUTIL_Config_Internal*)conf;
-    return (char*)CMUTIL_CALL(iconf->confs, Get, key);
+    const CMUTIL_Config_Internal *iconf = (const CMUTIL_Config_Internal*)conf;
+    return (char*)CMCall(iconf->confs, Get, key);
 }
 
 void CMUTIL_ConfigSet(CMUTIL_Config *conf, const char *key, const char *value)
 {
     CMUTIL_Config_Internal *iconf = (CMUTIL_Config_Internal*)conf;
-    char *prev = (char*)CMUTIL_CALL(
+    char *prev = (char*)CMCall(
                 iconf->confs, Put, key, iconf->memst->Strdup(value));
     if (prev) {
         iconf->memst->Free(prev);
@@ -168,33 +170,33 @@ void CMUTIL_ConfigSet(CMUTIL_Config *conf, const char *key, const char *value)
         item->key = iconf->memst->Strdup(key);
         item->type = ConfItem_Pair;
         item->memst = iconf->memst;
-        CMUTIL_CALL(iconf->sequence, Add, item);
-        CMUTIL_CALL(iconf->revconf, Put, item->key, item);
+        CMCall(iconf->sequence, Add, item);
+        CMCall(iconf->revconf, Put, item->key, item);
     }
 }
 
-long CMUTIL_ConfigGetLong(CMUTIL_Config *conf, const char *key)
+long CMUTIL_ConfigGetLong(const CMUTIL_Config *conf, const char *key)
 {
-    return atol(CMUTIL_CALL(conf, Get, key));
+    return atol(CMCall(conf, Get, key));
 }
 
 void CMUTIL_ConfigSetLong(CMUTIL_Config *conf, const char *key, long value)
 {
     char buf[20];
     sprintf(buf, "%ld", value);
-    CMUTIL_CALL(conf, Set, key, buf);
+    CMCall(conf, Set, key, buf);
 }
 
-double CMUTIL_ConfigGetDouble(CMUTIL_Config *conf, const char *key)
+double CMUTIL_ConfigGetDouble(const CMUTIL_Config *conf, const char *key)
 {
-    return atof(CMUTIL_CALL(conf, Get, key));
+    return atof(CMCall(conf, Get, key));
 }
 
 void CMUTIL_ConfigSetDouble(CMUTIL_Config *conf, const char *key, double value)
 {
     char buf[30];
     sprintf(buf, "%f", value);
-    CMUTIL_CALL(conf, Set, key, buf);
+    CMCall(conf, Set, key, buf);
 }
 
 static CMUTIL_Config g_cmutil_config = {
@@ -216,11 +218,11 @@ CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem *memst)
     memcpy(res, &g_cmutil_config, sizeof(CMUTIL_Config));
     res->memst = memst;
     res->confs = CMUTIL_MapCreateInternal(
-                memst, CMUTIL_MAP_DEFAULT, CMUTIL_False, memst->Free);
+                memst, CMUTIL_MAP_DEFAULT, CMFalse, memst->Free);
     res->sequence = CMUTIL_ArrayCreateInternal(
                 memst, 100, NULL, ConfItemDestroy);
     res->revconf = CMUTIL_MapCreateInternal(
-                memst, CMUTIL_MAP_DEFAULT, CMUTIL_False, NULL);
+                memst, CMUTIL_MAP_DEFAULT, CMFalse, NULL);
     return (CMUTIL_Config*)res;
 }
 
@@ -253,7 +255,7 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
             memset(res, 0x0, sizeof(CMUTIL_ConfItem));
             res->memst = memst;
 
-            p = (char*)CMUTIL_CALL(str, GetCString);
+            p = (char*)CMCall(str, GetCString);
             p = CMUTIL_StrSkipSpaces(p, SPACES);
             switch (*p) {
             case '#': case '\0':
@@ -274,28 +276,28 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
                 v = CMUTIL_StrTrim(value);
                 if (*p == '#')
                     item->comment = memst->Strdup(CMUTIL_StrRTrim(p));
-                CMUTIL_CALL(res->confs, Put, name, memst->Strdup(v));
+                CMCall(res->confs, Put, name, memst->Strdup(v));
                 item->key = memst->Strdup(name);
                 keylen = (int)strlen(item->key);
                 if (res->maxkeylen < keylen)
                     res->maxkeylen = keylen;
                 item->type = ConfItem_Pair;
-                CMUTIL_CALL(res->revconf, Put, item->key, item);
+                CMCall(res->revconf, Put, item->key, item);
             }
             }
 
-            item->index = CMUTIL_CALL(res->sequence, GetSize);
-            CMUTIL_CALL(res->sequence, Add, item);
-            CMUTIL_CALL(str, Clear);
+            item->index = (uint)CMCall(res->sequence, GetSize);
+            CMCall(res->sequence, Add, item);
+            CMCall(str, Clear);
         }
     FAILED:
         if (str)
-            CMUTIL_CALL(str, Destroy);
+            CMCall(str, Destroy);
         fclose(f);
     }
 
     if (failed && res) {
-        CMUTIL_CALL((CMUTIL_Config*)res, Destroy);
+        CMCall((CMUTIL_Config*)res, Destroy);
         res = NULL;
     }
 
