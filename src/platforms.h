@@ -33,36 +33,6 @@
 
 #if (defined(_WIN32) || defined(_WIN64)) && !defined(MSWIN)
 # define MSWIN
-#endif
-
-/* Defined if OS is Linux and compiler is gcc. */
-#if defined(__linux__) && !defined(LINUX)
-# define LINUX
-#endif
-
-/* Defined if OS is Solaris or SunOS. */
-#if defined(sun) && !defined(SUNOS)
-# define SUNOS
-#endif
-
-/* Defined if the operating system is AIX version 3.2 or higher. */
-#if defined(_AIX32) && !defined(AIX)
-# define AIX
-#endif
-
-/* Defined on all HP-UX systems. */
-#if defined(__hpux) && !defined(HPUX)
-# define HPUX
-#endif
-
-/* Defined on all Apple Systems(OS X, iOS, MacOS) */
-#if defined(__APPLE__) && !defined(APPLE)
-# define APPLE
-#endif
-
-
-
-#if defined(MSWIN)
 # define CMUTIL_SO_EXT		"dll"
 # define CMUTIL_LIB_ENV		"PATH"
 # define CMUTIL_LIB_DFLT	""
@@ -92,32 +62,32 @@
 /* Defined on all HP-UX systems. */
 #if defined(__hpux) && !defined(HPUX)
 # define HPUX
-# define CMUTIL_SO_EXT		"sl"
-# define CMUTIL_LIB_ENV	"SHLIB_PATH"
+# define CMUTIL_SO_EXT      "sl"
+# define CMUTIL_LIB_ENV     "SHLIB_PATH"
 #endif
 
 /* Defined on all Apple Systems(OS X, iOS, MacOS) */
 #if defined(__APPLE__) && !defined(APPLE)
 # define APPLE
-# define CMUTIL_SO_EXT		"dylib"
-# define CMUTIL_LIB_ENV	"DYLD_LIBRARY_PATH"
+# define CMUTIL_SO_EXT      "dylib"
+# define CMUTIL_LIB_ENV     "DYLD_LIBRARY_PATH"
 #endif
 
 #if !defined(CMUTIL_PATH_SEPS)
-# define CMUTIL_PATH_SEPS	":"
+# define CMUTIL_PATH_SEPS   ":"
 #endif
 
 
 #if !defined(CMUTIL_SO_EXT)
-# define CMUTIL_SO_EXT		"so"
+# define CMUTIL_SO_EXT      "so"
 #endif
 
 #if !defined(CMUTIL_LIB_ENV)
-# define CMUTIL_LIB_ENV	"LD_LIBRARY_PATH"
+# define CMUTIL_LIB_ENV     "LD_LIBRARY_PATH"
 #endif
 
 #if !defined(CMUTIL_LIB_DFLT)
-# define CMUTIL_LIB_DFLT	"/lib:/usr/lib:/usr/local/lib"
+# define CMUTIL_LIB_DFLT    "/lib:/usr/lib:/usr/local/lib"
 #endif
 
 
@@ -147,7 +117,7 @@
 # define gethostbyname_r(n,p,b,s,l,e)	\
 	memcpy(p,gethostbyname(n),sizeof(struct hostent))
 # define localtime_r(a,b)	memcpy(b, localtime(a), sizeof(struct tm))
-# define GETPID				(long)GetCurrentProcessId
+# define GETPID				(pid_t)GetCurrentProcessId
 # define S_CRLF				"\r\n"
 # define USLEEP(x)			Sleep((x) / 1000)
 #else

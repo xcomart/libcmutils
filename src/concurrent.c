@@ -161,21 +161,21 @@ CMUTIL_STATIC void CMUTIL_CondWait(CMUTIL_Cond *cond)
 ///		interval elapses. If millisec is zero, the function does not
 ///		enter a wait state if this condition is not set; it always
 ///		returns immediately.
-/// \return CMUTIL_True if this condition is set in given interval,
-///		CMUTIL_False otherwise.
+/// \return CMTrue if this condition is set in given interval,
+///		CMFalse otherwise.
 CMUTIL_STATIC CMUTIL_Bool CMUTIL_CondTimedWait(
         CMUTIL_Cond *cond, long millisec)
 {
-    CMUTIL_Bool res = CMUTIL_False;
+    CMUTIL_Bool res = CMFalse;
     CMUTIL_Cond_Internal *icond = (CMUTIL_Cond_Internal*)cond;
 #if defined(MSWIN)
     DWORD dwRes = WaitForSingleObject(icond->cond, (DWORD)millisec);
     if (dwRes == WAIT_OBJECT_0)
-        res = CMUTIL_True;
+        res = CMTrue;
 #else
     MUTEX_LOCK(&(icond->mutex));
     if (millisec == 0) {
-        res = icond->state? CMUTIL_True:CMUTIL_False;
+        res = icond->state? CMTrue:CMFalse;
     } else {
         struct timeval now;
         struct timespec timeout;
@@ -190,7 +190,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_CondTimedWait(
                 ir = COND_TIMEDWAIT(
                         &(icond->cond), &(icond->mutex), &timeout);
             if (icond->state)
-                res = CMUTIL_True;
+                res = CMTrue;
         }
     }
     if (res) {
@@ -314,10 +314,10 @@ CMUTIL_Cond *CMUTIL_CondCreateInternal(
 /// Creates a manual or auto resetting condition object.
 ///
 /// \param manual_reset
-///			If this parameter is CMUTIL_True, the function creates a
+///			If this parameter is CMTrue, the function creates a
 ///			manual-reset condition object, which requires the use of the Reset
 ///			method to set the event state to nonsignaled. If this parameter is
-///			CMUTIL_False, the function creates an auto-reset condition
+///			CMFalse, the function creates an auto-reset condition
 ///			object, and system automatically resets the event state to
 ///			nonsignaled after a single waiting thread has been released.
 CMUTIL_Cond *CMUTIL_CondCreate(CMUTIL_Bool manual_reset)
@@ -383,18 +383,18 @@ CMUTIL_STATIC void CMUTIL_MutexUnlock(CMUTIL_Mutex *mutex)
 
 /// \brief Try to lock given mutex object.
 /// \param	mutex	a mutex object to be tested.
-/// \return	CMUTIL_True if mutex locked successfully,
-///			CMUTIL_False if lock failed.
+/// \return	CMTrue if mutex locked successfully,
+///			CMFalse if lock failed.
 CMUTIL_STATIC CMUTIL_Bool CMUTIL_MutexTryLock(CMUTIL_Mutex *mutex)
 {
     CMUTIL_Mutex_Internal *imutex =
             (CMUTIL_Mutex_Internal *)mutex;
 #if defined(MSWIN)
     return TryEnterCriticalSection(&(imutex->mutex))?
-            CMUTIL_True:CMUTIL_False;
+            CMTrue:CMFalse;
 #else
     return MUTEX_TRYLOCK(&(imutex->mutex)) == 0?
-            CMUTIL_True:CMUTIL_False;
+            CMTrue:CMFalse;
 #endif
 }
 
@@ -412,7 +412,7 @@ CMUTIL_STATIC void CMUTIL_MutexDestroy(CMUTIL_Mutex *mutex)
     imutex->memst->Free(imutex);
 }
 
-CMUTIL_Mutex __g_cmutil_mutex = {
+static CMUTIL_Mutex __g_cmutil_mutex = {
         CMUTIL_MutexLock,
         CMUTIL_MutexUnlock,
         CMUTIL_MutexTryLock,
@@ -471,15 +471,15 @@ typedef struct CMUTIL_Thread_Internal {
     void                *udata;
     void                *retval;
     void                *(*proc)(void*);
-    CMUTIL_Bool         isrunning;
 #if defined(MSWIN)
     HANDLE              thread;
 #else
     THREAD_T            thread;
 #endif
-    unsigned int        id;
+    CMUTIL_Bool         isrunning;
+    uint                id;
     char                *name;
-    uint64              sysid;
+    uint64_t             sysid;
     CMUTIL_Mem          *memst;
 } CMUTIL_Thread_Internal;
 
@@ -490,12 +490,12 @@ typedef struct CMUTIL_Thread_Global_Context {
 } CMUTIL_Thread_Global_Context;
 
 static CMUTIL_Thread_Global_Context *g_cmutil_thread_context = NULL;
-static uint64 g_main_thread_sysid;
+static uint64_t g_main_thread_sysid;
 
 CMUTIL_STATIC int CMUTIL_ThreadComparator(const void *a, const void *b)
 {
-    CMUTIL_Thread_Internal *ia = (CMUTIL_Thread_Internal*)a;
-    CMUTIL_Thread_Internal *ib = (CMUTIL_Thread_Internal*)b;
+    const CMUTIL_Thread_Internal *ia = (const CMUTIL_Thread_Internal*)a;
+    const CMUTIL_Thread_Internal *ib = (const CMUTIL_Thread_Internal*)b;
     if (ia->sysid > ib->sysid) return 1;
     else if (ia->sysid < ib->sysid) return -1;
     else return 0;
@@ -516,9 +516,9 @@ void CMUTIL_ThreadInit()
 void CMUTIL_ThreadClear()
 {
     if (g_cmutil_thread_context->threads)
-        CMUTIL_CALL(g_cmutil_thread_context->threads, Destroy);
+        CMCall(g_cmutil_thread_context->threads, Destroy);
     if (g_cmutil_thread_context->mutex)
-        CMUTIL_CALL(g_cmutil_thread_context->mutex, Destroy);
+        CMCall(g_cmutil_thread_context->mutex, Destroy);
     CMFree(g_cmutil_thread_context);
     g_cmutil_thread_context = NULL;
 }
@@ -535,13 +535,13 @@ CMUTIL_STATIC void *CMUTIL_ThreadProc(void *param)
 {
     CMUTIL_Thread_Internal *iparam = (CMUTIL_Thread_Internal*)param;
 
-    iparam->isrunning = CMUTIL_True;
+    iparam->isrunning = CMTrue;
     iparam->retval = iparam->proc(iparam->udata);
 
-    CMUTIL_CALL(g_cmutil_thread_context->mutex, Lock);
-    CMUTIL_CALL(g_cmutil_thread_context->threads, Remove, iparam);
-    CMUTIL_CALL(g_cmutil_thread_context->mutex, Unlock);
-    iparam->isrunning = CMUTIL_False;
+    CMCall(g_cmutil_thread_context->mutex, Lock);
+    CMCall(g_cmutil_thread_context->threads, Remove, iparam);
+    CMCall(g_cmutil_thread_context->mutex, Unlock);
+    iparam->isrunning = CMFalse;
 
 #if defined(MSWIN)
     _endthreadex(0);
@@ -577,9 +577,10 @@ CMUTIL_STATIC void *CMUTIL_ThreadJoin(CMUTIL_Thread *thread)
     return res;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_ThreadIsRunning(CMUTIL_Thread *thread)
+CMUTIL_STATIC CMUTIL_Bool CMUTIL_ThreadIsRunning(const CMUTIL_Thread *thread)
 {
-    CMUTIL_Thread_Internal *ithread = (CMUTIL_Thread_Internal*)thread;
+    const CMUTIL_Thread_Internal *ithread =
+            (const CMUTIL_Thread_Internal*)thread;
     return ithread->isrunning;
 }
 
@@ -603,25 +604,27 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_ThreadStart(CMUTIL_Thread *thread)
 # else
     ir = pthread_create(&(ithread->thread), NULL, CMUTIL_ThreadProc, ithread);
 # endif
-    ithread->sysid = (uint64)ithread->thread;
+    ithread->sysid = (uint64_t)ithread->thread;
 #endif
 
-    CMUTIL_CALL(g_cmutil_thread_context->mutex, Lock);
-    CMUTIL_CALL(g_cmutil_thread_context->threads, Add, ithread);
-    CMUTIL_CALL(g_cmutil_thread_context->mutex, Unlock);
+    CMCall(g_cmutil_thread_context->mutex, Lock);
+    CMCall(g_cmutil_thread_context->threads, Add, ithread);
+    CMCall(g_cmutil_thread_context->mutex, Unlock);
 
-    return ir == 0? CMUTIL_True:CMUTIL_False;
+    return ir == 0? CMTrue:CMFalse;
 }
 
-CMUTIL_STATIC unsigned int CMUTIL_ThreadGetId(CMUTIL_Thread *thread)
+CMUTIL_STATIC uint CMUTIL_ThreadGetId(const CMUTIL_Thread *thread)
 {
-    CMUTIL_Thread_Internal *ithread = (CMUTIL_Thread_Internal*)thread;
+    const CMUTIL_Thread_Internal *ithread =
+            (const CMUTIL_Thread_Internal*)thread;
     return ithread->id;
 }
 
-CMUTIL_STATIC const char *CMUTIL_ThreadGetName(CMUTIL_Thread *thread)
+CMUTIL_STATIC const char *CMUTIL_ThreadGetName(const CMUTIL_Thread *thread)
 {
-    CMUTIL_Thread_Internal *ithread = (CMUTIL_Thread_Internal*)thread;
+    const CMUTIL_Thread_Internal *ithread =
+            (const CMUTIL_Thread_Internal*)thread;
     return ithread->name;
 }
 
@@ -648,9 +651,9 @@ CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
     ithread->memst = memst;
     ithread->name = memst->Strdup(name);
 
-    CMUTIL_CALL(g_cmutil_thread_context->mutex, Lock);
+    CMCall(g_cmutil_thread_context->mutex, Lock);
     ithread->id = ++(g_cmutil_thread_context->threadIndex);
-    CMUTIL_CALL(g_cmutil_thread_context->mutex, Unlock);
+    CMCall(g_cmutil_thread_context->mutex, Unlock);
 
     return (CMUTIL_Thread*)ithread;
 }
@@ -661,16 +664,16 @@ CMUTIL_Thread *CMUTIL_ThreadCreate(
     return CMUTIL_ThreadCreateInternal(CMUTIL_GetMem(), proc, udata, name);
 }
 
-unsigned int CMUTIL_ThreadSelfId()
+uint CMUTIL_ThreadSelfId()
 {
     unsigned int res = 0;
     CMUTIL_Thread_Internal q, *r;
     q.sysid = CMUTIL_ThreadSystemSelfId();
-    CMUTIL_CALL(g_cmutil_thread_context->mutex, Lock);
-    r = (CMUTIL_Thread_Internal*)CMUTIL_CALL(
+    CMCall(g_cmutil_thread_context->mutex, Lock);
+    r = (CMUTIL_Thread_Internal*)CMCall(
         g_cmutil_thread_context->threads, Find, &q, NULL);
     if (r != NULL) res = r->id;
-    CMUTIL_CALL(g_cmutil_thread_context->mutex, Unlock);
+    CMCall(g_cmutil_thread_context->mutex, Unlock);
 
     return res;
 }
@@ -688,7 +691,7 @@ CMUTIL_Thread *CMUTIL_ThreadSelf()
         NULL,
         NULL,
         NULL,
-        CMUTIL_True,
+        CMTrue,
     #if defined(MSWIN)
         NULL,
     #else
@@ -707,22 +710,22 @@ CMUTIL_Thread *CMUTIL_ThreadSelf()
     }
     q.sysid = CMUTIL_ThreadSystemSelfId();
     if (q.sysid == thmain.sysid) return (CMUTIL_Thread*)&thmain;
-    CMUTIL_CALL(g_cmutil_thread_context->mutex, Lock);
-    r = (CMUTIL_Thread_Internal*)CMUTIL_CALL(
+    CMCall(g_cmutil_thread_context->mutex, Lock);
+    r = (CMUTIL_Thread_Internal*)CMCall(
         g_cmutil_thread_context->threads, Find, &q, NULL);
-    CMUTIL_CALL(g_cmutil_thread_context->mutex, Unlock);
+    CMCall(g_cmutil_thread_context->mutex, Unlock);
     return (CMUTIL_Thread*)r;
 }
 
-uint64 CMUTIL_ThreadSystemSelfId()
+uint64_t CMUTIL_ThreadSystemSelfId()
 {
 #if defined(MSWIN)
-    return (uint64)GetCurrentThreadId();
+    return (uint64_t)GetCurrentThreadId();
 #else
 # if defined(USE_THREADS_H_)
-    return (uint64)thrd_current();
+    return (uint64_t)thrd_current();
 # else
-    return (uint64)pthread_self();
+    return (uint64_t)pthread_self();
 # endif
 #endif
 }
@@ -753,17 +756,17 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_SemaphoreAcquire(
     DWORD dwval = (DWORD)(millisec < 0? INFINITE:(unsigned long)millisec);
     dwval = WaitForSingleObject(isem->semp, dwval);
     return dwval == WAIT_OBJECT_0?
-            CMUTIL_True:CMUTIL_False;
+            CMTrue:CMFalse;
 #elif defined(APPLE)
     dispatch_time_t dtime = dispatch_time(
                 DISPATCH_TIME_NOW, NSEC_PER_MSEC * millisec);
     CMUTIL_Bool res = dispatch_semaphore_wait(isem->semp, dtime) == 0?
-                CMUTIL_True:CMUTIL_False;
+                CMTrue:CMFalse;
     return res;
 #else
     if (millisec < 0) {
         return sem_wait(&(isem->semp)) == 0?
-                CMUTIL_True:CMUTIL_False;
+                CMTrue:CMFalse;
     } else {
         const long nonesec = 1000 * 1000 * 1000;
         struct timespec ts = {0,0};
@@ -778,7 +781,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_SemaphoreAcquire(
             ts.tv_nsec -= nonesec;
         }
         return sem_timedwait(&(isem->semp), &ts) == 0?
-                CMUTIL_True:CMUTIL_False;
+                CMTrue:CMFalse;
     }
 #endif
 }
@@ -833,7 +836,7 @@ CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
 #elif defined(APPLE)
     isem->semp = dispatch_semaphore_create(initcnt);
 #else
-    ir = sem_init(&(isem->semp), 0, initcnt);
+    ir = sem_init(&(isem->semp), 0, (uint)initcnt);
 #endif
 
     if (ir != 0) {
@@ -865,29 +868,31 @@ typedef struct CMUTIL_RWLock_Internal {
     CMUTIL_Mutex		*wrmtx;
     CMUTIL_Cond			*nordrs;
     int					rdcnt;
+    int                 dummy_padder;
 #else
 #if defined(MSWIN)
     CRITICAL_SECTION	rdcntlock;
     CRITICAL_SECTION	wrlock;
     HANDLE				nordrs;
     int					rdcnt;
+    int                 dummy_padder;
 #else
     pthread_rwlock_t	rwlock;
 #endif
 #endif
-    CMUTIL_Mem		*memst;
+    CMUTIL_Mem          *memst;
 } CMUTIL_RWLock_Internal;
 
 CMUTIL_STATIC void CMUTIL_RWLockReadLock(CMUTIL_RWLock *rwlock)
 {
     CMUTIL_RWLock_Internal *irwlock = (CMUTIL_RWLock_Internal*)rwlock;
 #if defined(RWLOCK_USE_INTERNAL)
-    CMUTIL_CALL(irwlock->wrmtx, Lock);
-    CMUTIL_CALL(irwlock->rdcntmtx, Lock);
+    CMCall(irwlock->wrmtx, Lock);
+    CMCall(irwlock->rdcntmtx, Lock);
     if (++(irwlock->rdcnt) == 1)
-        CMUTIL_CALL(irwlock->nordrs, Reset);
-    CMUTIL_CALL(irwlock->rdcntmtx, Unlock);
-    CMUTIL_CALL(irwlock->wrmtx, Unlock);
+        CMCall(irwlock->nordrs, Reset);
+    CMCall(irwlock->rdcntmtx, Unlock);
+    CMCall(irwlock->wrmtx, Unlock);
 #else
 #if defined(MSWIN)
     /*
@@ -912,10 +917,10 @@ CMUTIL_STATIC void CMUTIL_RWLockReadUnlock(CMUTIL_RWLock *rwlock)
 {
     CMUTIL_RWLock_Internal *irwlock = (CMUTIL_RWLock_Internal*)rwlock;
 #if defined(RWLOCK_USE_INTERNAL)
-    CMUTIL_CALL(irwlock->rdcntmtx, Lock);
+    CMCall(irwlock->rdcntmtx, Lock);
     if ( (--irwlock->rdcnt) == 0)
-        CMUTIL_CALL(irwlock->nordrs, Set);
-    CMUTIL_CALL(irwlock->rdcntmtx, Unlock);
+        CMCall(irwlock->nordrs, Set);
+    CMCall(irwlock->rdcntmtx, Unlock);
 #else
 #if defined(MSWIN)
     EnterCriticalSection(&(irwlock->rdcntlock));
@@ -933,8 +938,8 @@ CMUTIL_STATIC void CMUTIL_RWLockWriteLock(CMUTIL_RWLock *rwlock)
 {
     CMUTIL_RWLock_Internal *irwlock = (CMUTIL_RWLock_Internal*)rwlock;
 #if defined(RWLOCK_USE_INTERNAL)
-    CMUTIL_CALL(irwlock->wrmtx, Lock);
-    CMUTIL_CALL(irwlock->nordrs, Wait);
+    CMCall(irwlock->wrmtx, Lock);
+    CMCall(irwlock->nordrs, Wait);
 #else
 #if defined(MSWIN)
     EnterCriticalSection(&(irwlock->wrlock));
@@ -951,7 +956,7 @@ CMUTIL_STATIC void CMUTIL_RWLockWriteUnlock(CMUTIL_RWLock *rwlock)
 {
     CMUTIL_RWLock_Internal *irwlock = (CMUTIL_RWLock_Internal*)rwlock;
 #if defined(RWLOCK_USE_INTERNAL)
-    CMUTIL_CALL(irwlock->wrmtx, Unlock);
+    CMCall(irwlock->wrmtx, Unlock);
 #else
 #if defined(MSWIN)
     LeaveCriticalSection(&irwlock->wrlock);
@@ -965,10 +970,10 @@ CMUTIL_STATIC void CMUTIL_RWLockDestroy(CMUTIL_RWLock *rwlock)
 {
     CMUTIL_RWLock_Internal *irwlock = (CMUTIL_RWLock_Internal*)rwlock;
 #if defined(RWLOCK_USE_INTERNAL)
-    CMUTIL_CALL(irwlock->nordrs, Wait);
-    CMUTIL_CALL(irwlock->nordrs, Destroy);
-    CMUTIL_CALL(irwlock->rdcntmtx, Destroy);
-    CMUTIL_CALL(irwlock->wrmtx, Destroy);
+    CMCall(irwlock->nordrs, Wait);
+    CMCall(irwlock->nordrs, Destroy);
+    CMCall(irwlock->rdcntmtx, Destroy);
+    CMCall(irwlock->wrmtx, Destroy);
 #else
 #if defined(MSWIN)
     WaitForSingleObject(irwlock->nordrs,INFINITE);
@@ -1003,8 +1008,8 @@ CMUTIL_RWLock *CMUTIL_RWLockCreateInternal(CMUTIL_Mem *memst)
 #if defined(RWLOCK_USE_INTERNAL)
     irwlock->rdcntmtx = CMUTIL_MutexCreateInternal(memst);
     irwlock->wrmtx = CMUTIL_MutexCreateInternal(memst);
-    irwlock->nordrs = CMUTIL_CondCreateInternal(memst, CMUTIL_True);
-    CMUTIL_CALL(irwlock->nordrs, Set);
+    irwlock->nordrs = CMUTIL_CondCreateInternal(memst, CMTrue);
+    CMCall(irwlock->nordrs, Set);
 #else
 #if defined(MSWIN)
     InitializeCriticalSection(&(irwlock->rdcntlock));
@@ -1057,10 +1062,10 @@ typedef struct CMUTIL_Timer_Internal {
     CMUTIL_List				*jqueue;	// queue of jobs to run
     CMUTIL_Semaphore		*jsemp;		// job queue semaphore
     CMUTIL_Thread			*mainloop;	// timer scheduling main loop thread
-    CMUTIL_Bool				running;	// timer running indicator
     long					precision;	// timer precision
+    CMUTIL_Bool				running;	// timer running indicator
     int						numthrs;	// number of worker thread
-    CMUTIL_Mem			*memst;
+    CMUTIL_Mem              *memst;
 } CMUTIL_Timer_Internal;
 
 CMUTIL_STATIC CMUTIL_Bool CMUTIL_TimerTaskCancelPrivate(
@@ -1068,19 +1073,19 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_TimerTaskCancelPrivate(
 {
     CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)task;
     CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)itask->timer;
-    CMUTIL_Bool isfree = CMUTIL_False;
+    CMUTIL_Bool isfree = CMFalse;
 
-    CMUTIL_CALL(itimer->mutex, Lock);
+    CMCall(itimer->mutex, Lock);
     if (!itask->canceled) {
-        if (CMUTIL_CALL(itimer->scheduled, Remove, task) ||
-                CMUTIL_CALL(itimer->finished, Remove, task)) {
-            CMUTIL_CALL(itimer->alltasks, Remove, task);
-            isfree = CMUTIL_True;
+        if (CMCall(itimer->scheduled, Remove, task) ||
+                CMCall(itimer->finished, Remove, task)) {
+            CMCall(itimer->alltasks, Remove, task);
+            isfree = CMTrue;
         } else {
-            itask->canceled = CMUTIL_True;
+            itask->canceled = CMTrue;
         }
     }
-    CMUTIL_CALL(itimer->mutex, Unlock);
+    CMCall(itimer->mutex, Unlock);
 
     if (isfree)
         itimer->memst->Free(itask);
@@ -1121,10 +1126,10 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerTaskCreate(
     res->type = type;
     res->base.Cancel = CMUTIL_TimerTaskCancel;
 
-    CMUTIL_CALL(itimer->mutex, Lock);
-    CMUTIL_CALL(itimer->scheduled, Add, res);
-    CMUTIL_CALL(itimer->alltasks, Add, res);
-    CMUTIL_CALL(itimer->mutex, Unlock);
+    CMCall(itimer->mutex, Lock);
+    CMCall(itimer->scheduled, Add, res);
+    CMCall(itimer->alltasks, Add, res);
+    CMCall(itimer->mutex, Unlock);
 
     return (CMUTIL_TimerTask*)res;
 }
@@ -1170,17 +1175,20 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleDelayRepeat(
 CMUTIL_STATIC void CMUTIL_TimerPurge(CMUTIL_Timer *timer)
 {
     CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)timer;
-    int i, len;
+    uint i;
+    size_t len;
 
-    CMUTIL_CALL(itimer->mutex, Lock);
-    len = CMUTIL_CALL(itimer->alltasks, GetSize);
+    CMCall(itimer->mutex, Lock);
+    len = CMCall(itimer->alltasks, GetSize);
     for (i=0; i<len; i++) {
         CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)
-                CMUTIL_CALL(itimer->alltasks, GetAt, i);
-        if (CMUTIL_TimerTaskCancelPrivate((CMUTIL_TimerTask*)itask))
-            len--, i--;
+                CMCall(itimer->alltasks, GetAt, i);
+        if (CMUTIL_TimerTaskCancelPrivate((CMUTIL_TimerTask*)itask)) {
+            len--;
+            i--;
+        }
     }
-    CMUTIL_CALL(itimer->mutex, Unlock);
+    CMCall(itimer->mutex, Unlock);
 }
 
 CMUTIL_STATIC void CMUTIL_TimerDestroy(CMUTIL_Timer *timer)
@@ -1188,48 +1196,48 @@ CMUTIL_STATIC void CMUTIL_TimerDestroy(CMUTIL_Timer *timer)
     CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)timer;
 
     // cancel all tasks.
-    CMUTIL_CALL(timer, Purge);
-    itimer->running = CMUTIL_False;
+    CMCall(timer, Purge);
+    itimer->running = CMFalse;
 
     // join mainloop thread
     if (itimer->mainloop)
-        CMUTIL_CALL(itimer->mainloop, Join);
+        CMCall(itimer->mainloop, Join);
 
     // destroy worker thread pool
     if (itimer->threads) {
         int i;
         for (i = 0; i < itimer->numthrs; i++)
-            CMUTIL_CALL(itimer->jsemp, Release);
+            CMCall(itimer->jsemp, Release);
         for (i = 0; i < itimer->numthrs; i++) {
-            CMUTIL_Thread *thr = (CMUTIL_Thread*)CMUTIL_CALL(
+            CMUTIL_Thread *thr = (CMUTIL_Thread*)CMCall(
                     itimer->threads, RemoveFront);
-            CMUTIL_CALL(thr, Join);
+            CMCall(thr, Join);
         }
 
-        CMUTIL_CALL(itimer->threads, Destroy);
+        CMCall(itimer->threads, Destroy);
     }
 
     // remove scheduled tasks
     if (itimer->alltasks) {
-        while (CMUTIL_CALL(itimer->alltasks, GetSize) > 0)
-            itimer->memst->Free(CMUTIL_CALL(itimer->alltasks, RemoveAt, 0));
-        CMUTIL_CALL(itimer->alltasks, Destroy);
+        while (CMCall(itimer->alltasks, GetSize) > 0)
+            itimer->memst->Free(CMCall(itimer->alltasks, RemoveAt, 0));
+        CMCall(itimer->alltasks, Destroy);
     }
 
     if (itimer->jqueue)
-        CMUTIL_CALL(itimer->jqueue, Destroy);
+        CMCall(itimer->jqueue, Destroy);
 
     if (itimer->finished)
-        CMUTIL_CALL(itimer->finished, Destroy);
+        CMCall(itimer->finished, Destroy);
 
     if (itimer->scheduled)
-        CMUTIL_CALL(itimer->scheduled, Destroy);
+        CMCall(itimer->scheduled, Destroy);
 
     if (itimer->jsemp)
-        CMUTIL_CALL(itimer->jsemp, Destroy);
+        CMCall(itimer->jsemp, Destroy);
 
     if (itimer->mutex)
-        CMUTIL_CALL(itimer->mutex, Destroy);
+        CMCall(itimer->mutex, Destroy);
 
     itimer->memst->Free(itimer);
 }
@@ -1250,9 +1258,9 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_TimerIsElapsed(
 {
     CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)task;
     if (CMUTIL_TimerTVCompare(&(itask->nextrun), curr) > 0)
-        return CMUTIL_False;
+        return CMFalse;
     else
-        return CMUTIL_True;
+        return CMTrue;
 }
 
 CMUTIL_STATIC void *CMUTIL_TimerMainLoop(void *param)
@@ -1265,17 +1273,17 @@ CMUTIL_STATIC void *CMUTIL_TimerMainLoop(void *param)
     while (itimer->running) {
         CMUTIL_TimerTask *task = NULL;
 
-        CMUTIL_CALL(itimer->mutex, Lock);
+        CMCall(itimer->mutex, Lock);
         while (CMUTIL_TimerIsElapsed(
-                CMUTIL_CALL(itimer->scheduled, Bottom), &curr)) {
+                CMCall(itimer->scheduled, Bottom), &curr)) {
             task = (CMUTIL_TimerTask*)
-                    CMUTIL_CALL(itimer->scheduled, RemoveAt, 0);
-            CMUTIL_CALL(itimer->jqueue, AddTail, task);
-            CMUTIL_CALL(itimer->jsemp, Release);
+                    CMCall(itimer->scheduled, RemoveAt, 0);
+            CMCall(itimer->jqueue, AddTail, task);
+            CMCall(itimer->jsemp, Release);
         }
-        CMUTIL_CALL(itimer->mutex, Unlock);
+        CMCall(itimer->mutex, Unlock);
 
-        usleep(itimer->precision);
+        usleep((uint)itimer->precision);
         gettimeofday(&curr, NULL);
     }
     return NULL;
@@ -1285,15 +1293,15 @@ CMUTIL_STATIC void *CMUTIL_TimerWorker(void *param)
 {
     CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)param;
     while (itimer->running) {
-        if (CMUTIL_CALL(itimer->jsemp, Acquire, 1000)) {
+        if (CMCall(itimer->jsemp, Acquire, 1000)) {
             CMUTIL_Array *addedto = NULL;
-            CMUTIL_Bool isfree = CMUTIL_False;
+            CMUTIL_Bool isfree = CMFalse;
             CMUTIL_TimerTask_Internal *itask;
 
-            CMUTIL_CALL(itimer->mutex, Lock);
-            itask = (CMUTIL_TimerTask_Internal*)CMUTIL_CALL(
+            CMCall(itimer->mutex, Lock);
+            itask = (CMUTIL_TimerTask_Internal*)CMCall(
                     itimer->jqueue, RemoveFront);
-            CMUTIL_CALL(itimer->mutex, Unlock);
+            CMCall(itimer->mutex, Unlock);
 
             if (itask == NULL) break;
 
@@ -1311,15 +1319,15 @@ CMUTIL_STATIC void *CMUTIL_TimerWorker(void *param)
                 }
             }
 
-            CMUTIL_CALL(itimer->mutex, Lock);
+            CMCall(itimer->mutex, Lock);
             if (itask->canceled) {
-                CMUTIL_CALL(itimer->alltasks, Remove, itask);
-                isfree = CMUTIL_True;
+                CMCall(itimer->alltasks, Remove, itask);
+                isfree = CMTrue;
             }
             else if (addedto) {
-                CMUTIL_CALL(addedto, Add, itask);
+                CMCall(addedto, Add, itask);
             }
-            CMUTIL_CALL(itimer->mutex, Unlock);
+            CMCall(itimer->mutex, Unlock);
 
             if (isfree)
                 itimer->memst->Free(itask);
@@ -1330,8 +1338,8 @@ CMUTIL_STATIC void *CMUTIL_TimerWorker(void *param)
 
 CMUTIL_STATIC int CMUTIL_TimerTaskComp(const void *a, const void *b)
 {
-    const CMUTIL_TimerTask_Internal *ta = (CMUTIL_TimerTask_Internal*)a;
-    const CMUTIL_TimerTask_Internal *tb = (CMUTIL_TimerTask_Internal*)b;
+    const CMUTIL_TimerTask_Internal *ta = (const CMUTIL_TimerTask_Internal*)a;
+    const CMUTIL_TimerTask_Internal *tb = (const CMUTIL_TimerTask_Internal*)b;
     return CMUTIL_TimerTVCompare(&(ta->nextrun), &(tb->nextrun));
 }
 
@@ -1361,7 +1369,7 @@ CMUTIL_Timer *CMUTIL_TimerCreateInternal(
     memcpy(res, &g_cmutil_timer, sizeof(CMUTIL_Timer));
 
     res->memst = memst;
-    res->running = CMUTIL_True;
+    res->running = CMTrue;
     res->precision = precision;
     res->numthrs = threads;
     res->mutex = CMUTIL_MutexCreateInternal(memst);
@@ -1383,8 +1391,8 @@ CMUTIL_Timer *CMUTIL_TimerCreateInternal(
     for (i = 0; i < threads; i++) {
         CMUTIL_Thread *thr = CMUTIL_ThreadCreateInternal(
                     memst, CMUTIL_TimerWorker, res, "TimerPool");
-        CMUTIL_CALL(thr, Start);
-        CMUTIL_CALL(res->threads, AddTail, thr);
+        CMCall(thr, Start);
+        CMCall(res->threads, AddTail, thr);
     }
 
     // Create main loop thread.

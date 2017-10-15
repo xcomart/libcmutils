@@ -572,7 +572,7 @@ CMUTIL_STATIC BOOL __stdcall CMUTIL_StackWalkerReadProcMem(
 }
 
 CMUTIL_STATIC BOOL CMUTIL_StackWalkerShowCallstack(
-    CMUTIL_StackWalker_Internal *walker,
+    const CMUTIL_StackWalker_Internal *walker,
     CMUTIL_StackWalkerStackEntryReader readMemoryFunction, LPVOID pUserData)
 {
     CONTEXT c;;
@@ -777,11 +777,11 @@ struct WalkerTemp {
     int depth;
     int stdepth;
     CMUTIL_StringArray *res;
-    CMUTIL_StackWalker_Internal *walker;
+    const CMUTIL_StackWalker_Internal *walker;
 };
 
 CMUTIL_STATIC void CMUTIL_StackWalkerGetStackIterator(
-    const char *sinfo, int len, void *data)
+    const char *sinfo, size_t len, void *data)
 {
     struct WalkerTemp *wtemp = (struct WalkerTemp*)data;
     if (wtemp->depth++ > wtemp->stdepth) {
@@ -793,9 +793,10 @@ CMUTIL_STATIC void CMUTIL_StackWalkerGetStackIterator(
 }
 
 CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_StackWalkerGetStack(
-    CMUTIL_StackWalker *walker, int skipdepth)
+    const CMUTIL_StackWalker *walker, int skipdepth)
 {
-    CMUTIL_StackWalker_Internal *iwalker = (CMUTIL_StackWalker_Internal*)walker;
+    const CMUTIL_StackWalker_Internal *iwalker =
+            (const CMUTIL_StackWalker_Internal*)walker;
     CMUTIL_StringArray *res = CMUTIL_StringArrayCreateInternal(
                 iwalker->memst, 10);
     struct WalkerTemp wtemp = { 0, skipdepth+1, res, iwalker };
@@ -811,7 +812,7 @@ struct WalkerPrintTemp {
 };
 
 CMUTIL_STATIC void CMUTIL_StackWalkerPrintStackIterator(
-    const char *sinfo, int len, void *data)
+    const char *sinfo, size_t len, void *data)
 {
     struct WalkerPrintTemp *wtemp = (struct WalkerPrintTemp*)data;
     if (wtemp->depth++ > wtemp->stdepth) {
@@ -821,9 +822,10 @@ CMUTIL_STATIC void CMUTIL_StackWalkerPrintStackIterator(
 }
 
 CMUTIL_STATIC void CMUTIL_StackWalkerPrintStack(
-    CMUTIL_StackWalker *walker, CMUTIL_String *outbuf, int skipdepth)
+    const CMUTIL_StackWalker *walker, CMUTIL_String *outbuf, int skipdepth)
 {
-    CMUTIL_StackWalker_Internal *iwalker = (CMUTIL_StackWalker_Internal*)walker;
+    const CMUTIL_StackWalker_Internal *iwalker =
+            (const CMUTIL_StackWalker_Internal*)walker;
     struct WalkerPrintTemp wtemp = { 0, skipdepth + 1, outbuf };
     CMUTIL_StackWalkerShowCallstack(
         iwalker, CMUTIL_StackWalkerPrintStackIterator, &wtemp);
@@ -921,12 +923,15 @@ CMUTIL_STATIC int CMUTIL_StackWalkerIterator(
 }
 
 CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_StackWalkerGetStack(
-    CMUTIL_StackWalker_Internal *walker, int skipdepth)
+    const CMUTIL_StackWalker *walker, int skipdepth)
 {
+    const CMUTIL_StackWalker_Internal *iwalker =
+            (const CMUTIL_StackWalker_Internal*)walker;
     ucontext_t ucp;
     if(getcontext(&ucp) == 0) {
         CMUTIL_StackWalkerCtx wtemp = {
-            0, skipdepth+1, CMUTIL_StringArrayCreateInternal(walker->memst, 10),
+            0, skipdepth+1,
+            CMUTIL_StringArrayCreateInternal(iwalker->memst, 10),
             NULL, walker
         };
         walkcontext(&ucp, CMUTIL_StackWalkerIterator, &wtemp);
@@ -936,12 +941,14 @@ CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_StackWalkerGetStack(
 }
 
 CMUTIL_STATIC void CMUTIL_StackWalkerPrintStack(
-    CMUTIL_StackWalker_Internal *walker, CMUTIL_String *outbuf, int skipdepth)
+    const CMUTIL_StackWalker *walker, CMUTIL_String *outbuf, int skipdepth)
 {
+    const CMUTIL_StackWalker_Internal *iwalker =
+            (const CMUTIL_StackWalker_Internal*)walker;
     ucontext_t ucp;
     if(getcontext(&ucp) == 0) {
         CMUTIL_StackWalkerCtx wtemp = {
-            0, skipdepth + 1, NULL, outbuf, walker
+            0, skipdepth + 1, NULL, outbuf, iwalker
         };
         walkcontext(&ucp, CMUTIL_StackWalkerIterator, &wtemp);
     }
@@ -952,9 +959,10 @@ CMUTIL_STATIC void CMUTIL_StackWalkerPrintStack(
 #define CMUTIL_STACK_MAX	1024
 
 CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_StackWalkerGetStack(
-    CMUTIL_StackWalker *walker, int skipdepth)
+    const CMUTIL_StackWalker *walker, int skipdepth)
 {
-    CMUTIL_StackWalker_Internal *iwalker = (CMUTIL_StackWalker_Internal*)walker;
+    const CMUTIL_StackWalker_Internal *iwalker =
+            (const CMUTIL_StackWalker_Internal*)walker;
     char **stacks = NULL;
     void *buffer[CMUTIL_STACK_MAX];
     int i, nptrs = backtrace(buffer, CMUTIL_STACK_MAX);
@@ -966,7 +974,7 @@ CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_StackWalkerGetStack(
         stacks = backtrace_symbols(buffer, nptrs);
         if (stacks) {
             for (i=skipdepth+1; i<nptrs; i++)
-                CMUTIL_CALL(res, Add, CMUTIL_StringCreateInternal(
+                CMCall(res, Add, CMUTIL_StringCreateInternal(
                                 iwalker->memst, 50, stacks[i]));
             free(stacks);
         }
@@ -977,7 +985,7 @@ CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_StackWalkerGetStack(
 }
 
 CMUTIL_STATIC void CMUTIL_StackWalkerPrintStack(
-    CMUTIL_StackWalker *walker, CMUTIL_String *outbuf, int skipdepth)
+    const CMUTIL_StackWalker *walker, CMUTIL_String *outbuf, int skipdepth)
 {
     char **stacks = NULL;
     void *buffer[CMUTIL_STACK_MAX];
@@ -988,7 +996,7 @@ CMUTIL_STATIC void CMUTIL_StackWalkerPrintStack(
         stacks = backtrace_symbols(buffer, nptrs);
         if (stacks) {
             for (i=skipdepth+1; i<nptrs; i++)
-                CMUTIL_CALL(outbuf, AddPrint, S_CRLF"%s", stacks[i]);
+                CMCall(outbuf, AddPrint, S_CRLF"%s", stacks[i]);
             free(stacks);
         }
     }

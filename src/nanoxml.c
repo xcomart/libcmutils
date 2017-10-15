@@ -102,13 +102,14 @@ static struct CMUTIL_EscapePair {
 typedef struct CMUTIL_XmlNode_Internal {
     CMUTIL_XmlNode		base;
     CMUTIL_String		*tagname;
-    CMUTIL_XmlNodeKind	type;
     CMUTIL_Map			*attributes;
     CMUTIL_Array		*children;
     CMUTIL_XmlNode		*parent;
-    CMUTIL_Mem		*memst;
+    CMUTIL_Mem          *memst;
     void				*udata;
     void				(*freef)(void*);
+    CMUTIL_XmlNodeKind	type;
+    int                 dummy_padder;
 } CMUTIL_XmlNode_Internal;
 
 static CMUTIL_Map *g_cmutil_xml_escape_map = NULL;
@@ -117,134 +118,140 @@ void CMUTIL_XmlInit()
 {
     struct CMUTIL_EscapePair *pair = g_cmutil_xml_escapes;
     g_cmutil_xml_escape_map = CMUTIL_MapCreateInternal(
-                CMUTIL_GetMem(), 10, CMUTIL_False, NULL);
+                CMUTIL_GetMem(), 10, CMFalse, NULL);
 
     while (pair->key) {
-        CMUTIL_CALL(g_cmutil_xml_escape_map, Put, pair->key, pair->val);
+        CMCall(g_cmutil_xml_escape_map, Put, pair->key, pair->val);
         pair++;
     }
 }
 
 void CMUTIL_XmlClear()
 {
-    CMUTIL_CALL(g_cmutil_xml_escape_map, Destroy);
+    CMCall(g_cmutil_xml_escape_map, Destroy);
     g_cmutil_xml_escape_map = NULL;
 }
 
 CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_XmlGetAttributeNames(
-        CMUTIL_XmlNode *node)
+        const CMUTIL_XmlNode *node)
 {
-    CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
-    return CMUTIL_CALL(inode->attributes, GetKeys);
+    const CMUTIL_XmlNode_Internal *inode =
+            (const CMUTIL_XmlNode_Internal*)node;
+    return CMCall(inode->attributes, GetKeys);
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_XmlGetAttribute(
-        CMUTIL_XmlNode *node, const char *key)
+        const CMUTIL_XmlNode *node, const char *key)
 {
-    CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
-    return (CMUTIL_String*)CMUTIL_CALL(inode->attributes, Get, key);
+    const CMUTIL_XmlNode_Internal *inode =
+            (const CMUTIL_XmlNode_Internal*)node;
+    return (CMUTIL_String*)CMCall(inode->attributes, Get, key);
 }
 
 CMUTIL_STATIC void CMUTIL_XmlSetAttribute(
         CMUTIL_XmlNode *node, const char *key, const char *value)
 {
     CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
-    CMUTIL_CALL(inode->attributes, Put, key,
+    CMCall(inode->attributes, Put, key,
                 CMUTIL_StringCreateInternal(inode->memst, 10, value));
 }
 
-CMUTIL_STATIC int CMUTIL_XmlChildCount(CMUTIL_XmlNode *node)
+CMUTIL_STATIC size_t CMUTIL_XmlChildCount(const CMUTIL_XmlNode *node)
 {
-    CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
-    return CMUTIL_CALL(inode->children, GetSize);
-    return 0;
+    const CMUTIL_XmlNode_Internal *inode =
+            (const CMUTIL_XmlNode_Internal*)node;
+    return CMCall(inode->children, GetSize);
 }
 
 CMUTIL_STATIC void CMUTIL_XmlAddChild(
         CMUTIL_XmlNode *node, CMUTIL_XmlNode *child)
 {
     CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
-    CMUTIL_CALL(inode->children, Add, child);
+    CMCall(inode->children, Add, child);
     ((CMUTIL_XmlNode_Internal*)child)->parent = node;
 }
 
 CMUTIL_STATIC CMUTIL_XmlNode *CMUTIL_XmlChildAt(
-        CMUTIL_XmlNode *node, int index)
+        const CMUTIL_XmlNode *node, uint index)
 {
-    CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
-    return (CMUTIL_XmlNode*)CMUTIL_CALL(inode->children, GetAt, index);
+    const CMUTIL_XmlNode_Internal *inode = (const CMUTIL_XmlNode_Internal*)node;
+    return (CMUTIL_XmlNode*)CMCall(inode->children, GetAt, index);
 }
 
 CMUTIL_STATIC CMUTIL_XmlNode *CMUTIL_XmlGetParent(
-        CMUTIL_XmlNode *node)
+        const CMUTIL_XmlNode *node)
 {
-    CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
+    const CMUTIL_XmlNode_Internal *inode =
+            (const CMUTIL_XmlNode_Internal*)node;
     return inode->parent;
 }
 
-CMUTIL_STATIC const char *CMUTIL_XmlGetName(CMUTIL_XmlNode *node)
+CMUTIL_STATIC const char *CMUTIL_XmlGetName(const CMUTIL_XmlNode *node)
 {
-    CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
-    return CMUTIL_CALL(inode->tagname, GetCString);
+    const CMUTIL_XmlNode_Internal *inode = (const CMUTIL_XmlNode_Internal*)node;
+    return CMCall(inode->tagname, GetCString);
 }
 
 CMUTIL_STATIC void CMUTIL_XmlSetName(CMUTIL_XmlNode *node, const char *name)
 {
     CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
-    CMUTIL_CALL(inode->tagname, Clear);
-    CMUTIL_CALL(inode->tagname, AddString, name);
+    CMCall(inode->tagname, Clear);
+    CMCall(inode->tagname, AddString, name);
 }
 
-CMUTIL_STATIC CMUTIL_XmlNodeKind CMUTIL_XmlGetType(CMUTIL_XmlNode *node)
+CMUTIL_STATIC CMUTIL_XmlNodeKind CMUTIL_XmlGetType(
+        const CMUTIL_XmlNode *node)
 {
-    CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
+    const CMUTIL_XmlNode_Internal *inode =
+            (const CMUTIL_XmlNode_Internal*)node;
     return inode->type;
 }
 
 CMUTIL_STATIC void CMUTIL_XmlEscape(
         CMUTIL_String *dest, CMUTIL_String *src)
 {
-    const unsigned char *p = (const unsigned char*)CMUTIL_CALL(src, GetCString);
-    const unsigned char *stpos = p;
+    const uint8_t *p = (const uint8_t*)CMCall(src, GetCString);
+    const uint8_t *stpos = p;
     char c;
     while ((c = (char)*p)) {
         if (g_cmutil_xml_escape[(int)c]) {
             char *q;
             if (stpos < p)
-                CMUTIL_CALL(dest, AddNString, (char*)stpos, (int)(p - stpos));
+                CMCall(dest, AddNString, (const char*)stpos, (uint)(p - stpos));
             q = g_cmutil_xml_escape_str[(int)c];
             if (q)
-                CMUTIL_CALL(dest, AddString, q);
+                CMCall(dest, AddString, q);
             else
-                CMUTIL_CALL(dest, AddChar, c);
+                CMCall(dest, AddChar, c);
             stpos = ++p;
         } else {
             p++;
         }
     }
     if (stpos > p)
-        CMUTIL_CALL(dest, AddNString, (char*)stpos, (int)(p - stpos));
+        CMCall(dest, AddNString, (const char*)stpos, (uint)(p - stpos));
 }
 
 CMUTIL_STATIC void CMUTIL_XmlBuildAttribute(
-        CMUTIL_String *buffer, CMUTIL_XmlNode_Internal *inode)
+        CMUTIL_String *buffer, const CMUTIL_XmlNode_Internal *inode)
 {
-    if (CMUTIL_CALL(inode->attributes, GetSize) > 0) {
-        int i, len;
-        CMUTIL_StringArray *keys = CMUTIL_CALL(inode->attributes, GetKeys);
-        len = CMUTIL_CALL(keys, GetSize);
+    if (CMCall(inode->attributes, GetSize) > 0) {
+        uint i;
+        size_t len;
+        CMUTIL_StringArray *keys = CMCall(inode->attributes, GetKeys);
+        len = CMCall(keys, GetSize);
         for (i=0; i<len; i++) {
-            CMUTIL_String *key = CMUTIL_CALL(keys, GetAt, i);
-            const char *skey = CMUTIL_CALL(key, GetCString);
-            CMUTIL_CALL(buffer, AddChar, ' ');
-            CMUTIL_CALL(buffer, AddAnother, key);
-            CMUTIL_CALL(buffer, AddString, "=\"");
+            CMUTIL_String *key = CMCall(keys, GetAt, i);
+            const char *skey = CMCall(key, GetCString);
+            CMCall(buffer, AddChar, ' ');
+            CMCall(buffer, AddAnother, key);
+            CMCall(buffer, AddString, "=\"");
             CMUTIL_XmlEscape(buffer, (CMUTIL_String*)
-                    CMUTIL_CALL(inode->attributes, Get, skey));
-            CMUTIL_CALL(buffer, AddChar, '\"');
+                    CMCall(inode->attributes, Get, skey));
+            CMCall(buffer, AddChar, '\"');
         }
         if (keys)
-            CMUTIL_CALL(keys, Destroy);
+            CMCall(keys, Destroy);
     }
 }
 
@@ -252,47 +259,48 @@ CMUTIL_STATIC void CMUTIL_XmlBuildAttribute(
 
 CMUTIL_STATIC void CMUTIL_XmlToDocumentPrivate(
         CMUTIL_String *buffer,
-        CMUTIL_XmlNode_Internal *inode,
+        const CMUTIL_XmlNode_Internal *inode,
         CMUTIL_Bool beutify,
-        int depth)
+        uint depth)
 {
     if (inode->type == CMUTIL_XmlNodeText) {
         CMUTIL_XmlEscape(buffer, inode->tagname);
     } else if (inode->type == CMUTIL_XmlNodeTag) {
-        int i, childcnt = CMUTIL_CALL(inode->children, GetSize);
-        const char *tname = CMUTIL_CALL(inode->tagname, GetCString);
-        int namelen = CMUTIL_CALL(inode->tagname, GetSize);
+        uint i;
+        size_t childcnt = CMCall(inode->children, GetSize);
+        const char *tname = CMCall(inode->tagname, GetCString);
+        size_t namelen = CMCall(inode->tagname, GetSize);
         for (i = 0; i < depth; i++)
-            CMUTIL_CALL(buffer, AddChar, '\t');
-        CMUTIL_CALL(buffer, AddChar, '<');
-        CMUTIL_CALL(buffer, AddNString, tname, namelen);
+            CMCall(buffer, AddChar, '\t');
+        CMCall(buffer, AddChar, '<');
+        CMCall(buffer, AddNString, tname, namelen);
         CMUTIL_XmlBuildAttribute(buffer, inode);
 
         if (inode->children && childcnt > 0) {
-            CMUTIL_CALL(buffer, AddChar, '>');
-            CMUTIL_CALL(buffer, AddNString, CMUTIL_XML_LINE_END, 2);
+            CMCall(buffer, AddChar, '>');
+            CMCall(buffer, AddNString, CMUTIL_XML_LINE_END, 2);
             for (i=0; i<childcnt; i++) {
                 CMUTIL_XmlNode_Internal *child = (CMUTIL_XmlNode_Internal*)
-                        CMUTIL_CALL(inode->children, GetAt, i);
+                        CMCall(inode->children, GetAt, i);
                 CMUTIL_XmlToDocumentPrivate(buffer, child, beutify, depth + 1);
-                CMUTIL_CALL(buffer, AddNString, CMUTIL_XML_LINE_END, 2);
+                CMCall(buffer, AddNString, CMUTIL_XML_LINE_END, 2);
             }
             for (i = 0; i < depth; i++)
-                CMUTIL_CALL(buffer, AddChar, '\t');
-            CMUTIL_CALL(buffer, AddNString, "</", 2);
-            CMUTIL_CALL(buffer, AddNString, tname, namelen);
-            CMUTIL_CALL(buffer, AddChar, '>');
+                CMCall(buffer, AddChar, '\t');
+            CMCall(buffer, AddNString, "</", 2);
+            CMCall(buffer, AddNString, tname, namelen);
+            CMCall(buffer, AddChar, '>');
         }
         else {
-            CMUTIL_CALL(buffer, AddString, "/>");
+            CMCall(buffer, AddString, "/>");
         }
     }
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_XmlToDocument(
-        CMUTIL_XmlNode *node, CMUTIL_Bool beutify)
+        const CMUTIL_XmlNode *node, CMUTIL_Bool beutify)
 {
-    CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
+    const CMUTIL_XmlNode_Internal *inode = (const CMUTIL_XmlNode_Internal*)node;
     CMUTIL_String *res = CMUTIL_StringCreateInternal(
                     inode->memst, 64,
                     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n");
@@ -308,9 +316,10 @@ CMUTIL_STATIC void CMUTIL_XmlSetUserData(
     inode->freef = freef;
 }
 
-CMUTIL_STATIC void *CMUTIL_XmlGetUserData(CMUTIL_XmlNode *node)
+CMUTIL_STATIC void *CMUTIL_XmlGetUserData(const CMUTIL_XmlNode *node)
 {
-    CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
+    const CMUTIL_XmlNode_Internal *inode =
+            (const CMUTIL_XmlNode_Internal*)node;
     return inode->udata;
 }
 
@@ -320,15 +329,15 @@ CMUTIL_STATIC void CMUTIL_XmlDestroy(CMUTIL_XmlNode *node)
     if (inode) {
         CMUTIL_Array *children = inode->children;
         if (inode->attributes)
-            CMUTIL_CALL(inode->attributes, Destroy);
+            CMCall(inode->attributes, Destroy);
         if (inode->tagname)
-            CMUTIL_CALL(inode->tagname, Destroy);
+            CMCall(inode->tagname, Destroy);
         if (inode->udata && inode->freef)
             inode->freef(inode->udata);
         inode->memst->Free(inode);
 
         if (children)
-            CMUTIL_CALL(children, Destroy);
+            CMCall(children, Destroy);
     }
 }
 
@@ -351,17 +360,17 @@ static CMUTIL_XmlNode g_cmutil_xmlnode = {
 
 CMUTIL_STATIC void CMUTIL_XmlStringDestroyer(void *data)
 {
-    CMUTIL_CALL((CMUTIL_String*)data, Destroy);
+    CMCall((CMUTIL_String*)data, Destroy);
 }
 
 CMUTIL_STATIC void CMUTIL_XmlNodeDestroyer(void *data)
 {
-    CMUTIL_CALL((CMUTIL_XmlNode*)data, Destroy);
+    CMCall((CMUTIL_XmlNode*)data, Destroy);
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
         CMUTIL_Mem *memst,
-        CMUTIL_XmlNodeKind type, const char *tagname, int namelen)
+        CMUTIL_XmlNodeKind type, const char *tagname, size_t namelen)
 {
     CMUTIL_XmlNode_Internal *res =
             memst->Alloc(sizeof(CMUTIL_XmlNode_Internal));
@@ -370,9 +379,9 @@ CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
     res->type = type;
     res->memst = memst;
     res->tagname = CMUTIL_StringCreateInternal(memst, namelen, NULL);
-    CMUTIL_CALL(res->tagname, AddNString, tagname, namelen);
+    CMCall(res->tagname, AddNString, tagname, namelen);
     res->attributes = CMUTIL_MapCreateInternal(
-                memst, 50, CMUTIL_False, CMUTIL_XmlStringDestroyer);
+                memst, 50, CMFalse, CMUTIL_XmlStringDestroyer);
     res->children = CMUTIL_ArrayCreateInternal(
                 memst, 5, NULL, CMUTIL_XmlNodeDestroyer);
     return (CMUTIL_XmlNode*)res;
@@ -382,7 +391,7 @@ CMUTIL_XmlNode *CMUTIL_XmlNodeCreateInternal(
         CMUTIL_Mem *memst, CMUTIL_XmlNodeKind type, const char *tagname)
 {
     return CMUTIL_XmlNodeCreateWithLenInternal(
-                memst, type, tagname, (int)strlen(tagname));
+                memst, type, tagname, strlen(tagname));
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreate(
@@ -392,7 +401,7 @@ CMUTIL_XmlNode *CMUTIL_XmlNodeCreate(
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLen(
-        CMUTIL_XmlNodeKind type, const char *tagname, int namelen)
+        CMUTIL_XmlNodeKind type, const char *tagname, size_t namelen)
 {
     return CMUTIL_XmlNodeCreateWithLenInternal(
                 CMUTIL_GetMem(), type, tagname, namelen);
@@ -403,18 +412,19 @@ static const char g_cmutil_delims[]=" \t\r\n<>&=/\"\'";
 
 typedef struct CMUTIL_XmlParseCtx {
     const char *pos;
-    char encoding[20];
-    int remain;
-    CMUTIL_Array *stack;
-    CMUTIL_CSConv *cconv;
-    CMUTIL_Mem *memst;
+    int64_t          remain;
+    CMUTIL_Array    *stack;
+    CMUTIL_CSConv   *cconv;
+    CMUTIL_Mem      *memst;
+    char            encoding[20];
+    int             dummy_padder;
 } CMUTIL_XmlParseCtx;
 
 #define DO_BOOL(...) do { if (!(__VA_ARGS__)) {	\
     char buf[50] = {0,};\
     strncat(buf, ctx->pos, 40); strcat(buf, "...");	\
     CMLogErrorS("xml parse failed near '%s'", buf);	\
-    return CMUTIL_False; } } while(0)
+    return CMFalse; } } while(0)
 #define DO_OBJ(...) do { if (!(__VA_ARGS__)) { \
     char buf[50] = {0,};\
     strncat(buf, ctx->pos, 40); strcat(buf, "...");	\
@@ -425,69 +435,70 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlUnescape(
         CMUTIL_String *dest, CMUTIL_String *src,
         CMUTIL_XmlParseCtx *ctx)
 {
-    const char *p = CMUTIL_CALL(src, GetCString), *q, *stpos;
+    const char *p = CMCall(src, GetCString), *q, *stpos;
     stpos = p;
     while ((q = strchr(p, '&'))) {
         const char *r = strchr(q+1, ';');
         if (r && (r-q) < 20) {
             char *v, keybuf[50] = {0,};
             if (q > p)
-                CMUTIL_CALL(dest, AddNString, p, (int)(q-p));
-            strncat(keybuf, q+1, r-q-1);
-            v = (char*)CMUTIL_CALL(g_cmutil_xml_escape_map, Get, keybuf);
+                CMCall(dest, AddNString, p, (ulong)(q-p));
+            strncat(keybuf, q+1, (ulong)(r-q-1));
+            v = (char*)CMCall(g_cmutil_xml_escape_map, Get, keybuf);
             if (v)
-                CMUTIL_CALL(dest, AddString, v);
+                CMCall(dest, AddString, v);
             else
-                return CMUTIL_False;
+                return CMFalse;
             p = r + 1;
         } else {
-            return CMUTIL_False;
+            return CMFalse;
         }
     }
     if (p && *p) {
-        int len = (int)(CMUTIL_CALL(src, GetSize) - (p - stpos));
-        CMUTIL_CALL(dest, AddNString, p, len);
+        size_t len = CMCall(src, GetSize) - (ulong)(p - stpos);
+        CMCall(dest, AddNString, p, len);
     }
 
     if (ctx->cconv) {
         // convert encoding to utf-8
-        CMUTIL_String *ndst = CMUTIL_CALL(ctx->cconv, Forward, dest);
-        int len = CMUTIL_CALL(ndst, GetSize);
-        const char *p = CMUTIL_CALL(ndst, GetCString);
-        CMUTIL_CALL(dest, Clear);
-        CMUTIL_CALL(dest, AddNString, p, len);
-        CMUTIL_CALL(ndst, Destroy);
+        CMUTIL_String *ndst = CMCall(ctx->cconv, Forward, dest);
+        size_t len = CMCall(ndst, GetSize);
+        const char *p = CMCall(ndst, GetCString);
+        CMCall(dest, Clear);
+        CMCall(dest, AddNString, p, len);
+        CMCall(ndst, Destroy);
     }
 
-    return CMUTIL_True;
+    return CMTrue;
 }
 
 CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlSkipSpaces(CMUTIL_XmlParseCtx *ctx)
 {
     register const char *p = ctx->pos;
-    while (ctx->remain > 0 && *p && strchr(g_cmutil_spaces, *p))
-        p++, ctx->remain--;
+    while (ctx->remain > 0 && *p && strchr(g_cmutil_spaces, *p)) {
+        p++; ctx->remain--;
+    }
     if (ctx->remain >= 0) {
         ctx->pos = p;
-        return CMUTIL_True;
+        return CMTrue;
     } else {
-        return CMUTIL_False;
+        return CMFalse;
     }
 }
 
 CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlNextSub(
-        char *buf, CMUTIL_XmlParseCtx *ctx, int len)
+        char *buf, CMUTIL_XmlParseCtx *ctx, size_t len)
 {
-    if (ctx->remain >= len) {
+    if (ctx->remain >= (int64_t)len) {
         if (buf) {
             *buf = 0x0;
             strncat(buf, ctx->pos, len);
         }
         ctx->pos += len;
         ctx->remain -= len;
-        return CMUTIL_True;
+        return CMTrue;
     } else {
-        return CMUTIL_False;
+        return CMFalse;
     }
 }
 
@@ -496,14 +507,15 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlNextToken(
 {
     register const char *p = ctx->pos;
     register char *q = buf;
-    while (ctx->remain > 0 && *p && !strchr(g_cmutil_delims, *p))
-        *q++ = *p++, ctx->remain--;
+    while (ctx->remain > 0 && *p && !strchr(g_cmutil_delims, *p)) {
+        *q++ = *p++; ctx->remain--;
+    }
     if (ctx->remain >= 0) {
         *q = 0x0;
         ctx->pos = p;
-        return CMUTIL_True;
+        return CMTrue;
     } else {
-        return CMUTIL_False;
+        return CMFalse;
     }
 }
 
@@ -521,23 +533,23 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlParseHeader(CMUTIL_XmlParseCtx *ctx)
             CMUTIL_Bool isenc;
             DO_BOOL(CMUTIL_XmlNextToken(buf, ctx));
             isenc = strcmp(buf, "encoding") == 0?
-                    CMUTIL_True:CMUTIL_False;
+                    CMTrue:CMFalse;
             DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, 2));
             DO_BOOL(CMUTIL_XmlNextToken(buf, ctx));
             if (isenc) {
                 const char *p = strchr(ctx->pos, '?');
-                if (!p) return CMUTIL_False;
+                if (!p) return CMFalse;
                 strcpy(ctx->encoding, buf);
-                CMUTIL_XmlNextSub(NULL, ctx, (int)(p - ctx->pos));
+                CMUTIL_XmlNextSub(NULL, ctx, (ulong)(p - ctx->pos));
             } else {
                 CMUTIL_XmlNextSub(NULL, ctx, 1);
             }
         }
         DO_BOOL(CMUTIL_XmlNextSub(buf, ctx, 2));
-        return CMUTIL_True;
+        return CMTrue;
     } else {
         CMLogErrorS("%s", "xml header is invalid");
-        return CMUTIL_False;
+        return CMFalse;
     }
 }
 
@@ -547,23 +559,25 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlNextChar(
     if (ctx->remain > 0) {
         *c = *(ctx->pos++);
         ctx->remain--;
-        return CMUTIL_True;
+        return CMTrue;
     } else {
-        return CMUTIL_False;
+        return CMFalse;
     }
 }
 
 CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlStartsWith(
         const char *a, const char *b)
 {
-    while (*b && *a == *b) a++, b++;
-    return *b? CMUTIL_False:CMUTIL_True;
+    while (*b && *a == *b) {
+        a++; b++;
+    }
+    return *b? CMFalse:CMTrue;
 }
 
 CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
 {
     CMUTIL_XmlNode *node =
-            (CMUTIL_XmlNode*)CMUTIL_CALL(ctx->stack, Top);
+            (CMUTIL_XmlNode*)CMCall(ctx->stack, Top);
     CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
     DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
     while (!strchr("/>", *(ctx->pos))) {
@@ -581,24 +595,24 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
             p = strchr(ctx->pos, openc);
             if (!p) {
                 CMLogErrorS("invalid xml");
-                return CMUTIL_False;
+                return CMFalse;
             }
             *attvalue = 0x0;
-            strncat(attvalue, ctx->pos, p - ctx->pos);
-            DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, (int)(p - ctx->pos + 1)));
+            strncat(attvalue, ctx->pos, (ulong)(p - ctx->pos));
+            DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, (ulong)(p - ctx->pos + 1)));
         } else {
             // assume attribute value is 'true' if there is no value part.
             strcpy(attvalue, "true");
         }
         bfval = CMUTIL_StringCreateInternal(ctx->memst, 10, attvalue);
         afval = CMUTIL_StringCreateInternal(
-                    ctx->memst, CMUTIL_CALL(bfval, GetSize), NULL);
+                    ctx->memst, CMCall(bfval, GetSize), NULL);
         CMUTIL_XmlUnescape(afval, bfval, ctx);
-        CMUTIL_CALL(inode->attributes, Put, attname, afval);
-        CMUTIL_CALL(bfval, Destroy);
+        CMCall(inode->attributes, Put, attname, afval);
+        CMCall(bfval, Destroy);
         DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
     }
-    return CMUTIL_True;
+    return CMTrue;
 }
 
 CMUTIL_STATIC CMUTIL_XmlNode *CMUTIL_XmlParseNode(
@@ -607,7 +621,7 @@ CMUTIL_STATIC CMUTIL_XmlNode *CMUTIL_XmlParseNode(
     char tagname[128];
     CMUTIL_XmlNode *child = NULL;
     CMUTIL_XmlNode *parent =
-            (CMUTIL_XmlNode*)CMUTIL_CALL(ctx->stack, Top);
+            (CMUTIL_XmlNode*)CMCall(ctx->stack, Top);
 PARSE_NEXT:
     DO_OBJ(CMUTIL_XmlSkipSpaces(ctx));
     if (*(ctx->pos) == '<') {
@@ -619,9 +633,9 @@ PARSE_NEXT:
             // parse close tag
             p = strchr(ctx->pos, '>');
             if (p) {
-                CMUTIL_XmlNextSub(NULL, ctx, (int)(p - ctx->pos + 1));
+                CMUTIL_XmlNextSub(NULL, ctx, (ulong)(p - ctx->pos + 1));
                 if (isClose)
-                    *isClose = CMUTIL_True;
+                    *isClose = CMTrue;
                 return parent;
             } else {
                 CMLogErrorS("invalid xml: invalid close tag");
@@ -638,19 +652,19 @@ PARSE_NEXT:
                 if (parent) {
                     CMUTIL_String *bfval, *afval;
                     bfval = CMUTIL_StringCreateInternal(ctx->memst, 10, NULL);
-                    CMUTIL_CALL(bfval, AddNString,
-                            ctx->pos, (int)(p - ctx->pos));
+                    CMCall(bfval, AddNString,
+                            ctx->pos, (ulong)(p - ctx->pos));
                     afval = CMUTIL_StringCreateInternal(
-                            ctx->memst, CMUTIL_CALL(bfval, GetSize), NULL);
+                            ctx->memst, CMCall(bfval, GetSize), NULL);
                     CMUTIL_XmlUnescape(afval, bfval, ctx);
-                    CMUTIL_CALL(bfval, Destroy);
+                    CMCall(bfval, Destroy);
                     child = CMUTIL_XmlNodeCreateWithLenInternal(
                                 ctx->memst, CMUTIL_XmlNodeText,
-                                CMUTIL_CALL(afval, GetCString),
-                                CMUTIL_CALL(afval, GetSize));
-                    CMUTIL_CALL(afval, Destroy);
-                    CMUTIL_CALL(parent, AddChild, child);
-                    CMUTIL_XmlNextSub(NULL, ctx, (int)(p - ctx->pos + 3));
+                                CMCall(afval, GetCString),
+                                CMCall(afval, GetSize));
+                    CMCall(afval, Destroy);
+                    CMCall(parent, AddChild, child);
+                    CMUTIL_XmlNextSub(NULL, ctx, (ulong)(p - ctx->pos + 3));
                     return child;
                 } else {
                     CMLogErrorS("invalid xml: CDATA with no parent");
@@ -663,7 +677,7 @@ PARSE_NEXT:
                     CMLogErrorS("invalid xml: no close tag");
                     return NULL;
                 }
-                CMUTIL_XmlNextSub(NULL, ctx, (int)(p - ctx->pos + 1));
+                CMUTIL_XmlNextSub(NULL, ctx, (ulong)(p - ctx->pos + 1));
                 goto PARSE_NEXT;
             }
             break;
@@ -673,24 +687,24 @@ PARSE_NEXT:
             child = CMUTIL_XmlNodeCreateInternal(
                         ctx->memst, CMUTIL_XmlNodeTag, tagname);
             if (parent)
-                CMUTIL_CALL(parent, AddChild, child);
-            CMUTIL_CALL(ctx->stack, Push, child);
+                CMCall(parent, AddChild, child);
+            CMCall(ctx->stack, Push, child);
             DO_OBJ(CMUTIL_XmlParseAttributes(ctx));
             if (CMUTIL_XmlStartsWith(ctx->pos, "/>")) {
                 // no children
                 CMUTIL_XmlNextSub(NULL, ctx, 2);
-                CMUTIL_CALL(ctx->stack, Pop);
+                CMCall(ctx->stack, Pop);
                 return child;
             } else if (*(ctx->pos) == '>') {
-                CMUTIL_Bool closed = CMUTIL_False;
+                CMUTIL_Bool closed = CMFalse;
                 CMUTIL_XmlNextSub(NULL, ctx, 1);
                 while (!closed)
                     if (!CMUTIL_XmlParseNode(ctx, &closed))
                         return NULL;
-                CMUTIL_CALL(ctx->stack, Pop);
+                CMCall(ctx->stack, Pop);
                 return child;
             } else {
-                CMUTIL_CALL(child, Destroy);
+                CMCall(child, Destroy);
                 CMLogErrorS("invalid xml");
                 return NULL;
             }
@@ -700,19 +714,19 @@ PARSE_NEXT:
         // text node
         CMUTIL_String *bfval, *afval;
         const char *p = strchr (ctx->pos, '<');
-        int textlen = (int)(p - ctx->pos);
+        size_t textlen = (ulong)(p - ctx->pos);
         bfval = CMUTIL_StringCreateInternal(ctx->memst, 10, NULL);
-        CMUTIL_CALL(bfval, AddNString, ctx->pos, textlen);
+        CMCall(bfval, AddNString, ctx->pos, textlen);
         afval = CMUTIL_StringCreateInternal(
-                    ctx->memst, CMUTIL_CALL(bfval, GetSize), NULL);
+                    ctx->memst, CMCall(bfval, GetSize), NULL);
         CMUTIL_XmlUnescape(afval, bfval, ctx);
-        CMUTIL_CALL(bfval, Destroy);
+        CMCall(bfval, Destroy);
         child = CMUTIL_XmlNodeCreateWithLenInternal(
                         ctx->memst, CMUTIL_XmlNodeText,
-                        CMUTIL_CALL(afval, GetCString),
-                        CMUTIL_CALL(afval, GetSize));
-        CMUTIL_CALL(afval, Destroy);
-        CMUTIL_CALL(parent, AddChild, child);
+                        CMCall(afval, GetCString),
+                        CMCall(afval, GetSize));
+        CMCall(afval, Destroy);
+        CMCall(parent, AddChild, child);
         CMUTIL_XmlNextSub(NULL, ctx, textlen);
         return child;
     } else {
@@ -722,12 +736,12 @@ PARSE_NEXT:
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlParseStringInternal(
-        CMUTIL_Mem *memst, const char *xmlstr, int len)
+        CMUTIL_Mem *memst, const char *xmlstr, size_t len)
 {
     CMUTIL_XmlParseCtx ctx;
     memset(&ctx, 0x0, sizeof(CMUTIL_XmlParseCtx));
     ctx.pos = xmlstr;
-    ctx.remain = len;
+    ctx.remain = (int64_t)len;
     ctx.memst = memst;
     strcpy(ctx.encoding, "UTF-8");
     if (CMUTIL_XmlParseHeader(&ctx)) {
@@ -737,15 +751,15 @@ CMUTIL_XmlNode *CMUTIL_XmlParseStringInternal(
                         memst, ctx.encoding, "UTF-8");
         ctx.stack = CMUTIL_ArrayCreateInternal(memst, 3, NULL, NULL);
         res = CMUTIL_XmlParseNode(&ctx, NULL);
-        bottom = (CMUTIL_XmlNode*)CMUTIL_CALL(ctx.stack, Bottom);
+        bottom = (CMUTIL_XmlNode*)CMCall(ctx.stack, Bottom);
         if (bottom) {
             CMLogErrorS("invalid xml: stack not empty");
-            CMUTIL_CALL(bottom, Destroy);
+            CMCall(bottom, Destroy);
             res = NULL;
         }
         if (ctx.cconv)
-            CMUTIL_CALL(ctx.cconv, Destroy);
-        CMUTIL_CALL(ctx.stack, Destroy);
+            CMCall(ctx.cconv, Destroy);
+        CMCall(ctx.stack, Destroy);
         return res;
     } else {
         CMLogErrorS("invalid xml: invalid header");
@@ -753,7 +767,7 @@ CMUTIL_XmlNode *CMUTIL_XmlParseStringInternal(
     }
 }
 
-CMUTIL_XmlNode *CMUTIL_XmlParseString(const char *xmlstr, int len)
+CMUTIL_XmlNode *CMUTIL_XmlParseString(const char *xmlstr, size_t len)
 {
     return CMUTIL_XmlParseStringInternal(CMUTIL_GetMem(), xmlstr, len);
 }
@@ -762,8 +776,8 @@ CMUTIL_XmlNode *CMUTIL_XmlParseInternal(
         CMUTIL_Mem *memst, CMUTIL_String *str)
 {
     return CMUTIL_XmlParseStringInternal(
-                memst, CMUTIL_CALL(str, GetCString),
-                CMUTIL_CALL(str, GetSize));
+                memst, CMCall(str, GetCString),
+                CMCall(str, GetSize));
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlParse(CMUTIL_String *str)
@@ -782,9 +796,9 @@ CMUTIL_XmlNode *CMUTIL_XmlParseFileInternal(
         CMUTIL_XmlNode *res = NULL;
         size_t rsz;
         while ((rsz = fread(buffer, 1, 1024, f)))
-            CMUTIL_CALL(fcont, AddNString, buffer, (int)rsz);
+            CMCall(fcont, AddNString, buffer, rsz);
         res = CMUTIL_XmlParseInternal(memst, fcont);
-        CMUTIL_CALL(fcont, Destroy);
+        CMCall(fcont, Destroy);
         return res;
     } else {
         CMLogErrorS("cannot read file: %s", fpath);
@@ -805,88 +819,88 @@ typedef struct CMUTIL_XmlToJsonCtx {
 CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(
         CMUTIL_XmlNode *node, CMUTIL_XmlToJsonCtx *ctx)
 {
-    int i, ccnt;
+    uint i, ccnt;
     CMUTIL_Json *prev;
     CMUTIL_Json *res;
     CMUTIL_JsonObject *parent;
     CMUTIL_StringArray *attrnames;
-    CMUTIL_Bool isattr = CMUTIL_False;
-    const char *name = CMUTIL_CALL(node, GetName);
-    if (CMUTIL_CALL(ctx->stack, GetSize) == 0) {
+    CMUTIL_Bool isattr = CMFalse;
+    const char *name = CMCall(node, GetName);
+    if (CMCall(ctx->stack, GetSize) == 0) {
         parent = CMUTIL_JsonObjectCreateInternal(ctx->memst);
-        CMUTIL_CALL(ctx->stack, Push, parent);
+        CMCall(ctx->stack, Push, parent);
     } else {
-        parent = (CMUTIL_JsonObject*)CMUTIL_CALL(ctx->stack, Top);
+        parent = (CMUTIL_JsonObject*)CMCall(ctx->stack, Top);
     }
 
     // set attributes to json object
-    attrnames = CMUTIL_CALL(node, GetAttributeNames);
-    if (attrnames != NULL && CMUTIL_CALL(attrnames, GetSize) > 0) {
+    attrnames = CMCall(node, GetAttributeNames);
+    if (attrnames != NULL && CMCall(attrnames, GetSize) > 0) {
         CMUTIL_JsonObject *ores = CMUTIL_JsonObjectCreateInternal(ctx->memst);
-        for (i=0; i<CMUTIL_CALL(attrnames, GetSize); i++) {
-            CMUTIL_String *aname = CMUTIL_CALL(attrnames, GetAt, i);
-            const char *sname = CMUTIL_CALL(aname, GetCString);
-            CMUTIL_String *value = CMUTIL_CALL(node, GetAttribute, sname);
-            const char *svalue = CMUTIL_CALL(value, GetCString);
-            prev = CMUTIL_CALL(ores, Get, sname);
+        for (i=0; i<CMCall(attrnames, GetSize); i++) {
+            CMUTIL_String *aname = CMCall(attrnames, GetAt, i);
+            const char *sname = CMCall(aname, GetCString);
+            CMUTIL_String *value = CMCall(node, GetAttribute, sname);
+            const char *svalue = CMCall(value, GetCString);
+            prev = CMCall(ores, Get, sname);
             if (prev) {
-                if (CMUTIL_CALL(prev, GetType) == CMUTIL_JsonTypeArray) {
-                    CMUTIL_CALL((CMUTIL_JsonArray*)prev, AddString, svalue);
+                if (CMCall(prev, GetType) == CMUTIL_JsonTypeArray) {
+                    CMCall((CMUTIL_JsonArray*)prev, AddString, svalue);
                 } else {
                     CMUTIL_JsonArray *arr =
                             CMUTIL_JsonArrayCreateInternal(ctx->memst);
-                    prev = CMUTIL_CALL(ores, Remove, sname);
-                    CMUTIL_CALL(arr, Add, prev);
-                    CMUTIL_CALL(arr, AddString, svalue);
-                    CMUTIL_CALL(ores, Put, sname, (CMUTIL_Json*)arr);
+                    prev = CMCall(ores, Remove, sname);
+                    CMCall(arr, Add, prev);
+                    CMCall(arr, AddString, svalue);
+                    CMCall(ores, Put, sname, (CMUTIL_Json*)arr);
                 }
             } else {
-                CMUTIL_CALL(ores, PutString, sname, svalue);
+                CMCall(ores, PutString, sname, svalue);
             }
         }
         res = (CMUTIL_Json*)ores;
     }
-    if (CMUTIL_CALL(node, ChildCount) == 1) {
-        CMUTIL_XmlNode *child = CMUTIL_CALL(node, ChildAt, 0);
-        if (CMUTIL_XmlNodeText == CMUTIL_CALL(child, GetType)) {
-            const char *text = CMUTIL_CALL(child, GetName);
+    if (CMCall(node, ChildCount) == 1) {
+        CMUTIL_XmlNode *child = CMCall(node, ChildAt, 0);
+        if (CMUTIL_XmlNodeText == CMCall(child, GetType)) {
+            const char *text = CMCall(child, GetName);
             text = CMUTIL_StrTrim((char*)text);
             if (strlen(text) > 0) {
                 CMUTIL_JsonValue *val = CMUTIL_JsonValueCreate();
-                CMUTIL_CALL(val, SetString, text);
+                CMCall(val, SetString, text);
                 //if ()
                 res = (CMUTIL_Json*)val;
-                isattr = CMUTIL_True;
+                isattr = CMTrue;
             }
         }
     }
     if (res == NULL)
         res = (CMUTIL_Json*)CMUTIL_JsonObjectCreate();
     if (attrnames)
-        CMUTIL_CALL(attrnames, Destroy);
+        CMCall(attrnames, Destroy);
 
-    ccnt = CMUTIL_CALL(node, ChildCount);
+    ccnt = (uint)CMCall(node, ChildCount);
     if (ccnt > 0 && !isattr) {
         // set children to json object
-        CMUTIL_CALL(ctx->stack, Push, res);
+        CMCall(ctx->stack, Push, res);
         for (i=0; i<ccnt; i++)
-            CMUTIL_XmlToJsonInternal(CMUTIL_CALL(node, ChildAt, i), ctx);
-        CMUTIL_CALL(ctx->stack, Pop);
+            CMUTIL_XmlToJsonInternal(CMCall(node, ChildAt, i), ctx);
+        CMCall(ctx->stack, Pop);
     }
-    prev = CMUTIL_CALL(parent, Get, name);
+    prev = CMCall(parent, Get, name);
     if (prev) {
-        if (CMUTIL_CALL(prev, GetType) == CMUTIL_JsonTypeArray) {
-            CMUTIL_CALL((CMUTIL_JsonArray*)prev, Add, res);
+        if (CMCall(prev, GetType) == CMUTIL_JsonTypeArray) {
+            CMCall((CMUTIL_JsonArray*)prev, Add, res);
         } else {
             CMUTIL_JsonArray *arr =
                     CMUTIL_JsonArrayCreateInternal(ctx->memst);
-            prev = CMUTIL_CALL(parent, Remove, name);
-            CMUTIL_CALL(arr, Add, prev);
-            CMUTIL_CALL(arr, Add, res);
-            CMUTIL_CALL(parent, Put, name, (CMUTIL_Json*)arr);
+            prev = CMCall(parent, Remove, name);
+            CMCall(arr, Add, prev);
+            CMCall(arr, Add, res);
+            CMCall(parent, Put, name, (CMUTIL_Json*)arr);
         }
     } else {
-        CMUTIL_CALL(parent, Put, name, res);
+        CMCall(parent, Put, name, res);
     }
     return (CMUTIL_Json*)res;
 }
@@ -899,7 +913,7 @@ CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node)
     ctx.stack = CMUTIL_ArrayCreateInternal(inode->memst, 5, NULL, NULL);
     ctx.memst = inode->memst;
     CMUTIL_XmlToJsonInternal(node, &ctx);
-    res = (CMUTIL_Json*)CMUTIL_CALL(ctx.stack, Pop);
-    CMUTIL_CALL(ctx.stack, Destroy);
+    res = (CMUTIL_Json*)CMCall(ctx.stack, Pop);
+    CMCall(ctx.stack, Destroy);
     return res;
 }

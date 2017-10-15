@@ -61,7 +61,7 @@
 #include <stddef.h>
 #include "functions.h"
 
-#if TEST
+#if defined(TEST)
 #include <locale.h>
 #include <stdio.h>
 #include <string.h>
@@ -134,7 +134,7 @@
 *	Checks that filename pattern 'pat' is a well-formed pattern.
 *
 * Returns
-*	1 CMUTIL_True if 'pat' is a valid filename pattern, otherwise 0 CMUTIL_False.
+*	1 CMTrue if 'pat' is a valid filename pattern, otherwise 0 CMFalse.
 *
 * Caveats
 *	If 'pat' is null, 0 (false) is returned.
@@ -150,7 +150,7 @@ CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat)
 
     /* Check args */
     if (pat == NULL)
-        return CMUTIL_False;
+        return CMFalse;
 
     /* Verify that the pattern is valid */
     for (len = 0;  pat[len] != '\0';  len++)
@@ -168,7 +168,7 @@ CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat)
                 if (pat[len] == QUOTE)
                     len++;      /* Quoted char */
                 if (pat[len] == '\0')
-                    return CMUTIL_False;    /* Missing closing bracket */
+                    return CMFalse;    /* Missing closing bracket */
                 len++;
 
                 if (pat[len] == FPAT_SET_THRU)
@@ -178,12 +178,12 @@ CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat)
                     if (pat[len] == QUOTE)
                         len++;      /* Quoted char */
                     if (pat[len] == '\0')
-                        return CMUTIL_False;    /* Missing closing bracket */
+                        return CMFalse;    /* Missing closing bracket */
                     len++;
                 }
 
                 if (pat[len] == '\0')
-                    return CMUTIL_False;    /* Missing closing bracket */
+                    return CMFalse;    /* Missing closing bracket */
             }
             break;
 
@@ -191,14 +191,14 @@ CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat)
             /* Quoted char */
             len++;
             if (pat[len] == '\0')
-                return CMUTIL_False;        /* Missing quoted char */
+                return CMFalse;        /* Missing quoted char */
             break;
 
         case FPAT_NOT:
             /* Negated pattern */
             len++;
             if (pat[len] == '\0')
-                return CMUTIL_False;		/* Missing subpattern */
+                return CMFalse;		/* Missing subpattern */
             break;
 
         default:
@@ -207,7 +207,7 @@ CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat)
         }
     }
 
-    return CMUTIL_True;
+    return CMTrue;
 }
 
 
@@ -216,7 +216,7 @@ CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat)
 *   Attempts to match subpattern 'pat' to subfilename 'fname'.
 *
 * Returns
-*   1 (true) if the subfilename matches, otherwise 0 CMUTIL_False.
+*   1 (true) if the subfilename matches, otherwise 0 CMFalse.
 *
 * Caveats
 *   This does not assume that 'pat' is well-formed.
@@ -249,10 +249,10 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
             /* Match a single char */
         #if DELIM
             if (fch == DEL  ||  fch == DEL2  ||  fch == '\0')
-                return CMUTIL_False;
+                return CMFalse;
         #else
             if (fch == '\0')
-                return CMUTIL_False;
+                return CMFalse;
         #endif
             fname++;
             break;
@@ -271,10 +271,10 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
             while (i >= 0)
             {
                 if (CMUTIL_PatternSubmatch(pat, fname+i))
-                    return CMUTIL_True;
+                    return CMTrue;
                 i--;
             }
-            return CMUTIL_False;
+            return CMFalse;
 
         case SUB:
             /* Match zero or more chars */
@@ -288,31 +288,31 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
             while (i >= 0)
             {
                 if (CMUTIL_PatternSubmatch(pat, fname+i))
-                    return CMUTIL_True;
+                    return CMTrue;
                 i--;
             }
-            return CMUTIL_False;
+            return CMFalse;
 
         case QUOTE:
             /* Match a quoted char */
             pch = *pat;
             if (lowercase(fch) != lowercase(pch)  ||  pch == '\0')
-                return CMUTIL_False;
+                return CMFalse;
             fname++;
             pat++;
             break;
 
         case FPAT_SET_L:
             /* Match char set/range */
-            yes = CMUTIL_True;
+            yes = CMTrue;
             if (*pat == FPAT_SET_NOT)
             {
                pat++;
-               yes = CMUTIL_False;  /* Set negation */
+               yes = CMFalse;  /* Set negation */
             }
 
             /* Look for [s], [-], [abc], [a-c] */
-            match = yes? CMUTIL_False:CMUTIL_True;
+            match = yes? CMFalse:CMTrue;
             while (*pat != FPAT_SET_R  &&  *pat != '\0')
             {
                 if (*pat == QUOTE)
@@ -346,10 +346,10 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
             }
 
             if (!match)
-                return CMUTIL_False;
+                return CMFalse;
 
             if (*pat == '\0')
-                return CMUTIL_False;		/* Missing closing bracket */
+                return CMFalse;		/* Missing closing bracket */
 
             fname++;
             pat++;
@@ -358,8 +358,8 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
         case FPAT_NOT:
             /* Match only if rest of pattern does not match */
             if (*pat == '\0')
-                return CMUTIL_False;		/* Missing subpattern */
-            return CMUTIL_PatternSubmatch(pat, fname)? CMUTIL_False:CMUTIL_True;
+                return CMFalse;		/* Missing subpattern */
+            return CMUTIL_PatternSubmatch(pat, fname)? CMFalse:CMTrue;
 
 #if DELIM
         case DEL:
@@ -368,7 +368,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
     #endif
             /* Match path delimiter char */
             if (fch != DEL  &&  fch != DEL2)
-                return CMUTIL_False;
+                return CMFalse;
             fname++;
             break;
 #endif
@@ -376,7 +376,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
         default:
             /* Match a (non-null) char exactly */
             if (lowercase(fch) != lowercase(pch))
-                return CMUTIL_False;
+                return CMFalse;
             fname++;
             break;
         }
@@ -384,10 +384,10 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
 
     /* Check for complete match */
     if (*fname != '\0')
-        return CMUTIL_False;
+        return CMFalse;
 
     /* Successful match */
-    return CMUTIL_True;
+    return CMTrue;
 }
 
 
@@ -396,12 +396,12 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
 *	Attempts to match pattern 'pat' to filename 'fname'.
 *
 * Returns
-*	1 CMUTIL_True if the filename matches, otherwise 0 CMUTIL_False.
+*	1 CMTrue if the filename matches, otherwise 0 CMFalse.
 *
 * Caveats
-*	If 'fname' is null, zero CMUTIL_False is returned.
+*	If 'fname' is null, zero CMFalse is returned.
 *
-*	If 'pat' is null, zero CMUTIL_False is returned.
+*	If 'pat' is null, zero CMFalse is returned.
 *
 *	If 'pat' is empty (""), the only filename it matches is the empty
 *	string ("").
@@ -409,7 +409,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
 *	If 'fname' is empty, the only pattern that will match it is the empty
 *	string ("").
 *
-*	If 'pat' is not a well-formed pattern, zero CMUTIL_False is returned.
+*	If 'pat' is not a well-formed pattern, zero CMFalse is returned.
 *
 *	Upper and lower case letters are treated the same; alphabetic
 *	characters are converted to lower case before matching occurs.
@@ -420,18 +420,18 @@ CMUTIL_Bool CMUTIL_PatternMatch(const char *pat, const char *fname)
 {
     /* Check args */
     if (fname == NULL)
-        return CMUTIL_False;
+        return CMFalse;
 
     if (pat == NULL)
-        return CMUTIL_False;
+        return CMFalse;
 
     /* Verify that the pattern is valid, and get its length */
     if (!CMUTIL_PatternIsValid(pat))
-        return CMUTIL_False;
+        return CMFalse;
 
     /* Attempt to match pattern against filename */
     if (fname[0] == '\0')
-        return (pat[0] == '\0');	/* Special case */
+        return (pat[0] == '\0')? CMTrue:CMFalse;	/* Special case */
     return CMUTIL_PatternSubmatch(pat, fname);
 }
 
@@ -444,12 +444,12 @@ CMUTIL_Bool CMUTIL_PatternMatch(const char *pat, const char *fname)
 *	prior call to fpattern_isvalid().
 *
 * Returns
-*	1 CMUTIL_True if the filename matches, otherwise 0 CMUTIL_False.
+*	1 CMTrue if the filename matches, otherwise 0 CMFalse.
 *
 * Caveats
-*	If 'fname' is null, zero CMUTIL_False is returned.
+*	If 'fname' is null, zero CMFalse is returned.
 *
-*	If 'pat' is null, zero CMUTIL_False is returned.
+*	If 'pat' is null, zero CMFalse is returned.
 *
 *	If 'pat' is empty (""), the only filename it matches is the empty ("")
 *	string.
@@ -468,10 +468,10 @@ CMUTIL_Bool CMUTIL_PatternMatchN(const char *pat, const char *fname)
 {
     /* Check args */
     if (fname == NULL)
-        return CMUTIL_False;
+        return CMFalse;
 
     if (pat == NULL)
-        return CMUTIL_False;
+        return CMFalse;
 
     /* Assume that pattern is well-formed */
 

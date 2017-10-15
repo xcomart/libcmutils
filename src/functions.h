@@ -36,7 +36,7 @@
 #if defined(ARCH32)
 typedef unsigned int	CMUTIL_PointDiff;
 #else
-typedef uint64          CMUTIL_PointDiff;
+typedef uint64_t        CMUTIL_PointDiff;
 #endif
 
 #if defined(_MSC_VER)
@@ -63,7 +63,7 @@ void CMUTIL_MemDebugClear();
 
 CMUTIL_Array *CMUTIL_ArrayCreateInternal(
         CMUTIL_Mem *mem,
-        int initcapacity,
+        size_t initcapacity,
         int(*comparator)(const void*,const void*),
         void(*freecb)(void*));
 
@@ -118,8 +118,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJsonInternal(
         CMUTIL_Mem *memst, const char *jsonfile);
 CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem *memst);
 
-CMUTIL_Map *CMUTIL_MapCreateInternal(
-        CMUTIL_Mem *memst, int bucketsize,
+CMUTIL_Map *CMUTIL_MapCreateInternal(CMUTIL_Mem *memst, uint bucketsize,
         CMUTIL_Bool isucase, void(*freecb)(void*));
 
 CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst);
@@ -127,13 +126,12 @@ CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_Json *CMUTIL_JsonParseInternal(
         CMUTIL_Mem *memst, CMUTIL_String *jsonstr, CMUTIL_Bool silent);
 
-CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
-        CMUTIL_Mem *memst,
-        CMUTIL_XmlNodeKind type, const char *tagname, int namelen);
+CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(CMUTIL_Mem *memst,
+        CMUTIL_XmlNodeKind type, const char *tagname, size_t namelen);
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateInternal(
         CMUTIL_Mem *memst, CMUTIL_XmlNodeKind type, const char *tagname);
 CMUTIL_XmlNode *CMUTIL_XmlParseStringInternal(
-        CMUTIL_Mem *memst, const char *xmlstr, int len);
+        CMUTIL_Mem *memst, const char *xmlstr, size_t len);
 CMUTIL_XmlNode *CMUTIL_XmlParseInternal(
         CMUTIL_Mem *memst, CMUTIL_String *str);
 CMUTIL_XmlNode *CMUTIL_XmlParseFileInternal(
@@ -173,10 +171,10 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
 
 CMUTIL_String *CMUTIL_StringCreateInternal(
         CMUTIL_Mem *memst,
-        int initcapacity,
+        size_t initcapacity,
         const char *initcontent);
 CMUTIL_StringArray *CMUTIL_StringArrayCreateInternal(
-        CMUTIL_Mem *memst, int initcapacity);
+        CMUTIL_Mem *memst, size_t initcapacity);
 CMUTIL_CSConv *CMUTIL_CSConvCreateInternal(
         CMUTIL_Mem *memst, const char *fromcs, const char *tocs);
 CMUTIL_StringArray *CMUTIL_StringSplitInternal(
