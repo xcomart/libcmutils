@@ -28,7 +28,7 @@ typedef struct CMUTIL_ConfItem {
     char			*key;
     char			*comment;
     CMUTIL_ConfType	type;
-    uint			index;
+    uint32_t			index;
     CMUTIL_Mem      *memst;
 } CMUTIL_ConfItem;
 
@@ -122,7 +122,7 @@ void CMUTIL_ConfigSave(const CMUTIL_Config *conf, const char *confpath)
                 (const CMUTIL_Config_Internal*)conf;
         FILE *f = NULL;
         char fmt[50];
-        uint i;
+        uint32_t i;
         f = fopen(confpath, "wb");
         for (i = 0; i < CMCall(iconf->sequence, GetSize); i++) {
             CMUTIL_ConfItem *item = (CMUTIL_ConfItem*)CMCall(
@@ -286,7 +286,7 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
             }
             }
 
-            item->index = (uint)CMCall(res->sequence, GetSize);
+            item->index = (uint32_t)CMCall(res->sequence, GetSize);
             CMCall(res->sequence, Add, item);
             CMCall(str, Clear);
         }

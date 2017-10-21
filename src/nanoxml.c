@@ -172,7 +172,7 @@ CMUTIL_STATIC void CMUTIL_XmlAddChild(
 }
 
 CMUTIL_STATIC CMUTIL_XmlNode *CMUTIL_XmlChildAt(
-        const CMUTIL_XmlNode *node, uint index)
+        const CMUTIL_XmlNode *node, uint32_t index)
 {
     const CMUTIL_XmlNode_Internal *inode = (const CMUTIL_XmlNode_Internal*)node;
     return (CMUTIL_XmlNode*)CMCall(inode->children, GetAt, index);
@@ -217,7 +217,7 @@ CMUTIL_STATIC void CMUTIL_XmlEscape(
         if (g_cmutil_xml_escape[(int)c]) {
             char *q;
             if (stpos < p)
-                CMCall(dest, AddNString, (const char*)stpos, (uint)(p - stpos));
+                CMCall(dest, AddNString, (const char*)stpos, (uint32_t)(p - stpos));
             q = g_cmutil_xml_escape_str[(int)c];
             if (q)
                 CMCall(dest, AddString, q);
@@ -229,14 +229,14 @@ CMUTIL_STATIC void CMUTIL_XmlEscape(
         }
     }
     if (stpos > p)
-        CMCall(dest, AddNString, (const char*)stpos, (uint)(p - stpos));
+        CMCall(dest, AddNString, (const char*)stpos, (uint32_t)(p - stpos));
 }
 
 CMUTIL_STATIC void CMUTIL_XmlBuildAttribute(
         CMUTIL_String *buffer, const CMUTIL_XmlNode_Internal *inode)
 {
     if (CMCall(inode->attributes, GetSize) > 0) {
-        uint i;
+        uint32_t i;
         size_t len;
         CMUTIL_StringArray *keys = CMCall(inode->attributes, GetKeys);
         len = CMCall(keys, GetSize);
@@ -261,12 +261,12 @@ CMUTIL_STATIC void CMUTIL_XmlToDocumentPrivate(
         CMUTIL_String *buffer,
         const CMUTIL_XmlNode_Internal *inode,
         CMUTIL_Bool beutify,
-        uint depth)
+        uint32_t depth)
 {
     if (inode->type == CMUTIL_XmlNodeText) {
         CMUTIL_XmlEscape(buffer, inode->tagname);
     } else if (inode->type == CMUTIL_XmlNodeTag) {
-        uint i;
+        uint32_t i;
         size_t childcnt = CMCall(inode->children, GetSize);
         const char *tname = CMCall(inode->tagname, GetCString);
         size_t namelen = CMCall(inode->tagname, GetSize);
@@ -442,8 +442,8 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlUnescape(
         if (r && (r-q) < 20) {
             char *v, keybuf[50] = {0,};
             if (q > p)
-                CMCall(dest, AddNString, p, (ulong)(q-p));
-            strncat(keybuf, q+1, (ulong)(r-q-1));
+                CMCall(dest, AddNString, p, (uint64_t)(q-p));
+            strncat(keybuf, q+1, (uint64_t)(r-q-1));
             v = (char*)CMCall(g_cmutil_xml_escape_map, Get, keybuf);
             if (v)
                 CMCall(dest, AddString, v);
@@ -455,7 +455,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlUnescape(
         }
     }
     if (p && *p) {
-        size_t len = CMCall(src, GetSize) - (ulong)(p - stpos);
+        size_t len = CMCall(src, GetSize) - (uint64_t)(p - stpos);
         CMCall(dest, AddNString, p, len);
     }
 
@@ -540,7 +540,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlParseHeader(CMUTIL_XmlParseCtx *ctx)
                 const char *p = strchr(ctx->pos, '?');
                 if (!p) return CMFalse;
                 strcpy(ctx->encoding, buf);
-                CMUTIL_XmlNextSub(NULL, ctx, (ulong)(p - ctx->pos));
+                CMUTIL_XmlNextSub(NULL, ctx, (uint64_t)(p - ctx->pos));
             } else {
                 CMUTIL_XmlNextSub(NULL, ctx, 1);
             }
@@ -598,8 +598,8 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
                 return CMFalse;
             }
             *attvalue = 0x0;
-            strncat(attvalue, ctx->pos, (ulong)(p - ctx->pos));
-            DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, (ulong)(p - ctx->pos + 1)));
+            strncat(attvalue, ctx->pos, (uint64_t)(p - ctx->pos));
+            DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, (uint64_t)(p - ctx->pos + 1)));
         } else {
             // assume attribute value is 'true' if there is no value part.
             strcpy(attvalue, "true");
@@ -633,7 +633,7 @@ PARSE_NEXT:
             // parse close tag
             p = strchr(ctx->pos, '>');
             if (p) {
-                CMUTIL_XmlNextSub(NULL, ctx, (ulong)(p - ctx->pos + 1));
+                CMUTIL_XmlNextSub(NULL, ctx, (uint64_t)(p - ctx->pos + 1));
                 if (isClose)
                     *isClose = CMTrue;
                 return parent;
@@ -653,7 +653,7 @@ PARSE_NEXT:
                     CMUTIL_String *bfval, *afval;
                     bfval = CMUTIL_StringCreateInternal(ctx->memst, 10, NULL);
                     CMCall(bfval, AddNString,
-                            ctx->pos, (ulong)(p - ctx->pos));
+                            ctx->pos, (uint64_t)(p - ctx->pos));
                     afval = CMUTIL_StringCreateInternal(
                             ctx->memst, CMCall(bfval, GetSize), NULL);
                     CMUTIL_XmlUnescape(afval, bfval, ctx);
@@ -664,7 +664,7 @@ PARSE_NEXT:
                                 CMCall(afval, GetSize));
                     CMCall(afval, Destroy);
                     CMCall(parent, AddChild, child);
-                    CMUTIL_XmlNextSub(NULL, ctx, (ulong)(p - ctx->pos + 3));
+                    CMUTIL_XmlNextSub(NULL, ctx, (uint64_t)(p - ctx->pos + 3));
                     return child;
                 } else {
                     CMLogErrorS("invalid xml: CDATA with no parent");
@@ -677,7 +677,7 @@ PARSE_NEXT:
                     CMLogErrorS("invalid xml: no close tag");
                     return NULL;
                 }
-                CMUTIL_XmlNextSub(NULL, ctx, (ulong)(p - ctx->pos + 1));
+                CMUTIL_XmlNextSub(NULL, ctx, (uint64_t)(p - ctx->pos + 1));
                 goto PARSE_NEXT;
             }
             break;
@@ -714,7 +714,7 @@ PARSE_NEXT:
         // text node
         CMUTIL_String *bfval, *afval;
         const char *p = strchr (ctx->pos, '<');
-        size_t textlen = (ulong)(p - ctx->pos);
+        size_t textlen = (uint64_t)(p - ctx->pos);
         bfval = CMUTIL_StringCreateInternal(ctx->memst, 10, NULL);
         CMCall(bfval, AddNString, ctx->pos, textlen);
         afval = CMUTIL_StringCreateInternal(
@@ -819,7 +819,7 @@ typedef struct CMUTIL_XmlToJsonCtx {
 CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(
         CMUTIL_XmlNode *node, CMUTIL_XmlToJsonCtx *ctx)
 {
-    uint i, ccnt;
+    uint32_t i, ccnt;
     CMUTIL_Json *prev;
     CMUTIL_Json *res;
     CMUTIL_JsonObject *parent;
@@ -879,7 +879,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(
     if (attrnames)
         CMCall(attrnames, Destroy);
 
-    ccnt = (uint)CMCall(node, ChildCount);
+    ccnt = (uint32_t)CMCall(node, ChildCount);
     if (ccnt > 0 && !isattr) {
         // set children to json object
         CMCall(ctx->stack, Push, res);

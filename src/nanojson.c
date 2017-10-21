@@ -94,7 +94,7 @@ CMUTIL_STATIC void CMUTIL_JsonObjectToStringInternal(
         const CMUTIL_Json *json, CMUTIL_String *buf,
         CMUTIL_Bool pretty, int depth)
 {
-    uint i;
+    uint32_t i;
     const CMUTIL_JsonObject *jobj = (const CMUTIL_JsonObject*)json;
     CMUTIL_StringArray *keys = CMCall(jobj, GetKeys);
     CMCall(buf, AddChar, '{');
@@ -126,7 +126,7 @@ CMUTIL_STATIC void CMUTIL_JsonArrayToStringInternal(
         CMUTIL_Bool pretty, int depth)
 {
     const CMUTIL_JsonArray *jarr = (const CMUTIL_JsonArray*)json;
-    uint i;
+    uint32_t i;
     size_t size = CMCall(jarr, GetSize);
     CMCall(buf, AddChar, '[');
     if (size > 0) {
@@ -181,7 +181,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonObjectClone(const CMUTIL_Json *json)
             CMUTIL_JsonObjectCreateInternal(iobj->memst);
     CMUTIL_StringArray *keys = CMCall(iobj->map, GetKeys);
     CMUTIL_Json *val, *dup;
-    uint i;
+    uint32_t i;
     for (i=0; i<CMCall(keys, GetSize); i++) {
         CMUTIL_String *key = CMCall(keys, GetAt, i);
         const char *skey = CMCall(key, GetCString);
@@ -199,7 +199,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonArrayClone(const CMUTIL_Json *json)
             (const CMUTIL_JsonArray_Internal*)json;
     CMUTIL_JsonArray_Internal *res = (CMUTIL_JsonArray_Internal*)
             CMUTIL_JsonArrayCreateInternal(iarr->memst);
-    uint i;
+    uint32_t i;
     for (i=0; i<CMCall(iarr->arr, GetSize); i++) {
         CMUTIL_Json *item = CMCall(&iarr->base, Get, i);
         CMUTIL_Json *dup = CMCall(item, Clone);
@@ -299,7 +299,7 @@ CMUTIL_STATIC void CMUTIL_JsonValueSetLong(
         CMUTIL_JsonValue *jval, int64_t value)
 {
     char buf[50];
-    size_t size = (uint)sprintf(buf, PRINT64I, value);
+    size_t size = (uint32_t)sprintf(buf, PRINT64I, value);
     CMUTIL_JsonValueSetBase(jval, buf, size, CMUTIL_JsonValueLong);
 }
 
@@ -307,7 +307,7 @@ CMUTIL_STATIC void CMUTIL_JsonValueSetDouble(
         CMUTIL_JsonValue *jval, double value)
 {
     char buf[50];
-    size_t size = (uint)sprintf(buf, "%lf", value);
+    size_t size = (uint32_t)sprintf(buf, "%lf", value);
     CMUTIL_JsonValueSetBase(jval, buf, size, CMUTIL_JsonValueDouble);
 }
 
@@ -566,7 +566,7 @@ CMUTIL_STATIC size_t CMUTIL_JsonArrayGetSize(const CMUTIL_JsonArray *jarr)
 }
 
 CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonArrayGet(
-        const CMUTIL_JsonArray *jarr, uint index)
+        const CMUTIL_JsonArray *jarr, uint32_t index)
 {
     const CMUTIL_JsonArray_Internal *ijarr =
             (const CMUTIL_JsonArray_Internal*)jarr;
@@ -593,31 +593,31 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonArrayGet(
     } return v;} while(0)
 
 CMUTIL_STATIC int64_t CMUTIL_JsonArrayGetLong(
-        const CMUTIL_JsonArray *jarr, uint index)
+        const CMUTIL_JsonArray *jarr, uint32_t index)
 {
     CMUTIL_JsonArrayGetBody(jarr, index, GetLong, 0);
 }
 
 CMUTIL_STATIC double CMUTIL_JsonArrayGetDouble(
-        const CMUTIL_JsonArray *jarr, uint index)
+        const CMUTIL_JsonArray *jarr, uint32_t index)
 {
     CMUTIL_JsonArrayGetBody(jarr, index, GetDouble, 0.0);
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_JsonArrayGetString(
-        const CMUTIL_JsonArray *jarr, uint index)
+        const CMUTIL_JsonArray *jarr, uint32_t index)
 {
     CMUTIL_JsonArrayGetBody(jarr, index, GetString, NULL);
 }
 
 CMUTIL_STATIC const char *CMUTIL_JsonArrayGetCString(
-        const CMUTIL_JsonArray *jarr, uint index)
+        const CMUTIL_JsonArray *jarr, uint32_t index)
 {
     CMUTIL_JsonArrayGetBody(jarr, index, GetCString, NULL);
 }
 
 CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonArrayGetBoolean(
-        const CMUTIL_JsonArray *jarr, uint index)
+        const CMUTIL_JsonArray *jarr, uint32_t index)
 {
     CMUTIL_JsonArrayGetBody(jarr, index, GetBoolean, CMFalse);
 }
@@ -668,7 +668,7 @@ CMUTIL_STATIC void CMUTIL_JsonArrayAddNull(CMUTIL_JsonArray *jarr)
 }
 
 CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonArrayRemove(
-        CMUTIL_JsonArray *jarr, uint index)
+        CMUTIL_JsonArray *jarr, uint32_t index)
 {
     CMUTIL_JsonArray_Internal *ijarr = (CMUTIL_JsonArray_Internal*)jarr;
     return (CMUTIL_Json*)CMCall(ijarr->arr, RemoveAt, index);

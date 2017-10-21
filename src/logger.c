@@ -65,8 +65,8 @@ typedef struct CMUTIL_LogAppenderFormatItem CMUTIL_LogAppenderFormatItem;
 struct CMUTIL_LogAppenderFormatItem {
     CMUTIL_LogFormatItemType	type;
     CMUTIL_Bool					padleft;
-    uint						precision[10];
-    uint						precisioncnt;
+    uint32_t						precision[10];
+    uint32_t						precisioncnt;
     CMUTIL_Bool					hasext;
     size_t						length;
     CMUTIL_String				*data;
@@ -224,13 +224,13 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendLoggerName(
     CMUTIL_Logger_Internal *ilog = (CMUTIL_Logger_Internal*)params->logger;
     CMUTIL_String *buf = CMUTIL_StringCreateInternal(ilog->memst, 10, NULL);
     CMUTIL_String *curr = NULL;
-    uint i, tsize = (uint)CMCall(ilog->namepath, GetSize);
+    uint32_t i, tsize = (uint32_t)CMCall(ilog->namepath, GetSize);
     switch (params->item->precisioncnt) {
     case 0:
         CMCall(buf, AddAnother, ilog->fullname);
         break;
     case 1: {
-        uint lastcnt = params->item->precision[0];
+        uint32_t lastcnt = params->item->precision[0];
         for (i = tsize - lastcnt; i < (tsize - 1); i++) {
             curr = CMCall(ilog->namepath, GetAt, i);
             CMCall(buf, AddAnother, curr);
@@ -241,7 +241,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendLoggerName(
         break;
     }
     case 2: {
-        uint i, size = params->item->precision[0];
+        uint32_t i, size = params->item->precision[0];
         for (i = 0; i < (tsize - 1); i++) {
             if (size) {
                 size_t minsz = size;
@@ -278,14 +278,14 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendThreadId(
     CMUTIL_Thread *t = CMUTIL_ThreadSelf();
     unsigned int tid = CMCall(t, GetId);
     const char *name = CMCall(t, GetName);
-    uint size = (uint)sprintf(buf, "%s-%u", name, tid);
+    uint32_t size = (uint32_t)sprintf(buf, "%s-%u", name, tid);
     CMUTIL_LogPatternAppendPadding(params->item, params->dest, buf, size);
 }
 
 CMUTIL_STATIC void CMUTIL_LogPatternAppendFileName(
     CMUTIL_LogPatternAppendFuncParam *params)
 {
-    uint tsize = (uint)strlen(params->fname), size = 0;
+    uint32_t tsize = (uint32_t)strlen(params->fname), size = 0;
     const char *p = params->fname + (tsize - 1);
     while (p > params->fname && !strchr("/\\", *p)) {
         p--;
@@ -299,7 +299,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendLineNumber(
     CMUTIL_LogPatternAppendFuncParam *params)
 {
     char buf[20];
-    uint size = (uint)sprintf(buf, "%d", params->linenum);
+    uint32_t size = (uint32_t)sprintf(buf, "%d", params->linenum);
     CMUTIL_LogPatternAppendPadding(params->item, params->dest, buf, size);
 }
 
@@ -333,7 +333,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendStack(
     CMUTIL_LogPatternAppendFuncParam *params)
 {
     if (params->stack != NULL && CMCall(params->stack, GetSize) > 0) {
-        uint i;
+        uint32_t i;
         size_t maxlen = params->item->hasext ?
             params->item->precisioncnt : CMCall(params->stack, GetSize);
         for (i = 0; i < maxlen; i++) {
@@ -602,7 +602,7 @@ CMUTIL_STATIC CMUTIL_LogAppenderFormatItem *CMUTIL_LogAppenderItemString(
 CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
     CMUTIL_LogAppenderFormatItem *item, const char *extra)
 {
-    uint i;
+    uint32_t i;
     CMUTIL_Map *map = CMUTIL_MapCreateInternal(
                 item->memst, 10, CMFalse,
                 CMUTIL_LogAppenderStringDestroyer);
@@ -620,7 +620,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
             if (strcmp(ks, "length") == 0) {
                 int slen = atoi(vs);
                 if (slen > 0) {
-                    uint len = (uint)slen;
+                    uint32_t len = (uint32_t)slen;
                     CMUTIL_Iterator *iter =
                         CMCall(g_cmutil_log_levels, Iterator);
                     while (CMCall(iter, HasNext)) {
@@ -676,7 +676,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogPatternParse(
     while ((q = strchr(p, '%')) != NULL) {
         char buf[128] = { 0, };
         char fmt[20];
-        uint length = 0;
+        uint32_t length = 0;
         CMUTIL_Bool padleft = CMFalse;
         CMUTIL_Bool hasext = CMFalse;
         CMUTIL_LogFormatType type;
@@ -686,7 +686,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogPatternParse(
         // add former string to pattern list
         if (q > p)
             CMCall(list, AddTail,
-                CMUTIL_LogAppenderItemString(memst, p, (uint)(q - p)));
+                CMUTIL_LogAppenderItemString(memst, p, (uint32_t)(q - p)));
         q++;
         // check escape charactor
         if (*q == '%') {
@@ -706,7 +706,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogPatternParse(
             while (strchr("0123456789", *q))
                 *r++ = *q++;
             *r = 0x0;
-            length = (uint)atoi(buf);
+            length = (uint32_t)atoi(buf);
         }
         // check the pattern item
         q = CMUTIL_StrNextToken(
@@ -750,7 +750,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogPatternParse(
                 if (milli) {
                     CMUTIL_StringArray *arr =
                             CMUTIL_StringSplitInternal(memst, buf, milli);
-                    uint i, size = (uint)CMCall(arr, GetSize);
+                    uint32_t i, size = (uint32_t)CMCall(arr, GetSize);
                     for (i = 0; i < size; i++) {
                         CMUTIL_String *s = CMCall(arr, RemoveAt, 0);
                         if (CMCall(s, GetSize) > 0) {
@@ -805,13 +805,13 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogPatternParse(
                     }
                     else {
                         strncat(temp, p, (size_t)(r - p));
-                        item->precision[item->precisioncnt] = (uint)atoi(temp);
+                        item->precision[item->precisioncnt] = (uint32_t)atoi(temp);
                     }
                     item->precisioncnt++;
                     p = r + 1;
                 }
                 if (item->precisioncnt == 0) {
-                    item->precision[item->precisioncnt] = (uint)atoi(buf);
+                    item->precision[item->precisioncnt] = (uint32_t)atoi(buf);
                 }
                 else {
                     item->precision[item->precisioncnt] = 0;
@@ -879,7 +879,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogPatternParse(
         case LogType_Stack:
             item = CMUTIL_LogAppenderItemCreate(memst, LogFormatItem_Stack);
             if (hasext)
-                item->precisioncnt = (uint)atoi(buf);
+                item->precisioncnt = (uint32_t)atoi(buf);
             break;
         case LogType_LineSeparator:
             item = CMUTIL_LogAppenderItemCreate(memst, LogFormatItem_String);
@@ -1272,7 +1272,7 @@ CMUTIL_STATIC void CMUTIL_LogSocketAppenderWrite(
         CMUTIL_LogAppenderBase *appender,
         CMUTIL_String *logmsg, struct tm *logtm)
 {
-    uint i;
+    uint32_t i;
     CMUTIL_LogSocketAppender *iap = (CMUTIL_LogSocketAppender*)appender;
     CMCall(iap->climtx, Lock);
     for (i = 0; i < CMCall(iap->clients, GetSize); i++) {
@@ -1454,7 +1454,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_ConfLoggerLog(
 {
     CMUTIL_Array *apndrs = CMCall(cli->lvlapndrs, GetAt, level);
     if (CMCall(apndrs, GetSize) > 0) {
-        uint i;
+        uint32_t i;
         for (i=0; i<CMCall(apndrs, GetSize); i++) {
             CMUTIL_LogAppender *ap =
                     (CMUTIL_LogAppender*)CMCall(apndrs, GetAt, i);
@@ -1493,7 +1493,7 @@ CMUTIL_STATIC CMUTIL_ConfLogger *CMUTIL_LogSystemCreateLogger(
         CMUTIL_Bool additivity)
 {
     CMUTIL_Array *lvllog;
-    uint i, lvllen = CMUTIL_LogLevel_Fatal + 1;
+    uint32_t i, lvllen = CMUTIL_LogLevel_Fatal + 1;
     const CMUTIL_LogSystem_Internal *ilsys =
             (const CMUTIL_LogSystem_Internal*)lsys;
     CMUTIL_ConfLogger_Internal *res =
@@ -1537,7 +1537,7 @@ CMUTIL_STATIC void CMUTIL_LoggerLogEx(
         const char *file, int line, CMUTIL_Bool printStack,
         const char *fmt, ...)
 {
-    uint i;
+    uint32_t i;
     CMUTIL_Logger_Internal *il = (CMUTIL_Logger_Internal*)logger;
     CMUTIL_String *logmsg;
     CMUTIL_StringArray *stack = NULL;
@@ -1590,7 +1590,7 @@ CMUTIL_STATIC CMUTIL_Logger *CMUTIL_LogSystemGetLogger(
     q.fullname = CMUTIL_StringCreateInternal(ilsys->memst, 20, name);
     res = (CMUTIL_Logger_Internal*)CMCall(ilsys->loggers, Find, &q, NULL);
     if (res == NULL) {
-        uint i;
+        uint32_t i;
         // create logger
         res = ilsys->memst->Alloc(sizeof(CMUTIL_Logger_Internal));
         memset(res, 0x0, sizeof(CMUTIL_Logger_Internal));
@@ -1708,7 +1708,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemCreate()
 
 CMUTIL_STATIC void CMUTIL_LogConfigClean(CMUTIL_Json *json)
 {
-    uint i;
+    uint32_t i;
     switch (CMCall(json, GetType)) {
     case CMUTIL_JsonTypeObject: {
         CMUTIL_JsonObject *jobj = (CMUTIL_JsonObject*)json;
@@ -1990,7 +1990,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessOneLogger(
         switch (CMCall(apref, GetType)) {
         case CMUTIL_JsonTypeArray: {
             CMUTIL_JsonArray *jarr = (CMUTIL_JsonArray*)apref;
-            uint i;
+            uint32_t i;
             for (i=0; i<CMCall(jarr, GetSize); i++) {
                 CMUTIL_Json *item = CMCall(jarr, Get, i);
                 CMUTIL_JsonType type = CMCall(item, GetType);
@@ -2025,7 +2025,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessItems(
             CMUTIL_LogSystem_Internal*, const char *, CMUTIL_Json*))
 {
     CMUTIL_Bool res = CMFalse;
-    uint i;
+    uint32_t i;
     CMUTIL_JsonArray *jarr = NULL;
     if (CMCall(json, GetType) != CMUTIL_JsonTypeArray) {
         printf("invalid configuration structure.\n");
