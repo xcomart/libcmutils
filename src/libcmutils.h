@@ -262,7 +262,7 @@ CMUTIL_API void CMUTIL_Init(
 /**
  * @brief Clear allocated resource for this library.
  */
-CMUTIL_API void CMUTIL_Clear();
+CMUTIL_API void CMUTIL_Clear(void);
 
 /**
  * Memory operation interface.
@@ -301,7 +301,7 @@ typedef struct CMUTIL_Mem {
  * This object will be initialized with appropriate memory operators in
  * <tt>CMUTIL_Init</tt>.
  */
-CMUTIL_API CMUTIL_Mem *CMUTIL_GetMem();
+CMUTIL_API CMUTIL_Mem *CMUTIL_GetMem(void);
 
 /**
  * @brief Allocate new memory.
@@ -489,7 +489,7 @@ struct CMUTIL_Mutex {
  * This function creates a 'recursive lockable' mutex object.
  * @return Created mutex object.
  */
-CMUTIL_API CMUTIL_Mutex *CMUTIL_MutexCreate();
+CMUTIL_API CMUTIL_Mutex *CMUTIL_MutexCreate(void);
 
 
 /**
@@ -534,7 +534,7 @@ struct CMUTIL_Thread {
      *     just internal thread index.
      * @return ID of this thread.
      */
-    uint (*GetId)(const CMUTIL_Thread *thread);
+    uint32_t (*GetId)(const CMUTIL_Thread *thread);
 
     /**
      * @brief Get the name of this thread.
@@ -565,19 +565,19 @@ CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadCreate(
  *     just internal thread index.
  * @return ID of current thread.
  */
-CMUTIL_API uint CMUTIL_ThreadSelfId();
+CMUTIL_API uint32_t CMUTIL_ThreadSelfId(void);
 
 /**
  * @brief Get current thread context.
  * @return Current thread context.
  */
-CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadSelf();
+CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadSelf(void);
 
 /**
  * @brief Get system dependent thread id.
  * @return System dependent thread id.
  */
-CMUTIL_API uint64_t CMUTIL_ThreadSystemSelfId();
+CMUTIL_API uint64_t CMUTIL_ThreadSystemSelfId(void);
 
 /**
  * @brief Platform independent semaphore object.
@@ -771,7 +771,7 @@ struct CMUTIL_Array {
      * @return Inserted item if this array is not a sorted array.
      *         NULL if this array is a sorted array.
      */
-    void *(*InsertAt)(CMUTIL_Array *array, void *item, uint index);
+    void *(*InsertAt)(CMUTIL_Array *array, void *item, uint32_t index);
 
     /**
      * @brief Remove an item from this array.
@@ -783,7 +783,7 @@ struct CMUTIL_Array {
      * @return Removed item if given index is a valid index.
      *         NULL if given index is invalid.
      */
-    void *(*RemoveAt)(CMUTIL_Array *array, uint index);
+    void *(*RemoveAt)(CMUTIL_Array *array, uint32_t index);
 
     /**
      * @brief Replace an item at the position of this array.
@@ -800,7 +800,7 @@ struct CMUTIL_Array {
      *         NULL if this array is a sorted array or given index is not a
      *         valid index or the old item is NULL.
      */
-    void *(*SetAt)(CMUTIL_Array *array, void *item, uint index);
+    void *(*SetAt)(CMUTIL_Array *array, void *item, uint32_t index);
 
     /**
      * @brief Get an item from this array.
@@ -814,7 +814,7 @@ struct CMUTIL_Array {
      *         given index is valid one.
      *         NULL if given index is invalid.
      */
-    void *(*GetAt)(const CMUTIL_Array *array, uint index);
+    void *(*GetAt)(const CMUTIL_Array *array, uint32_t index);
 
     /**
      * @brief Find an item from this array.
@@ -829,7 +829,7 @@ struct CMUTIL_Array {
      * @return A found item from this array if the item found. NULL if
      *         this array is not a sorted array or item not found.
      */
-    void *(*Find)(const CMUTIL_Array *array, const void *compval, uint *index);
+    void *(*Find)(const CMUTIL_Array *array, const void *compval, uint32_t *index);
 
     /**
      * @brief The size of this array.
@@ -959,21 +959,21 @@ struct CMUTIL_String {
     size_t (*AddAnother)(
             CMUTIL_String *string, CMUTIL_String *tobeadded);
     size_t (*InsertString)(
-            CMUTIL_String *string, const char *tobeadded, uint at);
+            CMUTIL_String *string, const char *tobeadded, uint32_t at);
     size_t (*InsertNString)(
             CMUTIL_String *string,
-            const char *tobeadded, uint at, size_t size);
+            const char *tobeadded, uint32_t at, size_t size);
     size_t (*InsertPrint)(
-            CMUTIL_String *string, uint idx, const char *fmt, ...);
+            CMUTIL_String *string, uint32_t idx, const char *fmt, ...);
     size_t (*InsertVPrint)(
-            CMUTIL_String *string, uint idx,
+            CMUTIL_String *string, uint32_t idx,
             const char *fmt, va_list args);
     size_t (*InsertAnother)(
-            CMUTIL_String *string, uint idx, CMUTIL_String *tobeadded);
+            CMUTIL_String *string, uint32_t idx, CMUTIL_String *tobeadded);
     void (*CutTailOff)(
             CMUTIL_String *string, size_t length);
     CMUTIL_String *(*Substring)(
-            const CMUTIL_String *string, uint offset, size_t length);
+            const CMUTIL_String *string, uint32_t offset, size_t length);
     CMUTIL_String *(*ToLower)(
             const CMUTIL_String *string);
     void (*SelfToLower)(
@@ -1012,19 +1012,19 @@ struct CMUTIL_StringArray {
     void (*AddCString)(
             CMUTIL_StringArray *array, const char *string);
     void (*InsertAt)(
-            CMUTIL_StringArray *array, CMUTIL_String *string, uint index);
+            CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index);
     void (*InsertAtCString)(
-            CMUTIL_StringArray *array, const char *string, uint index);
+            CMUTIL_StringArray *array, const char *string, uint32_t index);
     CMUTIL_String *(*RemoveAt)(
-            CMUTIL_StringArray *array, uint index);
+            CMUTIL_StringArray *array, uint32_t index);
     CMUTIL_String *(*SetAt)(
-            CMUTIL_StringArray *array, CMUTIL_String *string, uint index);
+            CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index);
     CMUTIL_String *(*SetAtCString)(
-            CMUTIL_StringArray *array, const char *string, uint index);
+            CMUTIL_StringArray *array, const char *string, uint32_t index);
     CMUTIL_String *(*GetAt)(
-            const CMUTIL_StringArray *array, uint index);
+            const CMUTIL_StringArray *array, uint32_t index);
     const char *(*GetCString)(
-            const CMUTIL_StringArray *array, uint index);
+            const CMUTIL_StringArray *array, uint32_t index);
     size_t (*GetSize)(
             const CMUTIL_StringArray *array);
     CMUTIL_Iterator *(*Iterator)(
@@ -1069,7 +1069,7 @@ struct CMUTIL_Map {
 #define CMUTIL_MapCreate()	CMUTIL_MapCreateEx(\
         CMUTIL_MAP_DEFAULT, CMFalse, NULL)
 CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
-        uint bucketsize, CMUTIL_Bool isucase, void(*freecb)(void*));
+        uint32_t bucketsize, CMUTIL_Bool isucase, void(*freecb)(void*));
 
 
 typedef struct CMUTIL_List CMUTIL_List;
@@ -1109,7 +1109,7 @@ struct CMUTIL_XmlNode {
             CMUTIL_XmlNode *node, const char *key, const char *value);
     size_t (*ChildCount)(const CMUTIL_XmlNode *node);
     void (*AddChild)(CMUTIL_XmlNode *node, CMUTIL_XmlNode *child);
-    CMUTIL_XmlNode *(*ChildAt)(const CMUTIL_XmlNode *node, uint index);
+    CMUTIL_XmlNode *(*ChildAt)(const CMUTIL_XmlNode *node, uint32_t index);
     CMUTIL_XmlNode *(*GetParent)(const CMUTIL_XmlNode *node);
     const char *(*GetName)(const CMUTIL_XmlNode *node);
     void (*SetName)(CMUTIL_XmlNode *node, const char *name);
@@ -1219,7 +1219,7 @@ struct CMUTIL_FileList {
             const CMUTIL_FileList *flist);
     CMUTIL_File *(*GetAt)(
             const CMUTIL_FileList *flist,
-            uint index);
+            uint32_t index);
     void (*Destroy)(
             CMUTIL_FileList *flist);
 };
@@ -1364,7 +1364,7 @@ struct CMUTIL_File {
 
 CMUTIL_API CMUTIL_File *CMUTIL_FileCreate(const char *path);
 
-CMUTIL_Bool CMUTIL_PathCreate(const char *path, uint mode);
+CMUTIL_Bool CMUTIL_PathCreate(const char *path, uint32_t mode);
 
 typedef struct CMUTIL_Config CMUTIL_Config;
 struct CMUTIL_Config {
@@ -1548,12 +1548,12 @@ typedef struct CMUTIL_Socket CMUTIL_Socket;
 struct CMUTIL_Socket {
     CMUTIL_SocketResult (*Read)(
             const CMUTIL_Socket *socket,
-            CMUTIL_String *buffer, uint size, long timeout);
+            CMUTIL_String *buffer, uint32_t size, long timeout);
     CMUTIL_SocketResult (*Write)(
             const CMUTIL_Socket *socket, CMUTIL_String *data, long timeout);
     CMUTIL_SocketResult (*WritePart)(
             const CMUTIL_Socket *socket, CMUTIL_String *data,
-            int offset, uint length, long timeout);
+            int offset, uint32_t length, long timeout);
     CMUTIL_SocketResult (*CheckReadBuffer)(
             const CMUTIL_Socket *sock, long timeout);
     CMUTIL_SocketResult (*CheckWriteBuffer)(
@@ -1688,17 +1688,17 @@ struct CMUTIL_JsonArray {
     size_t (*GetSize)(
             const CMUTIL_JsonArray *jarr);
     CMUTIL_Json *(*Get)(
-            const CMUTIL_JsonArray *jarr, uint index);
+            const CMUTIL_JsonArray *jarr, uint32_t index);
     int64_t (*GetLong)(
-            const CMUTIL_JsonArray *jarr, uint index);
+            const CMUTIL_JsonArray *jarr, uint32_t index);
     double (*GetDouble)(
-            const CMUTIL_JsonArray *jarr, uint index);
+            const CMUTIL_JsonArray *jarr, uint32_t index);
     CMUTIL_String *(*GetString)(
-            const CMUTIL_JsonArray *jarr, uint index);
+            const CMUTIL_JsonArray *jarr, uint32_t index);
     const char *(*GetCString)(
-            const CMUTIL_JsonArray *jarr, uint index);
+            const CMUTIL_JsonArray *jarr, uint32_t index);
     CMUTIL_Bool (*GetBoolean)(
-            const CMUTIL_JsonArray *jarr, uint index);
+            const CMUTIL_JsonArray *jarr, uint32_t index);
     void (*Add)(
             CMUTIL_JsonArray *jarr, CMUTIL_Json *json);
     void (*AddLong)(
@@ -1712,7 +1712,7 @@ struct CMUTIL_JsonArray {
     void (*AddNull)(
             CMUTIL_JsonArray *jarr);
     CMUTIL_Json *(*Remove)(
-            CMUTIL_JsonArray *jarr, uint index);
+            CMUTIL_JsonArray *jarr, uint32_t index);
 };
 
 CMUTIL_API CMUTIL_JsonArray *CMUTIL_JsonArrayCreate();

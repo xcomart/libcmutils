@@ -289,14 +289,14 @@ CMUTIL_STATIC size_t CMUTIL_StringAddAnother(
 }
 
 CMUTIL_STATIC size_t CMUTIL_StringInsertString(CMUTIL_String *string,
-        const char *tobeadded, uint at)
+        const char *tobeadded, uint32_t at)
 {
     size_t size = strlen((const char*)tobeadded);
     return CMCall(string, InsertNString, tobeadded, at, size);
 }
 
 CMUTIL_STATIC size_t CMUTIL_StringInsertNString(CMUTIL_String *string,
-        const char *tobeadded, uint at, size_t size)
+        const char *tobeadded, uint32_t at, size_t size)
 {
     CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
     CMUTIL_StringCheckSize(istr, size);
@@ -307,7 +307,7 @@ CMUTIL_STATIC size_t CMUTIL_StringInsertNString(CMUTIL_String *string,
 }
 
 CMUTIL_STATIC size_t CMUTIL_StringInsertPrint(
-        CMUTIL_String *string, uint idx, const char *fmt, ...)
+        CMUTIL_String *string, uint32_t idx, const char *fmt, ...)
 {
     va_list args;
     size_t ir;
@@ -318,17 +318,17 @@ CMUTIL_STATIC size_t CMUTIL_StringInsertPrint(
 }
 
 CMUTIL_STATIC size_t CMUTIL_StringInsertVPrint(
-        CMUTIL_String *string, uint idx, const char *fmt, va_list args)
+        CMUTIL_String *string, uint32_t idx, const char *fmt, va_list args)
 {
     char buf[4096];
     size_t len, ir;
-    len = (uint)vsnprintf(buf, sizeof(buf), fmt, args);
+    len = (uint32_t)vsnprintf(buf, sizeof(buf), fmt, args);
     ir = CMCall(string, InsertNString, buf, idx, len);
     return ir;
 }
 
 CMUTIL_STATIC size_t CMUTIL_StringInsertAnother(
-        CMUTIL_String *string, uint idx, CMUTIL_String *tobeadded)
+        CMUTIL_String *string, uint32_t idx, CMUTIL_String *tobeadded)
 {
     const char *str = CMCall(tobeadded, GetCString);
     size_t len = CMCall(tobeadded, GetSize);
@@ -347,7 +347,7 @@ CMUTIL_STATIC void CMUTIL_StringCutTailOff(
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_StringSubstring(
-    const CMUTIL_String *string, uint offset, size_t length)
+    const CMUTIL_String *string, uint32_t offset, size_t length)
 {
     const CMUTIL_String_Internal *istr = (const CMUTIL_String_Internal*)string;
     CMUTIL_String *res = NULL;
@@ -562,42 +562,42 @@ CMUTIL_STATIC void CMUTIL_StringArrayAddCString(
 }
 
 CMUTIL_STATIC void CMUTIL_StringArrayInsertAt(
-        CMUTIL_StringArray *array, CMUTIL_String *string, uint index)
+        CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index)
 {
     CMUTIL_StringArray_Internal *iarray = (CMUTIL_StringArray_Internal*)array;
     CMCall(iarray->array, InsertAt, string, index);
 }
 
 CMUTIL_STATIC void CMUTIL_StringArrayInsertAtCString(
-        CMUTIL_StringArray *array, const char *string, uint index)
+        CMUTIL_StringArray *array, const char *string, uint32_t index)
 {
     CMUTIL_String *data = CMUTIL_StringCreateEx(64, string);
     CMCall(array, InsertAt, data, index);
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_StringArrayRemoveAt(
-        CMUTIL_StringArray *array, uint index)
+        CMUTIL_StringArray *array, uint32_t index)
 {
     CMUTIL_StringArray_Internal *iarray = (CMUTIL_StringArray_Internal*)array;
     return (CMUTIL_String*)CMCall(iarray->array, RemoveAt, index);
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_StringArraySetAt(
-        CMUTIL_StringArray *array, CMUTIL_String *string, uint index)
+        CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index)
 {
     CMUTIL_StringArray_Internal *iarray = (CMUTIL_StringArray_Internal*)array;
     return CMCall(iarray->array, SetAt, string, index);
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_StringArraySetAtCString(
-        CMUTIL_StringArray *array, const char *string, uint index)
+        CMUTIL_StringArray *array, const char *string, uint32_t index)
 {
     CMUTIL_String *data = CMUTIL_StringCreateEx(64, string);
     return CMCall(array, SetAt, data, index);
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_StringArrayGetAt(
-        const CMUTIL_StringArray *array, uint index)
+        const CMUTIL_StringArray *array, uint32_t index)
 {
     const CMUTIL_StringArray_Internal *iarray =
             (const CMUTIL_StringArray_Internal*)array;
@@ -605,7 +605,7 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringArrayGetAt(
 }
 
 CMUTIL_STATIC const char *CMUTIL_StringArrayGetCString(
-        const CMUTIL_StringArray *array, uint index)
+        const CMUTIL_StringArray *array, uint32_t index)
 {
     CMUTIL_String *v = CMCall(array, GetAt, index);
     return CMCall(v, GetCString);
@@ -869,7 +869,7 @@ CMUTIL_StringArray *CMUTIL_StringSplitInternal(
             /* find needle */
             q = strstr(p, needle);
             while (q) {
-                strncpy(buf, p, (uint)(q-p));
+                strncpy(buf, p, (uint32_t)(q-p));
                 *(buf+(q-p)) = 0x0;
                 r = CMUTIL_StrTrim(buf);
                 str = CMUTIL_StringCreateInternal(memst, strlen(r), r);

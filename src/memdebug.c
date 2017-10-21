@@ -396,7 +396,7 @@ void CMUTIL_MemDebugInit(CMUTIL_MemOper memoper)
 void CMUTIL_MemDebugClear()
 {
     if (g_cmutil_memoper != CMUTIL_MemSystem) {
-        uint i;
+        uint32_t i;
         for (i=0; i<MEM_BLOCK_SZ; i++) {
             CMUTIL_MemRcyList *list = &g_cmutil_memrcyblocks[i];
             // TODO: print used items;
@@ -405,7 +405,7 @@ void CMUTIL_MemDebugClear()
                         "memory leak detected.",
                         i, list->cnt - list->avlcnt, list->usedsize);
                 if (g_cmutil_memoper == CMUTIL_MemDebug) {
-                    uint j;
+                    uint32_t j;
                     for (j=0; j<CMCall(list->used, GetSize); j++) {
                         CMUTIL_MemNode *node = (CMUTIL_MemNode*)CMCall(
                                     list->used, GetAt, j);

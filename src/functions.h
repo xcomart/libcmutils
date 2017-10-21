@@ -45,20 +45,20 @@ int gettimeofday(struct timeval *tv, struct timezone *tz);
 
 typedef struct CMUTIL_Mem CMUTIL_Mem;
 
-void CMUTIL_XmlInit();
-void CMUTIL_XmlClear();
-void CMUTIL_LogInit();
-void CMUTIL_LogClear();
-void CMUTIL_ThreadInit();
-void CMUTIL_ThreadClear();
-void CMUTIL_CallStackInit();
-void CMUTIL_CallStackClear();
-void CMUTIL_NetworkInit();
-void CMUTIL_NetworkClear();
-void CMUTIL_StringBaseInit();
-void CMUTIL_StringBaseClear();
+void CMUTIL_XmlInit(void);
+void CMUTIL_XmlClear(void);
+void CMUTIL_LogInit(void);
+void CMUTIL_LogClear(void);
+void CMUTIL_ThreadInit(void);
+void CMUTIL_ThreadClear(void);
+void CMUTIL_CallStackInit(void);
+void CMUTIL_CallStackClear(void);
+void CMUTIL_NetworkInit(void);
+void CMUTIL_NetworkClear(void);
+void CMUTIL_StringBaseInit(void);
+void CMUTIL_StringBaseClear(void);
 void CMUTIL_MemDebugInit(CMUTIL_MemOper memoper);
-void CMUTIL_MemDebugClear();
+void CMUTIL_MemDebugClear(void);
 
 
 CMUTIL_Array *CMUTIL_ArrayCreateInternal(
@@ -118,7 +118,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJsonInternal(
         CMUTIL_Mem *memst, const char *jsonfile);
 CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem *memst);
 
-CMUTIL_Map *CMUTIL_MapCreateInternal(CMUTIL_Mem *memst, uint bucketsize,
+CMUTIL_Map *CMUTIL_MapCreateInternal(CMUTIL_Mem *memst, uint32_t bucketsize,
         CMUTIL_Bool isucase, void(*freecb)(void*));
 
 CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst);

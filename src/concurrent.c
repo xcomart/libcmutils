@@ -477,7 +477,7 @@ typedef struct CMUTIL_Thread_Internal {
     THREAD_T            thread;
 #endif
     CMUTIL_Bool         isrunning;
-    uint                id;
+    uint32_t                id;
     char                *name;
     uint64_t             sysid;
     CMUTIL_Mem          *memst;
@@ -596,7 +596,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_ThreadStart(CMUTIL_Thread *thread)
             ithread, 0, &tid);
     if (ithread->thread == INVALID_HANDLE_VALUE)
         ir = -1;
-    ithread->sysid = (uint64)tid;
+    ithread->sysid = (uint64_t)tid;
 #else
 # if defined(USE_THREADS_H_)
     ir = thrd_create(
@@ -614,7 +614,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_ThreadStart(CMUTIL_Thread *thread)
     return ir == 0? CMTrue:CMFalse;
 }
 
-CMUTIL_STATIC uint CMUTIL_ThreadGetId(const CMUTIL_Thread *thread)
+CMUTIL_STATIC uint32_t CMUTIL_ThreadGetId(const CMUTIL_Thread *thread)
 {
     const CMUTIL_Thread_Internal *ithread =
             (const CMUTIL_Thread_Internal*)thread;
@@ -664,7 +664,7 @@ CMUTIL_Thread *CMUTIL_ThreadCreate(
     return CMUTIL_ThreadCreateInternal(CMUTIL_GetMem(), proc, udata, name);
 }
 
-uint CMUTIL_ThreadSelfId()
+uint32_t CMUTIL_ThreadSelfId()
 {
     unsigned int res = 0;
     CMUTIL_Thread_Internal q, *r;
@@ -691,12 +691,12 @@ CMUTIL_Thread *CMUTIL_ThreadSelf()
         NULL,
         NULL,
         NULL,
-        CMTrue,
     #if defined(MSWIN)
         NULL,
     #else
         (THREAD_T)NULL,
     #endif
+        CMTrue,
         0,
         "main",
         0,
@@ -836,7 +836,7 @@ CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
 #elif defined(APPLE)
     isem->semp = dispatch_semaphore_create(initcnt);
 #else
-    ir = sem_init(&(isem->semp), 0, (uint)initcnt);
+    ir = sem_init(&(isem->semp), 0, (uint32_t)initcnt);
 #endif
 
     if (ir != 0) {
@@ -1175,7 +1175,7 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleDelayRepeat(
 CMUTIL_STATIC void CMUTIL_TimerPurge(CMUTIL_Timer *timer)
 {
     CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)timer;
-    uint i;
+    uint32_t i;
     size_t len;
 
     CMCall(itimer->mutex, Lock);
@@ -1283,7 +1283,7 @@ CMUTIL_STATIC void *CMUTIL_TimerMainLoop(void *param)
         }
         CMCall(itimer->mutex, Unlock);
 
-        usleep((uint)itimer->precision);
+        usleep((uint32_t)itimer->precision);
         gettimeofday(&curr, NULL);
     }
     return NULL;

@@ -142,7 +142,7 @@ CMUTIL_STATIC size_t CMUTIL_FileListCount(const CMUTIL_FileList *flist)
 }
 
 CMUTIL_STATIC CMUTIL_File *CMUTIL_FileListGetAt(
-        const CMUTIL_FileList *flist, uint index)
+        const CMUTIL_FileList *flist, uint32_t index)
 {
     const CMUTIL_FileList_Internal *iflist =
             (const CMUTIL_FileList_Internal*)flist;
@@ -154,7 +154,7 @@ CMUTIL_STATIC void CMUTIL_FileListDestroy(CMUTIL_FileList *flist)
     CMUTIL_FileList_Internal *iflist = (CMUTIL_FileList_Internal*)flist;
     if (iflist) {
         if (iflist->files) {
-            uint i;
+            uint32_t i;
             size_t count = CMCall(iflist->files, GetSize);
             for (i=0; i<count; i++) {
                 CMUTIL_File_Internal *file =
@@ -458,7 +458,7 @@ CMUTIL_File *CMUTIL_FileCreate(const char *path)
 # define MKDIR			mkdir
 #endif
 
-CMUTIL_Bool CMUTIL_PathCreate(const char *path, uint mode)
+CMUTIL_Bool CMUTIL_PathCreate(const char *path, uint32_t mode)
 {
     int retval, i;
 
@@ -482,7 +482,7 @@ CMUTIL_Bool CMUTIL_PathCreate(const char *path, uint mode)
         // no permission or path cannot be created.
         if (++i > 2)
             return CMFalse;
-        strncat(subpath, path, (ulong)(p - path));     /* Appends NULL */
+        strncat(subpath, path, (uint64_t)(p - path));     /* Appends NULL */
         CMUTIL_FileCreate(subpath);
     }
 #if defined(MSWIN)

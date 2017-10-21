@@ -35,8 +35,8 @@ typedef struct CMUTIL_Pool_Internal {
     CMUTIL_TimerTask	*pingtester;
     CMUTIL_Mem          *memst;
     CMUTIL_Bool			intimer;
-    uint				totcnt;
-    uint				maxcnt;
+    uint32_t				totcnt;
+    uint32_t				maxcnt;
     CMUTIL_Bool			testonb;
 } CMUTIL_Pool_Internal;
 
@@ -131,7 +131,7 @@ CMUTIL_STATIC void CMUTIL_PoolPingTester(void *p)
 {
     CMUTIL_Pool_Internal *ipool = (CMUTIL_Pool_Internal*)p;
     CMUTIL_Pool *pool = (CMUTIL_Pool*)ipool;
-    uint i;
+    uint32_t i;
     size_t size = CMCall(ipool->avail, GetSize);
     for (i=0; i<size; i++) {
         /*

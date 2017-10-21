@@ -289,22 +289,22 @@ typedef struct CMUTIL_StackWalker_Internal CMUTIL_StackWalker_Internal;
 struct CMUTIL_StackWalker_Internal {
     CMUTIL_StackWalker	base;
     DWORD (*LoadModule)(
-        CMUTIL_StackWalker_Internal *walker,
+        const CMUTIL_StackWalker_Internal *walker,
         LPCSTR img, LPCSTR mod, DWORD64 baseAddr, DWORD size);
     BOOL (*GetModuleListTH32)(
-        CMUTIL_StackWalker_Internal *walker);
+        const CMUTIL_StackWalker_Internal *walker);
     BOOL (*GetModuleListPSAPI)(
-        CMUTIL_StackWalker_Internal *walker);
+        const CMUTIL_StackWalker_Internal *walker);
     BOOL (*LoadModules)(
-        CMUTIL_StackWalker_Internal *walker);
+        const CMUTIL_StackWalker_Internal *walker);
     BOOL (*GetModuleInfo)(
-        CMUTIL_StackWalker_Internal *walker, DWORD64 baseAddr,
+        const CMUTIL_StackWalker_Internal *walker, DWORD64 baseAddr,
         IMAGEHLP_MODULE64_V2 *pModuleInfo);
     CMUTIL_Mem *memst;
 };
 
 CMUTIL_STATIC BOOL CMUTIL_StackWalkerGetModuleListTH32(
-    CMUTIL_StackWalker_Internal *walker)
+    const CMUTIL_StackWalker_Internal *walker)
 {
     // CreateToolhelp32Snapshot()
     typedef HANDLE(__stdcall *tCT32S)(DWORD dwFlags, DWORD th32ProcessID);
@@ -351,7 +351,7 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerGetModuleListTH32(
     int cnt = 0;
     while (keepGoing)
     {
-        CMUTIL_CALL(walker, LoadModule, me.szExePath, me.szModule,
+        CMCall(walker, LoadModule, me.szExePath, me.szModule,
             (DWORD64)me.modBaseAddr, me.modBaseSize);
         cnt++;
         keepGoing = !!pM32N(hSnap, &me);
@@ -364,7 +364,7 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerGetModuleListTH32(
 }  // GetModuleListTH32
 
 CMUTIL_STATIC BOOL CMUTIL_StackWalkerGetModuleListPSAPI(
-    CMUTIL_StackWalker_Internal *walker)
+    const CMUTIL_StackWalker_Internal *walker)
 {
     // EnumProcessModules()
     typedef BOOL(__stdcall *tEPM)(
@@ -438,7 +438,7 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerGetModuleListPSAPI(
         tt2[0] = 0;
         pGMBN(hProcess, hMods[i], tt2, (DWORD)TTBUFLEN);
 
-        DWORD dwRes = CMUTIL_CALL(walker, LoadModule, tt, tt2,
+        DWORD dwRes = CMCall(walker, LoadModule, tt, tt2,
             (DWORD64)mi.lpBaseOfDll, mi.SizeOfImage);
         if (dwRes != ERROR_SUCCESS) {
             // TODO: report error
@@ -456,7 +456,7 @@ cleanup:
 }  // GetModuleListPSAPI
 
 CMUTIL_STATIC DWORD CMUTIL_StackWalkerLoadModule(
-    CMUTIL_StackWalker_Internal *walker,
+    const CMUTIL_StackWalker_Internal *walker,
     LPCSTR img, LPCSTR mod, DWORD64 baseAddr, DWORD size)
 {
     CHAR *szImg = walker->memst->Strdup(img);
@@ -475,17 +475,17 @@ CMUTIL_STATIC DWORD CMUTIL_StackWalkerLoadModule(
 }
 
 CMUTIL_STATIC BOOL CMUTIL_StackWalkerLoadModules(
-    CMUTIL_StackWalker_Internal *walker)
+    const CMUTIL_StackWalker_Internal *walker)
 {
     // first try toolhelp32
-    if (CMUTIL_CALL(walker, GetModuleListTH32))
+    if (CMCall(walker, GetModuleListTH32))
         return TRUE;
     // then try psapi
-    return CMUTIL_CALL(walker, GetModuleListPSAPI);
+    return CMCall(walker, GetModuleListPSAPI);
 }
 
 CMUTIL_STATIC BOOL CMUTIL_StackWalkerGetModuleInfo(
-    CMUTIL_StackWalker_Internal *walker, DWORD64 baseAddr,
+    const CMUTIL_StackWalker_Internal *walker, DWORD64 baseAddr,
     IMAGEHLP_MODULE64_V2 *pModuleInfo)
 {
     if (pSGMI == NULL)
@@ -551,7 +551,7 @@ typedef struct CallstackEntry
 } CallstackEntry;
 
 typedef void (*CMUTIL_StackWalkerStackEntryReader)(
-    const char *stackinfo, int len, void * userdat);
+    const char *stackinfo, size_t len, void * userdat);
 
 CMUTIL_STATIC BOOL __stdcall CMUTIL_StackWalkerReadProcMem(
     HANDLE      hProcess,
@@ -585,7 +585,7 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerShowCallstack(
 
     // modules are loaded already
     //if (walker->m_modulesLoaded == FALSE)
-    CMUTIL_CALL(walker, LoadModules);  // ignore the result...
+    CMCall(walker, LoadModules);  // ignore the result...
 
     GET_CURRENT_CONTEXT(c, USED_CONTEXT_FLAGS);
 
@@ -711,7 +711,7 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerShowCallstack(
             } // yes, we have SymGetLineFromAddr64()
 
             // show module info (SymGetModuleInfo64())
-            if (CMUTIL_CALL(walker, GetModuleInfo, s.AddrPC.Offset,
+            if (CMCall(walker, GetModuleInfo, s.AddrPC.Offset,
                 &Module) != FALSE)
             { // got module info OK
                 // TODO: Mache dies sicher...!
@@ -787,8 +787,8 @@ CMUTIL_STATIC void CMUTIL_StackWalkerGetStackIterator(
     if (wtemp->depth++ > wtemp->stdepth) {
         CMUTIL_String *item = CMUTIL_StringCreateInternal(
                     wtemp->walker->memst, len, NULL);
-        CMUTIL_CALL(item, AddNString, sinfo, len);
-        CMUTIL_CALL(wtemp->res, Add, item);
+        CMCall(item, AddNString, sinfo, len);
+        CMCall(wtemp->res, Add, item);
     }
 }
 
@@ -816,8 +816,8 @@ CMUTIL_STATIC void CMUTIL_StackWalkerPrintStackIterator(
 {
     struct WalkerPrintTemp *wtemp = (struct WalkerPrintTemp*)data;
     if (wtemp->depth++ > wtemp->stdepth) {
-        CMUTIL_CALL(wtemp->res, AddString, "\r\n");
-        CMUTIL_CALL(wtemp->res, AddNString, sinfo, len);
+        CMCall(wtemp->res, AddString, "\r\n");
+        CMCall(wtemp->res, AddNString, sinfo, len);
     }
 }
 
@@ -903,14 +903,14 @@ CMUTIL_STATIC int CMUTIL_StackWalkerIterator(
         CMUTIL_StackWalkerCtx *stk = (CMUTIL_StackWalkerCtx*)uarg;
         if (wtemp->depth++ > wtemp->stdepth) {
             if (wtemp->buffer) {
-                CMUTIL_CALL(wtemp->buffer, AddPrint, "\n%08lx %s %s",
+                CMCall(wtemp->buffer, AddPrint, "\n%08lx %s %s",
                     pc, dlip.dli_fname, dlip.dli_sname);
             } else {
                 CMUTIL_String *item = CMUTIL_StringCreateInternal(
                             50, NULL, stk->walker->memst);
-                CMUTIL_CALL(item, AddPrint, "%08lx %s %s",
+                CMCall(item, AddPrint, "%08lx %s %s",
                     pc, dlip.dli_fname, dlip.dli_sname);
-                CMUTIL_CALL(item->stack, Add, item);
+                CMCall(item->stack, Add, item);
             }
             return 0;
         } else {
