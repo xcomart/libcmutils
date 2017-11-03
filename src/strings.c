@@ -189,7 +189,7 @@ void CMUTIL_StringBaseInit()
     g_cmutil_csmap = CMUTIL_MapCreateEx(CMUTIL_MAP_DEFAULT, CMTrue, NULL);
     pair = g_msvc_cspiars;
     while (pair) {
-        CMUTIL_CALL(g_cmutil_csmap, Put, pair->csname, pair);
+        CMCall(g_cmutil_csmap, Put, pair->csname, pair);
         pair++;
     }
 #endif
@@ -198,7 +198,7 @@ void CMUTIL_StringBaseInit()
 void CMUTIL_StringBaseClear()
 {
 #if defined(_MSC_VER)
-    CMUTIL_CALL(g_cmutil_csmap, Destroy);
+    CMCall(g_cmutil_csmap, Destroy);
 #endif
 }
 
@@ -695,17 +695,17 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_CSConvConv(
     if (instr) {
 #if defined(_MSC_VER)
         struct CMUTIL_CSPair *pair1, *pair2;
-        pair1 = CMUTIL_CALL(g_cmutil_csmap, Get, frcs);
-        pair2 = CMUTIL_CALL(g_cmutil_csmap, Get, tocs);
+        pair1 = CMCall(g_cmutil_csmap, Get, frcs);
+        pair2 = CMCall(g_cmutil_csmap, Get, tocs);
         if (pair1 && pair2) {
             // convert mbcs to widechar and convert widechar to mbcs
             WCHAR *wstr = NULL;
             int cvsize;
-            int size = CMUTIL_CALL(instr, GetSize);
+            int size = CMCall(instr, GetSize);
             char *rbuf = NULL;
             wstr = memst->Alloc(sizeof(WCHAR) * size);
             cvsize = MultiByteToWideChar(
-                        pair1->cpno, 0, CMUTIL_CALL(instr, GetCString),
+                        pair1->cpno, 0, CMCall(instr, GetCString),
                         size, wstr, size);
             if (cvsize > 0) {
                 rbuf = memst->Alloc(cvsize * 4);
