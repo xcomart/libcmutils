@@ -45,9 +45,9 @@ struct hostent *CMUTIL_NetworkGetHostByName(const char *name)
     struct hostent *res = NULL;
     // lock gethostbyname function to guarantee consistancy of
     // CMUTIL_NetworkGetHostByNameR
-    CMUTIL_CALL(g_cmutil_hostbyname_mutex, Lock);
+    CMCall(g_cmutil_hostbyname_mutex, Lock);
     res = gethostbyname(name);
-    CMUTIL_CALL(g_cmutil_hostbyname_mutex, Unlock);
+    CMCall(g_cmutil_hostbyname_mutex, Unlock);
     return res;
 }
 
@@ -63,7 +63,7 @@ int CMUTIL_NetworkGetHostByNameR(const char *name,
 #define declen(sz) do {                                 \
     if (buflen - sz - 1 > 0) buflen -= sz;              \
     else {                                              \
-        CMUTIL_CALL(g_cmutil_hostbyname_mutex, Unlock); \
+        CMCall(g_cmutil_hostbyname_mutex, Unlock); \
         return -1;                                      \
     } } while(0)
 
@@ -71,7 +71,7 @@ int CMUTIL_NetworkGetHostByNameR(const char *name,
     memset(buf, 0x0, buflen);
 
     // lock gethostbyname function to guarantee consistancy.
-    CMUTIL_CALL(g_cmutil_hostbyname_mutex, Lock);
+    CMCall(g_cmutil_hostbyname_mutex, Lock);
     staticval = gethostbyname(name);
     memcpy(ret, staticval, sizeof(struct hostent));
     clen = sizeof(char*) * staticval->h_length;
@@ -113,7 +113,7 @@ int CMUTIL_NetworkGetHostByNameR(const char *name,
     }
     *p++ = 0x0; declen(1);
 
-    CMUTIL_CALL(g_cmutil_hostbyname_mutex, Unlock);
+    CMCall(g_cmutil_hostbyname_mutex, Unlock);
     CMUTIL_UNUSED(result, h_errnop);
     return 0;
 }
@@ -136,7 +136,7 @@ void CMUTIL_NetworkClear()
 #if defined(MSWIN)
     WSACleanup();
 #elif defined(APPLE)
-    CMUTIL_CALL(g_cmutil_hostbyname_mutex, Destroy);
+    CMCall(g_cmutil_hostbyname_mutex, Destroy);
 #endif
 }
 
@@ -217,14 +217,14 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SocketReadSocket(
     WSAPROTOCOL_INFO pi;
     CMUTIL_String *rcvbuf = CMUTIL_StringCreateInternal(
                 isock->memst, sizeof(pi), NULL);
-    *rval = CMUTIL_CALL(sock, Read, rcvbuf, sizeof(pi), timeout);
+    *rval = CMCall(sock, Read, rcvbuf, sizeof(pi), timeout);
     if (*rval != CMUTIL_SocketOk) {
         // error code has been set already.
-        CMUTIL_CALL(rcvbuf, Destroy);
+        CMCall(rcvbuf, Destroy);
         return NULL;
     }
-    memcpy(&pi, CMUTIL_CALL(rcvbuf, GetCString), sizeof(pi));
-    CMUTIL_CALL(rcvbuf, Destroy);
+    memcpy(&pi, CMCall(rcvbuf, GetCString), sizeof(pi));
+    CMCall(rcvbuf, Destroy);
     rsock = WSASocket(AF_INET, SOCK_STREAM, 0, &pi, 0, WSA_FLAG_OVERLAPPED);
     if (rsock == INVALID_SOCKET)
         *rval = CMUTIL_SocketUnknownError;
@@ -352,7 +352,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SocketWritePart(
         rc = (int)send(isock->sock, CMCall(data, GetCString) + offset,
                        size, MSG_NOSIGNAL);
 #else
-        rc = (int)send(isock->sock, CMUTIL_CALL(data, GetCString) + offset,
+        rc = (int)send(isock->sock, CMCall(data, GetCString) + offset,
                        size, 0);
 #endif
         if (rc == SOCKET_ERROR) {
@@ -391,10 +391,10 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SocketWriteSocket(
     if (ir != 0)
         return CMUTIL_SocketUnknownError;
     sendbuf = CMUTIL_StringCreateInternal(isock->memst, sizeof(pi), NULL);
-    CMUTIL_CALL(sendbuf, AddNString, (char*)&pi, sizeof(pi));
+    CMCall(sendbuf, AddNString, (char*)&pi, sizeof(pi));
 
-    res = CMUTIL_CALL(&isock->base, Write, sendbuf, timeout);
-    CMUTIL_CALL(sendbuf, Destroy);
+    res = CMCall(&isock->base, Write, sendbuf, timeout);
+    CMCall(sendbuf, Destroy);
 #else
     char *cmd="SERV";
     struct iovec vector;
@@ -1047,7 +1047,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketRead(
                 in_init = 0;
         }
 
-        res = CMUTIL_CALL(sock, CheckReadBuffer, timeout);
+        res = CMCall(sock, CheckReadBuffer, timeout);
         if (res == CMUTIL_SocketOk) {
             rsz = size > 1024? 1024:size;
             rc = SSL_read(isck->session, buf, rsz);
@@ -1059,7 +1059,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketRead(
                     CMLogError("SSL read failed");
                     return CMUTIL_SocketReceiveFailed;
                 }
-                CMUTIL_CALL(buffer, AddNString, buf, rc);
+                CMCall(buffer, AddNString, buf, rc);
                 size -= rc;
                 if (size == 0)
                     return CMUTIL_SocketOk;
@@ -1169,7 +1169,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketWritePart(
                 in_init = 0;
         }
 
-        res = CMUTIL_CALL(sock, CheckWriteBuffer, timeout);
+        res = CMCall(sock, CheckWriteBuffer, timeout);
         if (res == CMUTIL_SocketOk) {
             rc = SSL_write(isck->session, buf, size);
 

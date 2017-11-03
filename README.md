@@ -10,13 +10,13 @@ this may causes confusion to developer who to uses it.
 The libcmutils library :
 
 * has intuitive structure to use like OOP language
-* is written in pure ISO C99 code
 * runs on almost every platforms
 * offers log4j like logging system
 * has concurrent programming API(Mutex, Thread, Semaphore, Timer, etc)
-* provides simple version JSON, XML parser and builder
+* provides JSON, XML parser and builder
 
-libcmutils is developed and maintained by Dennis Soungjin Park <xcomart@gmail.com>.
+libcmutils is developed and maintained
+by Dennis Soungjin Park <xcomart@gmail.com>.
 
 ## 2. License
 
@@ -43,10 +43,13 @@ The source code freely to use under **GPL v3** - see [LICENSE file](LICENSE)
 	* Log4J like implementation.
 	* JSON configuration file support.
 	* Custom appender can be used.
-	* FileAppender, RollingFileAppender, SocketAppender and ConsoleAppender implemented internally.
+    * FileAppender, RollingFileAppender, SocketAppender
+        and ConsoleAppender implemented internally.
 	* Asynchronous logging support.
 * Platform independent non-blocking TCP/IP networking implementation.
 	* ServerSocket / ClientSocket implemented.
+    * SSL communication implemented with same as ServerSocket / ClientSocket.
+        (gnutls backend / OpenSSL backend can be chosen)
 	* Passing socket to another process using IPC.
 * Supports memory management by three types of strategy
 	* System - Uses system version malloc, realloc, strdup and free.
