@@ -64,10 +64,10 @@ typedef enum CMUTIL_LogFormatType {
 typedef struct CMUTIL_LogAppenderFormatItem CMUTIL_LogAppenderFormatItem;
 struct CMUTIL_LogAppenderFormatItem {
     CMUTIL_LogFormatItemType	type;
-    CMUTIL_Bool					padleft;
+    CMBool					padleft;
     uint32_t						precision[10];
     uint32_t						precisioncnt;
-    CMUTIL_Bool					hasext;
+    CMBool					hasext;
     size_t						length;
     CMUTIL_String				*data;
     CMUTIL_String				*data2;
@@ -78,7 +78,7 @@ struct CMUTIL_LogAppenderFormatItem {
 typedef struct CMUTIL_LogAppenderBase CMUTIL_LogAppenderBase;
 struct CMUTIL_LogAppenderBase {
     CMUTIL_LogAppender	base;
-    CMUTIL_Bool			isasync;
+    CMBool			isasync;
     int                 dummy_padder;
     size_t				buffersz;
     void                (*Write)(CMUTIL_LogAppenderBase *appender,
@@ -666,7 +666,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
     item->anything = map;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogPatternParse(
+CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
     CMUTIL_Mem *memst, CMUTIL_List *list, const char *pattern)
 {
     const char *p, *q, *r;
@@ -677,8 +677,8 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogPatternParse(
         char buf[128] = { 0, };
         char fmt[20];
         uint32_t length = 0;
-        CMUTIL_Bool padleft = CMFalse;
-        CMUTIL_Bool hasext = CMFalse;
+        CMBool padleft = CMFalse;
+        CMBool hasext = CMFalse;
         CMUTIL_LogFormatType type;
         CMUTIL_LogAppenderFormatItem *item = NULL;
         void *tvoid = NULL;
@@ -901,7 +901,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogPatternParse(
     return CMTrue;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogAppenderBaseInit(
+CMUTIL_STATIC CMBool CMUTIL_LogAppenderBaseInit(
     CMUTIL_LogAppenderBase *iap,
     const char *pattern,
     const char *name,
@@ -1104,7 +1104,7 @@ typedef struct CMUTIL_LogRollingFileAppender {
     CMUTIL_PointDiff tmlen;
 } CMUTIL_LogRollingFileAppender;
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogRollingFileAppenderIsChanged(
+CMUTIL_STATIC CMBool CMUTIL_LogRollingFileAppenderIsChanged(
         CMUTIL_LogRollingFileAppender *appender, struct tm *curr)
 {
     return memcmp(
@@ -1260,7 +1260,7 @@ CMUTIL_LogAppender *CMUTIL_LogRollingFileAppenderCreate(
 
 typedef struct CMUTIL_LogSocketAppender {
     CMUTIL_LogAppenderBase base;
-    CMUTIL_Bool         isrunning;
+    CMBool         isrunning;
     int                 dummy_padder;
     CMUTIL_ServerSocket *listener;
     CMUTIL_Thread       *acceptor;
@@ -1404,11 +1404,11 @@ struct CMUTIL_ConfLogger_Internal
     CMUTIL_ConfLogger			base;
     char						*name;
     CMUTIL_LogLevel				level;
-    CMUTIL_Bool					additivity;
+    CMBool					additivity;
     CMUTIL_Array				*lvlapndrs;
     const CMUTIL_LogSystem_Internal	*lsys;
     void (*Destroy)(CMUTIL_ConfLogger_Internal *icl);
-    CMUTIL_Bool (*Log)(CMUTIL_ConfLogger_Internal *cli,
+    CMBool (*Log)(CMUTIL_ConfLogger_Internal *cli,
                        CMUTIL_Logger_Internal *li,
                        CMUTIL_LogLevel level,
                        CMUTIL_StringArray *stack,
@@ -1443,7 +1443,7 @@ CMUTIL_STATIC void CMUTIL_ConfLoggerDestroy(CMUTIL_ConfLogger_Internal *icl)
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_ConfLoggerLog(
+CMUTIL_STATIC CMBool CMUTIL_ConfLoggerLog(
         CMUTIL_ConfLogger_Internal *cli,
         CMUTIL_Logger_Internal *li,
         CMUTIL_LogLevel level,
@@ -1490,7 +1490,7 @@ CMUTIL_STATIC void CMUTIL_ConfLoggerAddAppender(
 
 CMUTIL_STATIC CMUTIL_ConfLogger *CMUTIL_LogSystemCreateLogger(
         const CMUTIL_LogSystem *lsys, const char *name, CMUTIL_LogLevel level,
-        CMUTIL_Bool additivity)
+        CMBool additivity)
 {
     CMUTIL_Array *lvllog;
     uint32_t i, lvllen = CMUTIL_LogLevel_Fatal + 1;
@@ -1534,7 +1534,7 @@ CMUTIL_STATIC int CMUTIL_LoggerRefComparator(const void *a, const void *b)
 
 CMUTIL_STATIC void CMUTIL_LoggerLogEx(
         CMUTIL_Logger *logger, CMUTIL_LogLevel level,
-        const char *file, int line, CMUTIL_Bool printStack,
+        const char *file, int line, CMBool printStack,
         const char *fmt, ...)
 {
     uint32_t i;
@@ -1768,13 +1768,13 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureDefault(CMUTIL_Mem *memst)
     return res;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessOneAppender(
+CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneAppender(
         CMUTIL_LogSystem_Internal *lsys, const char *stype, CMUTIL_Json *json)
 {
     CMUTIL_JsonObject *jobj = (CMUTIL_JsonObject*)json;
     const char *sname = NULL, *spattern = NULL;
     CMUTIL_LogAppender *appender = NULL;
-    CMUTIL_Bool async = CMFalse;
+    CMBool async = CMFalse;
     int64_t asyncBufsz = 256;
 
     if (CMCall(json, GetType) != CMUTIL_JsonTypeObject) {
@@ -1875,7 +1875,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessOneAppender(
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemAddAppenderToLogger(
+CMUTIL_STATIC CMBool CMUTIL_LogSystemAddAppenderToLogger(
         CMUTIL_LogSystem_Internal *lsys, CMUTIL_ConfLogger *clogger,
         const char *apndr, CMUTIL_LogLevel level)
 {
@@ -1888,7 +1888,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemAddAppenderToLogger(
     return CMTrue;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogStringToLevel(
+CMUTIL_STATIC CMBool CMUTIL_LogStringToLevel(
         const char *slevel, CMUTIL_LogLevel *level)
 {
     if (strcasecmp(slevel, "trace") == 0)
@@ -1908,7 +1908,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogStringToLevel(
     return CMTrue;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessAppenderRef(
+CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessAppenderRef(
         CMUTIL_LogSystem_Internal *lsys, CMUTIL_ConfLogger *clogger,
         CMUTIL_Json *json, CMUTIL_LogLevel level)
 {
@@ -1939,14 +1939,14 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessAppenderRef(
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessOneLogger(
+CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
         CMUTIL_LogSystem_Internal *lsys, const char *stype, CMUTIL_Json *json)
 {
-    CMUTIL_Bool res = CMTrue;
+    CMBool res = CMTrue;
     CMUTIL_JsonObject *jobj = (CMUTIL_JsonObject*)json;
     const char *sname = NULL;
     CMUTIL_ConfLogger *clogger = NULL;
-    CMUTIL_Bool additivity = CMTrue;
+    CMBool additivity = CMTrue;
     CMUTIL_LogLevel level = CMUTIL_LogLevel_Error;
     CMUTIL_Json *apref = NULL;
 
@@ -2019,12 +2019,12 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessOneLogger(
     return CMTrue;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_LogSystemProcessItems(
+CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessItems(
         CMUTIL_LogSystem_Internal *lsys, CMUTIL_Json *json,
-        CMUTIL_Bool(*oneprocf)(
+        CMBool(*oneprocf)(
             CMUTIL_LogSystem_Internal*, const char *, CMUTIL_Json*))
 {
-    CMUTIL_Bool res = CMFalse;
+    CMBool res = CMFalse;
     uint32_t i;
     CMUTIL_JsonArray *jarr = NULL;
     if (CMCall(json, GetType) != CMUTIL_JsonTypeArray) {
@@ -2062,7 +2062,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureInternal(
     CMUTIL_LogSystem *lsys;
     CMUTIL_JsonObject *config = (CMUTIL_JsonObject*)json;
     CMUTIL_Json *appenders, *loggers;
-    CMUTIL_Bool succeeded = CMFalse;
+    CMBool succeeded = CMFalse;
 
     // all keys to lowercase for case insensitive.
     CMUTIL_LogConfigClean(json);
@@ -2111,7 +2111,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJson(const char *jsonfile)
                 CMUTIL_GetMem(), jsonfile);
 }
 
-static CMUTIL_Bool g_cmutil_logsystem_initializing = CMFalse;
+static CMBool g_cmutil_logsystem_initializing = CMFalse;
 
 CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem *memst)
 {

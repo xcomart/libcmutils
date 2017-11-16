@@ -72,7 +72,7 @@ CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(
 
 CMUTIL_Cond *CMUTIL_CondCreateInternal(
         CMUTIL_Mem *memst,
-        CMUTIL_Bool manual_reset);
+        CMBool manual_reset);
 CMUTIL_Mutex *CMUTIL_MutexCreateInternal(
         CMUTIL_Mem *memst);
 CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
@@ -119,12 +119,12 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJsonInternal(
 CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem *memst);
 
 CMUTIL_Map *CMUTIL_MapCreateInternal(CMUTIL_Mem *memst, uint32_t bucketsize,
-        CMUTIL_Bool isucase, void(*freecb)(void*));
+        CMBool isucase, void(*freecb)(void*));
 
 CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_Json *CMUTIL_JsonParseInternal(
-        CMUTIL_Mem *memst, CMUTIL_String *jsonstr, CMUTIL_Bool silent);
+        CMUTIL_Mem *memst, CMUTIL_String *jsonstr, CMBool silent);
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(CMUTIL_Mem *memst,
         CMUTIL_XmlNodeKind type, const char *tagname, size_t namelen);
@@ -139,24 +139,24 @@ CMUTIL_XmlNode *CMUTIL_XmlParseFileInternal(
 
 CMUTIL_Socket *CMUTIL_SocketConnectInternal(
         CMUTIL_Mem *memst, const char *host, int port, long timeout,
-        CMUTIL_Bool silent);
+        CMBool silent);
 CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
         CMUTIL_Mem *memst,
         const char *cert, const char *key, const char *ca,
         const char *servername,
         const char *host, int port, long timeout,
-        CMUTIL_Bool silent);
+        CMBool silent);
 CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
         CMUTIL_Mem *memst, const char *host, int port, int qcnt,
-        CMUTIL_Bool silent);
+        CMBool silent);
 CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreateInternal(
         CMUTIL_Mem *memst, const char *host, int port, int qcnt,
         const char *cert, const char *key, const char *ca,
-        CMUTIL_Bool silent);
+        CMBool silent);
 
-CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat);
-CMUTIL_Bool CMUTIL_PatternMatch(const char *pat, const char *fname);
-CMUTIL_Bool CMUTIL_PatternMatchN(const char *pat, const char *fname);
+CMBool CMUTIL_PatternIsValid(const char *pat);
+CMBool CMUTIL_PatternMatch(const char *pat, const char *fname);
+CMBool CMUTIL_PatternMatchN(const char *pat, const char *fname);
 
 
 CMUTIL_Pool *CMUTIL_PoolCreateInternal(
@@ -164,9 +164,9 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
         int initcnt, int maxcnt,
         void *(*createproc)(void *),
         void (*destroyproc)(void *, void *),
-        CMUTIL_Bool (*testproc)(void *, void *),
+        CMBool (*testproc)(void *, void *),
         long pinginterval,
-        CMUTIL_Bool testonborrow,
+        CMBool testonborrow,
         void *udata, CMUTIL_Timer *timer);
 
 CMUTIL_String *CMUTIL_StringCreateInternal(

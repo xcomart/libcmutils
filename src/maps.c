@@ -35,7 +35,7 @@ typedef struct CMUTIL_Map_Internal {
     CMUTIL_Array	*keyset;
     void			(*freecb)(void*);
     CMUTIL_Mem      *memst;
-    CMUTIL_Bool     isucase;
+    CMBool     isucase;
     uint32_t			bucketsize;
 } CMUTIL_Map_Internal;
 
@@ -234,7 +234,7 @@ typedef struct CMUTIL_MapIter_st {
     CMUTIL_Iterator             *keyiter;
 } CMUTIL_MapIter_st;
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_MapIterHasNext(const CMUTIL_Iterator *iter)
+CMUTIL_STATIC CMBool CMUTIL_MapIterHasNext(const CMUTIL_Iterator *iter)
 {
     const CMUTIL_MapIter_st *iiter = (const CMUTIL_MapIter_st*)iter;
     return CMCall(iiter->keyiter, HasNext);
@@ -278,7 +278,7 @@ CMUTIL_STATIC CMUTIL_Iterator *CMUTIL_MapIterator(const CMUTIL_Map *map)
     return (CMUTIL_Iterator*)res;
 }
 
-CMUTIL_STATIC void CMUTIL_MapClearBase(CMUTIL_Map *map, CMUTIL_Bool freedata)
+CMUTIL_STATIC void CMUTIL_MapClearBase(CMUTIL_Map *map, CMBool freedata)
 {
     CMUTIL_Map_Internal *imap = (CMUTIL_Map_Internal*)map;
     uint32_t i, j;
@@ -375,7 +375,7 @@ static CMUTIL_Map g_cmutil_map = {
 
 CMUTIL_Map *CMUTIL_MapCreateInternal(
         CMUTIL_Mem *memst, uint32_t bucketsize,
-        CMUTIL_Bool isucase, void(*freecb)(void*))
+        CMBool isucase, void(*freecb)(void*))
 {
     CMUTIL_Map_Internal *imap = memst->Alloc(sizeof(CMUTIL_Map_Internal));
     memset(imap, 0x0, sizeof(CMUTIL_Map_Internal));
@@ -395,7 +395,7 @@ CMUTIL_Map *CMUTIL_MapCreateInternal(
 }
 
 CMUTIL_Map *CMUTIL_MapCreateEx(
-        uint32_t bucketsize, CMUTIL_Bool isucase, void(*freecb)(void*))
+        uint32_t bucketsize, CMBool isucase, void(*freecb)(void*))
 {
     return CMUTIL_MapCreateInternal(
                 CMUTIL_GetMem(), bucketsize, isucase, freecb);

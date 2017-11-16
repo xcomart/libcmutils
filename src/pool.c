@@ -31,13 +31,13 @@ typedef struct CMUTIL_Pool_Internal {
     void				*udata;
     void				*(*createf)(void*);
     void				(*destroyf)(void*,void*);
-    CMUTIL_Bool			(*testf)(void*,void*);
+    CMBool			(*testf)(void*,void*);
     CMUTIL_TimerTask	*pingtester;
     CMUTIL_Mem          *memst;
-    CMUTIL_Bool			intimer;
+    CMBool			intimer;
     uint32_t				totcnt;
     uint32_t				maxcnt;
-    CMUTIL_Bool			testonb;
+    CMBool			testonb;
 } CMUTIL_Pool_Internal;
 
 CMUTIL_STATIC void *CMUTIL_PoolCheckOut(
@@ -87,7 +87,7 @@ CMUTIL_STATIC void CMUTIL_PoolRelease(
 CMUTIL_STATIC void CMUTIL_PoolAddResource(
         CMUTIL_Pool *pool, void *resource)
 {
-    CMUTIL_Bool incmax = CMFalse;
+    CMBool incmax = CMFalse;
     CMUTIL_Pool_Internal *ipool = (CMUTIL_Pool_Internal*)pool;
     CMCall(ipool->avlmtx, Lock);
     CMCall(ipool->avail, AddTail, resource);
@@ -163,9 +163,9 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
         int initcnt, int maxcnt,
         void *(*createproc)(void *),
         void (*destroyproc)(void *, void *),
-        CMUTIL_Bool (*testproc)(void *, void *),
+        CMBool (*testproc)(void *, void *),
         long pinginterval,
-        CMUTIL_Bool testonborrow,
+        CMBool testonborrow,
         void *udata, CMUTIL_Timer *timer)
 {
     int i;
@@ -199,8 +199,8 @@ CMUTIL_Pool *CMUTIL_PoolCreate(
         int initcnt, int maxcnt,
         void *(*createproc)(void *),
         void (*destroyproc)(void *, void *),
-        CMUTIL_Bool (*testproc)(void *, void *),
-        long pinginterval, CMUTIL_Bool testonborrow,
+        CMBool (*testproc)(void *, void *),
+        long pinginterval, CMBool testonborrow,
         void *udata, CMUTIL_Timer *timer)
 {
     return CMUTIL_PoolCreateInternal(

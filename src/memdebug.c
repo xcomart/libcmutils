@@ -49,7 +49,7 @@ static CMUTIL_Mutex *g_cmutil_memlog_mutex = NULL;
 CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
 {
     static char buf[2048];
-    static CMUTIL_Bool havepath = CMFalse;
+    static CMBool havepath = CMFalse;
     static int rcnt = 0;
     FILE *res = NULL;
 
@@ -235,7 +235,7 @@ CMUTIL_STATIC void *CMUTIL_MemRcyCalloc(size_t nmem, size_t size)
     return res;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_MemCheckFlow(CMUTIL_MemNode *node)
+CMUTIL_STATIC CMBool CMUTIL_MemCheckFlow(CMUTIL_MemNode *node)
 {
     if (node->flag != 0xFF) {
         if (node->stack) {

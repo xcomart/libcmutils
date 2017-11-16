@@ -199,6 +199,17 @@ void CMUTIL_ConfigSetDouble(CMUTIL_Config *conf, const char *key, double value)
     CMCall(conf, Set, key, buf);
 }
 
+CMBool CMUTIL_ConfigGetBoolean(const CMUTIL_Config *conf, const char *key)
+{
+    return strchr("YyTt1", *CMCall(conf, Get, key))? CMTrue:CMFalse;
+}
+
+void CMUTIL_ConfigSetBoolean(
+        CMUTIL_Config *conf, const char *key, CMBool value)
+{
+    CMCall(conf, Set, key, value? "True":"False");
+}
+
 static CMUTIL_Config g_cmutil_config = {
     CMUTIL_ConfigSave,
     CMUTIL_ConfigGet,
@@ -207,6 +218,8 @@ static CMUTIL_Config g_cmutil_config = {
     CMUTIL_ConfigSetLong,
     CMUTIL_ConfigGetDouble,
     CMUTIL_ConfigSetDouble,
+    CMUTIL_ConfigGetBoolean,
+    CMUTIL_ConfigSetBoolean,
     CMUTIL_ConfigDestroy
 };
 

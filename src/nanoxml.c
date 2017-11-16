@@ -260,7 +260,7 @@ CMUTIL_STATIC void CMUTIL_XmlBuildAttribute(
 CMUTIL_STATIC void CMUTIL_XmlToDocumentPrivate(
         CMUTIL_String *buffer,
         const CMUTIL_XmlNode_Internal *inode,
-        CMUTIL_Bool beutify,
+        CMBool beutify,
         uint32_t depth)
 {
     if (inode->type == CMUTIL_XmlNodeText) {
@@ -298,7 +298,7 @@ CMUTIL_STATIC void CMUTIL_XmlToDocumentPrivate(
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_XmlToDocument(
-        const CMUTIL_XmlNode *node, CMUTIL_Bool beutify)
+        const CMUTIL_XmlNode *node, CMBool beutify)
 {
     const CMUTIL_XmlNode_Internal *inode = (const CMUTIL_XmlNode_Internal*)node;
     CMUTIL_String *res = CMUTIL_StringCreateInternal(
@@ -431,7 +431,7 @@ typedef struct CMUTIL_XmlParseCtx {
     CMLogErrorS("xml parse failed near '%s'", buf);	\
     return NULL; } } while(0)
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlUnescape(
+CMUTIL_STATIC CMBool CMUTIL_XmlUnescape(
         CMUTIL_String *dest, CMUTIL_String *src,
         CMUTIL_XmlParseCtx *ctx)
 {
@@ -472,7 +472,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlUnescape(
     return CMTrue;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlSkipSpaces(CMUTIL_XmlParseCtx *ctx)
+CMUTIL_STATIC CMBool CMUTIL_XmlSkipSpaces(CMUTIL_XmlParseCtx *ctx)
 {
     register const char *p = ctx->pos;
     while (ctx->remain > 0 && *p && strchr(g_cmutil_spaces, *p)) {
@@ -486,7 +486,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlSkipSpaces(CMUTIL_XmlParseCtx *ctx)
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlNextSub(
+CMUTIL_STATIC CMBool CMUTIL_XmlNextSub(
         char *buf, CMUTIL_XmlParseCtx *ctx, size_t len)
 {
     if (ctx->remain >= (int64_t)len) {
@@ -502,7 +502,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlNextSub(
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlNextToken(
+CMUTIL_STATIC CMBool CMUTIL_XmlNextToken(
         char *buf, CMUTIL_XmlParseCtx *ctx)
 {
     register const char *p = ctx->pos;
@@ -519,7 +519,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlNextToken(
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlParseHeader(CMUTIL_XmlParseCtx *ctx)
+CMUTIL_STATIC CMBool CMUTIL_XmlParseHeader(CMUTIL_XmlParseCtx *ctx)
 {
     char buf[20];
     DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
@@ -530,7 +530,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlParseHeader(CMUTIL_XmlParseCtx *ctx)
         // 'buf' may contain 'xml'
         DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
         while (*(ctx->pos) != '?') {
-            CMUTIL_Bool isenc;
+            CMBool isenc;
             DO_BOOL(CMUTIL_XmlNextToken(buf, ctx));
             isenc = strcmp(buf, "encoding") == 0?
                     CMTrue:CMFalse;
@@ -553,7 +553,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlParseHeader(CMUTIL_XmlParseCtx *ctx)
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlNextChar(
+CMUTIL_STATIC CMBool CMUTIL_XmlNextChar(
         CMUTIL_XmlParseCtx *ctx, char *c)
 {
     if (ctx->remain > 0) {
@@ -565,7 +565,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlNextChar(
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlStartsWith(
+CMUTIL_STATIC CMBool CMUTIL_XmlStartsWith(
         const char *a, const char *b)
 {
     while (*b && *a == *b) {
@@ -574,7 +574,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlStartsWith(
     return *b? CMFalse:CMTrue;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
+CMUTIL_STATIC CMBool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
 {
     CMUTIL_XmlNode *node =
             (CMUTIL_XmlNode*)CMCall(ctx->stack, Top);
@@ -616,7 +616,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
 }
 
 CMUTIL_STATIC CMUTIL_XmlNode *CMUTIL_XmlParseNode(
-        CMUTIL_XmlParseCtx *ctx, CMUTIL_Bool *isClose)
+        CMUTIL_XmlParseCtx *ctx, CMBool *isClose)
 {
     char tagname[128];
     CMUTIL_XmlNode *child = NULL;
@@ -696,7 +696,7 @@ PARSE_NEXT:
                 CMCall(ctx->stack, Pop);
                 return child;
             } else if (*(ctx->pos) == '>') {
-                CMUTIL_Bool closed = CMFalse;
+                CMBool closed = CMFalse;
                 CMUTIL_XmlNextSub(NULL, ctx, 1);
                 while (!closed)
                     if (!CMUTIL_XmlParseNode(ctx, &closed))
@@ -824,7 +824,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(
     CMUTIL_Json *res;
     CMUTIL_JsonObject *parent;
     CMUTIL_StringArray *attrnames;
-    CMUTIL_Bool isattr = CMFalse;
+    CMBool isattr = CMFalse;
     const char *name = CMCall(node, GetName);
     if (CMCall(ctx->stack, GetSize) == 0) {
         parent = CMUTIL_JsonObjectCreateInternal(ctx->memst);

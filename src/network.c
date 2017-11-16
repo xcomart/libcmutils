@@ -144,12 +144,12 @@ typedef struct CMUTIL_Socket_Internal {
     CMUTIL_Socket		base;
     SOCKET				sock;
     struct sockaddr_in	peer;
-    CMUTIL_Bool			silent;
+    CMBool			silent;
     CMUTIL_Mem          *memst;
 } CMUTIL_Socket_Internal;
 
 CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
-        CMUTIL_Mem *memst, CMUTIL_Bool silent);
+        CMUTIL_Mem *memst, CMBool silent);
 
 # define CMUTIL_RBUF_LEN    1024
 CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SocketRead(
@@ -463,7 +463,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SocketWriteSocket(
 }
 
 CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SocketCheckBuffer(
-        const CMUTIL_Socket *sock, long timeout, CMUTIL_Bool isread)
+        const CMUTIL_Socket *sock, long timeout, CMBool isread)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
     int rc, width;
@@ -529,10 +529,10 @@ CMUTIL_STATIC void CMUTIL_SocketClose(CMUTIL_Socket *sock)
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_SocketConnectByIP(
+CMUTIL_STATIC CMBool CMUTIL_SocketConnectByIP(
         unsigned char *ip, int port,
         CMUTIL_Socket_Internal *is, long timeout, int retrycnt,
-        CMUTIL_Bool silent)
+        CMBool silent)
 {
     uint32_t addr;
     struct sockaddr_in *serv = &(is->peer);
@@ -666,7 +666,7 @@ static CMUTIL_Socket g_cmutil_socket = {
 };
 
 CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
-        CMUTIL_Mem *memst, CMUTIL_Bool silent)
+        CMUTIL_Mem *memst, CMBool silent)
 {
     CMUTIL_Socket_Internal *res = NULL;
     res = memst->Alloc(sizeof(CMUTIL_Socket_Internal));
@@ -678,9 +678,9 @@ CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
     return res;
 }
 
-CMUTIL_Bool CMUTIL_SocketConnectBase(
+CMBool CMUTIL_SocketConnectBase(
         CMUTIL_Socket_Internal *res, const char *host, int port, long timeout,
-        CMUTIL_Bool silent)
+        CMBool silent)
 {
     uint8_t ip[4];
     uint32_t in[4];
@@ -727,7 +727,7 @@ CMUTIL_Bool CMUTIL_SocketConnectBase(
 
 CMUTIL_Socket *CMUTIL_SocketConnectInternal(
         CMUTIL_Mem *memst, const char *host, int port, long timeout,
-        CMUTIL_Bool silent)
+        CMBool silent)
 {
     CMUTIL_Socket_Internal *res = CMUTIL_SocketCreate(memst, silent);
     if (CMUTIL_SocketConnectBase(res, host, port, timeout, silent)) {
@@ -748,11 +748,11 @@ CMUTIL_Socket *CMUTIL_SocketConnect(
 typedef struct CMUTIL_ServerSocket_Internal {
     CMUTIL_ServerSocket	base;
     SOCKET				ssock;
-    CMUTIL_Bool			silent;
+    CMBool			silent;
     CMUTIL_Mem          *memst;
 } CMUTIL_ServerSocket_Internal;
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_ServerSocketAcceptInternal(
+CMUTIL_STATIC CMBool CMUTIL_ServerSocketAcceptInternal(
         const CMUTIL_ServerSocket *ssock, CMUTIL_Socket *sock, long timeout)
 {
     const CMUTIL_ServerSocket_Internal *issock =
@@ -819,7 +819,7 @@ static CMUTIL_ServerSocket g_cmutil_serversocket = {
     CMUTIL_ServerSocketClose
 };
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_ServerSocketCreateBase(
+CMUTIL_STATIC CMBool CMUTIL_ServerSocketCreateBase(
         CMUTIL_ServerSocket_Internal *res, const char *host, int port, int qcnt)
 {
     struct sockaddr_in addr;
@@ -895,7 +895,7 @@ FAILED:
 
 CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
         CMUTIL_Mem *memst, const char *host, int port, int qcnt,
-        CMUTIL_Bool silent)
+        CMBool silent)
 {
     CMUTIL_ServerSocket_Internal *res =
             memst->Alloc(sizeof(CMUTIL_ServerSocket_Internal));
@@ -954,7 +954,7 @@ typedef struct CMUTIL_SSLSocket_Internal {
 } CMUTIL_SSLSocket_Internal;
 
 CMUTIL_STATIC CMUTIL_SSLSocket_Internal *CMUTIL_SSLSocketCreate(
-        CMUTIL_Mem *memst, CMUTIL_Bool silent);
+        CMUTIL_Mem *memst, CMBool silent);
 
 CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketCheckReadBuffer(
         const CMUTIL_Socket *sock, long timeout)
@@ -1299,7 +1299,7 @@ static CMUTIL_Socket g_cmutil_sslsocket = {
 };
 
 CMUTIL_STATIC CMUTIL_SSLSocket_Internal *CMUTIL_SSLSocketCreate(
-        CMUTIL_Mem *memst, CMUTIL_Bool silent)
+        CMUTIL_Mem *memst, CMBool silent)
 {
     CMUTIL_SSLSocket_Internal *res = NULL;
     res = memst->Alloc(sizeof(CMUTIL_SSLSocket_Internal));
@@ -1334,7 +1334,7 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
         const char *cert, const char *key, const char *ca,
         const char *servername,
         const char *host, int port, long timeout,
-        CMUTIL_Bool silent)
+        CMBool silent)
 {
     CMUTIL_SSLSocket_Internal *res = CMUTIL_SSLSocketCreate(memst, silent);
 #if defined(CMUTIL_SSL_USE_OPENSSL)
@@ -1445,7 +1445,7 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLServerSocketAccept(
             (const CMUTIL_SSLServerSocket_Internal*)server;
     CMUTIL_SSLSocket_Internal *res = CMUTIL_SSLSocketCreate(
                 issock->base.memst, CMFalse);
-    CMUTIL_Bool silent = issock->base.silent;
+    CMBool silent = issock->base.silent;
 
     if (CMUTIL_ServerSocketAcceptInternal(
                 server, (CMUTIL_Socket*)res, timeout)) {
@@ -1510,7 +1510,7 @@ static CMUTIL_ServerSocket g_cmutil_sslserversocket = {
 CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreateInternal(
         CMUTIL_Mem *memst, const char *host, int port, int qcnt,
         const char *cert, const char *key, const char *ca,
-        CMUTIL_Bool silent)
+        CMBool silent)
 {
     CMUTIL_SSLServerSocket_Internal *res =
             memst->Alloc(sizeof(CMUTIL_SSLServerSocket_Internal));
@@ -1575,7 +1575,7 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
         const char *cert, const char *key, const char *ca,
         const char *servername,
         const char *host, int port, long timeout,
-        CMUTIL_Bool silent)
+        CMBool silent)
 {
     CMUTIL_UNUSED(memst, cert, key, ca, servername,
                   host, port, timeout, silent);
@@ -1586,7 +1586,7 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
 CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreateInternal(
         CMUTIL_Mem *memst, const char *host, int port, int qcnt,
         const char *cert, const char *key, const char *ca,
-        CMUTIL_Bool silent)
+        CMBool silent)
 {
     CMUTIL_UNUSED(memst, host, port, qcnt, cert, key, ca, silent);
     CMLogError("SSL not enabled. recompile with CMUTIL_SUPPORT_SSL.");

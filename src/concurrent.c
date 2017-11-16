@@ -121,7 +121,7 @@ typedef struct CMUTIL_Cond_Internal {
     HANDLE              cond;       // event handle for windows
 #else
     int                 state;      // condition state
-    CMUTIL_Bool         manualrst;  // manual-reset indicator
+    CMBool         manualrst;  // manual-reset indicator
     MUTEX_T             mutex;      // condition mutex
     COND_T              cond;       // condition variable
 #endif
@@ -163,10 +163,10 @@ CMUTIL_STATIC void CMUTIL_CondWait(CMUTIL_Cond *cond)
 ///		returns immediately.
 /// \return CMTrue if this condition is set in given interval,
 ///		CMFalse otherwise.
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_CondTimedWait(
+CMUTIL_STATIC CMBool CMUTIL_CondTimedWait(
         CMUTIL_Cond *cond, long millisec)
 {
-    CMUTIL_Bool res = CMFalse;
+    CMBool res = CMFalse;
     CMUTIL_Cond_Internal *icond = (CMUTIL_Cond_Internal*)cond;
 #if defined(MSWIN)
     DWORD dwRes = WaitForSingleObject(icond->cond, (DWORD)millisec);
@@ -279,7 +279,7 @@ static CMUTIL_Cond g_cmutil_cond = {
 };
 
 CMUTIL_Cond *CMUTIL_CondCreateInternal(
-        CMUTIL_Mem *memst, CMUTIL_Bool manual_reset)
+        CMUTIL_Mem *memst, CMBool manual_reset)
 {
     CMUTIL_Cond_Internal *res = memst->Alloc(sizeof(CMUTIL_Cond_Internal));
 #if !defined(MSWIN) && !defined(USE_THREADS_H_)
@@ -320,7 +320,7 @@ CMUTIL_Cond *CMUTIL_CondCreateInternal(
 ///			CMFalse, the function creates an auto-reset condition
 ///			object, and system automatically resets the event state to
 ///			nonsignaled after a single waiting thread has been released.
-CMUTIL_Cond *CMUTIL_CondCreate(CMUTIL_Bool manual_reset)
+CMUTIL_Cond *CMUTIL_CondCreate(CMBool manual_reset)
 {
     return CMUTIL_CondCreateInternal(CMUTIL_GetMem(), manual_reset);
 }
@@ -385,7 +385,7 @@ CMUTIL_STATIC void CMUTIL_MutexUnlock(CMUTIL_Mutex *mutex)
 /// \param	mutex	a mutex object to be tested.
 /// \return	CMTrue if mutex locked successfully,
 ///			CMFalse if lock failed.
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_MutexTryLock(CMUTIL_Mutex *mutex)
+CMUTIL_STATIC CMBool CMUTIL_MutexTryLock(CMUTIL_Mutex *mutex)
 {
     CMUTIL_Mutex_Internal *imutex =
             (CMUTIL_Mutex_Internal *)mutex;
@@ -476,7 +476,7 @@ typedef struct CMUTIL_Thread_Internal {
 #else
     THREAD_T            thread;
 #endif
-    CMUTIL_Bool         isrunning;
+    CMBool         isrunning;
     uint32_t                id;
     char                *name;
     uint64_t             sysid;
@@ -577,14 +577,14 @@ CMUTIL_STATIC void *CMUTIL_ThreadJoin(CMUTIL_Thread *thread)
     return res;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_ThreadIsRunning(const CMUTIL_Thread *thread)
+CMUTIL_STATIC CMBool CMUTIL_ThreadIsRunning(const CMUTIL_Thread *thread)
 {
     const CMUTIL_Thread_Internal *ithread =
             (const CMUTIL_Thread_Internal*)thread;
     return ithread->isrunning;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_ThreadStart(CMUTIL_Thread *thread)
+CMUTIL_STATIC CMBool CMUTIL_ThreadStart(CMUTIL_Thread *thread)
 {
     int ir = 0;
     CMUTIL_Thread_Internal *ithread = (CMUTIL_Thread_Internal*)thread;
@@ -748,7 +748,7 @@ typedef struct CMUTIL_Semaphore_Internal {
     CMUTIL_Mem              *memst;
 } CMUTIL_Semaphore_Internal;
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_SemaphoreAcquire(
+CMUTIL_STATIC CMBool CMUTIL_SemaphoreAcquire(
         CMUTIL_Semaphore *semaphore, long millisec)
 {
     CMUTIL_Semaphore_Internal *isem = (CMUTIL_Semaphore_Internal*)semaphore;
@@ -760,7 +760,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_SemaphoreAcquire(
 #elif defined(APPLE)
     dispatch_time_t dtime = dispatch_time(
                 DISPATCH_TIME_NOW, NSEC_PER_MSEC * millisec);
-    CMUTIL_Bool res = dispatch_semaphore_wait(isem->semp, dtime) == 0?
+    CMBool res = dispatch_semaphore_wait(isem->semp, dtime) == 0?
                 CMTrue:CMFalse;
     return res;
 #else
@@ -1044,7 +1044,7 @@ typedef enum CMUTIL_TimerTaskType {
 typedef struct CMUTIL_TimerTask_Internal {
     CMUTIL_TimerTask		base;			// timer task API interface
     CMUTIL_TimerTaskType	type;			// timer task type
-    CMUTIL_Bool				canceled;		// task canceled or not
+    CMBool				canceled;		// task canceled or not
     struct timeval			nextrun;		// next run time for repeating tasks
     long					period;			// repeating period
     void					(*proc)(void*);	// task procedure
@@ -1063,17 +1063,17 @@ typedef struct CMUTIL_Timer_Internal {
     CMUTIL_Semaphore		*jsemp;		// job queue semaphore
     CMUTIL_Thread			*mainloop;	// timer scheduling main loop thread
     long					precision;	// timer precision
-    CMUTIL_Bool				running;	// timer running indicator
+    CMBool				running;	// timer running indicator
     int						numthrs;	// number of worker thread
     CMUTIL_Mem              *memst;
 } CMUTIL_Timer_Internal;
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_TimerTaskCancelPrivate(
+CMUTIL_STATIC CMBool CMUTIL_TimerTaskCancelPrivate(
         CMUTIL_TimerTask *task)
 {
     CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)task;
     CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)itask->timer;
-    CMUTIL_Bool isfree = CMFalse;
+    CMBool isfree = CMFalse;
 
     CMCall(itimer->mutex, Lock);
     if (!itask->canceled) {
@@ -1253,7 +1253,7 @@ CMUTIL_STATIC int CMUTIL_TimerTVCompare(
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_TimerIsElapsed(
+CMUTIL_STATIC CMBool CMUTIL_TimerIsElapsed(
         void *task, struct timeval *curr)
 {
     CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)task;
@@ -1295,7 +1295,7 @@ CMUTIL_STATIC void *CMUTIL_TimerWorker(void *param)
     while (itimer->running) {
         if (CMCall(itimer->jsemp, Acquire, 1000)) {
             CMUTIL_Array *addedto = NULL;
-            CMUTIL_Bool isfree = CMFalse;
+            CMBool isfree = CMFalse;
             CMUTIL_TimerTask_Internal *itask;
 
             CMCall(itimer->mutex, Lock);
