@@ -1678,6 +1678,8 @@ struct CMUTIL_JsonObject {
             CMUTIL_JsonObject *jobj, const char *key);
     CMUTIL_Json *(*Remove)(
             CMUTIL_JsonObject *jobj, const char *key);
+    void (*Delete)(
+            CMUTIL_JsonObject *jobj, const char *key);
 };
 
 CMUTIL_API CMUTIL_JsonObject *CMUTIL_JsonObjectCreate();
@@ -1712,6 +1714,8 @@ struct CMUTIL_JsonArray {
     void (*AddNull)(
             CMUTIL_JsonArray *jarr);
     CMUTIL_Json *(*Remove)(
+            CMUTIL_JsonArray *jarr, uint32_t index);
+    void (*Delete)(
             CMUTIL_JsonArray *jarr, uint32_t index);
 };
 
