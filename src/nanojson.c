@@ -501,6 +501,14 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonObjectRemove(
     return (CMUTIL_Json*)CMCall(ijobj->map, Remove, key);
 }
 
+CMUTIL_STATIC void CMUTIL_JsonObjectDelete(
+        CMUTIL_JsonObject *jobj, const char *key)
+{
+    CMUTIL_Json *item = CMCall(jobj, Remove, key);
+    if (item)
+        CMCall(item, Destroy);
+}
+
 static CMUTIL_JsonObject g_cmutil_jsonobject = {
     {
         CMUTIL_JsonToString,
@@ -521,7 +529,8 @@ static CMUTIL_JsonObject g_cmutil_jsonobject = {
     CMUTIL_JsonObjectPutString,
     CMUTIL_JsonObjectPutBoolean,
     CMUTIL_JsonObjectPutNull,
-    CMUTIL_JsonObjectRemove
+    CMUTIL_JsonObjectRemove,
+    CMUTIL_JsonObjectDelete
 };
 
 CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst)
@@ -674,6 +683,13 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonArrayRemove(
     return (CMUTIL_Json*)CMCall(ijarr->arr, RemoveAt, index);
 }
 
+CMUTIL_STATIC void CMUTIL_JsonArrayDelete(
+        CMUTIL_JsonArray *jarr, uint32_t index)
+{
+    CMUTIL_Json *item = CMCall(jarr, Remove, index);
+    CMCall(item, Destroy);
+}
+
 static CMUTIL_JsonArray g_cmutil_jsonarray = {
     {
         CMUTIL_JsonToString,
@@ -694,7 +710,8 @@ static CMUTIL_JsonArray g_cmutil_jsonarray = {
     CMUTIL_JsonArrayAddString,
     CMUTIL_JsonArrayAddBoolean,
     CMUTIL_JsonArrayAddNull,
-    CMUTIL_JsonArrayRemove
+    CMUTIL_JsonArrayRemove,
+    CMUTIL_JsonArrayDelete
 };
 
 CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem *memst)
