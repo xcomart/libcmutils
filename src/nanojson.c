@@ -27,7 +27,7 @@ CMUTIL_LogDefine("cmutils.nanojson")
 
 CMUTIL_STATIC void CMUTIL_JsonToStringInternal(
         const CMUTIL_Json *json, CMUTIL_String *buf,
-        CMUTIL_Bool pretty, int depth);
+        CMBool pretty, int depth);
 
 typedef void (*CMUTIL_JsonValToStrFunc)(CMUTIL_String *str, CMUTIL_String *buf);
 
@@ -82,7 +82,7 @@ CMUTIL_STATIC void CMUTIL_JsonIndent(CMUTIL_String *buf, int depth)
 
 CMUTIL_STATIC void CMUTIL_JsonValueToStringInternal(
         const CMUTIL_Json *json,
-        CMUTIL_String *buf, CMUTIL_Bool pretty, int depth)
+        CMUTIL_String *buf, CMBool pretty, int depth)
 {
     const CMUTIL_JsonValue_Internal *ijval =
             (const CMUTIL_JsonValue_Internal*)json;
@@ -92,7 +92,7 @@ CMUTIL_STATIC void CMUTIL_JsonValueToStringInternal(
 
 CMUTIL_STATIC void CMUTIL_JsonObjectToStringInternal(
         const CMUTIL_Json *json, CMUTIL_String *buf,
-        CMUTIL_Bool pretty, int depth)
+        CMBool pretty, int depth)
 {
     uint32_t i;
     const CMUTIL_JsonObject *jobj = (const CMUTIL_JsonObject*)json;
@@ -123,7 +123,7 @@ CMUTIL_STATIC void CMUTIL_JsonObjectToStringInternal(
 
 CMUTIL_STATIC void CMUTIL_JsonArrayToStringInternal(
         const CMUTIL_Json *json, CMUTIL_String *buf,
-        CMUTIL_Bool pretty, int depth)
+        CMBool pretty, int depth)
 {
     const CMUTIL_JsonArray *jarr = (const CMUTIL_JsonArray*)json;
     uint32_t i;
@@ -141,7 +141,7 @@ CMUTIL_STATIC void CMUTIL_JsonArrayToStringInternal(
 
 typedef void (*CMUTIL_JsonToStringFunc)(
         const CMUTIL_Json *json,
-        CMUTIL_String *buf, CMUTIL_Bool pretty, int depth);
+        CMUTIL_String *buf, CMBool pretty, int depth);
 
 static CMUTIL_JsonToStringFunc g_cmutil_jsontostrf[] = {
     CMUTIL_JsonValueToStringInternal,
@@ -151,13 +151,13 @@ static CMUTIL_JsonToStringFunc g_cmutil_jsontostrf[] = {
 
 CMUTIL_STATIC void CMUTIL_JsonToStringInternal(
         const CMUTIL_Json *json, CMUTIL_String *buf,
-        CMUTIL_Bool pretty, int depth)
+        CMBool pretty, int depth)
 {
     g_cmutil_jsontostrf[CMCall(json, GetType)](json, buf, pretty, depth);
 }
 
 CMUTIL_STATIC void CMUTIL_JsonToString(
-        const CMUTIL_Json *json, CMUTIL_String *buf, CMUTIL_Bool pretty)
+        const CMUTIL_Json *json, CMUTIL_String *buf, CMBool pretty)
 {
     CMUTIL_JsonToStringInternal(json, buf, pretty, 0);
 }
@@ -276,7 +276,7 @@ CMUTIL_STATIC const char *CMUTIL_JsonValueGetCString(
     return CMCall(ijval->data, GetCString);
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonValueGetBoolean(
+CMUTIL_STATIC CMBool CMUTIL_JsonValueGetBoolean(
         const CMUTIL_JsonValue *jval)
 {
     const CMUTIL_JsonValue_Internal *ijval =
@@ -319,7 +319,7 @@ CMUTIL_STATIC void CMUTIL_JsonValueSetString(
 }
 
 CMUTIL_STATIC void CMUTIL_JsonValueSetBoolean(
-        CMUTIL_JsonValue *jval, CMUTIL_Bool value)
+        CMUTIL_JsonValue *jval, CMBool value)
 {
     const char *sval = value? "true":"false";
     CMUTIL_JsonValueSetBase(
@@ -439,7 +439,7 @@ CMUTIL_STATIC const char *CMUTIL_JsonObjectGetCString(
     CMUTIL_JsonObjectGetBody(jobj, key, GetCString, NULL);
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonObjectGetBoolean(
+CMUTIL_STATIC CMBool CMUTIL_JsonObjectGetBoolean(
         const CMUTIL_JsonObject *jobj, const char *key)
 {
     CMUTIL_JsonObjectGetBody(jobj, key, GetBoolean, CMFalse);
@@ -480,7 +480,7 @@ CMUTIL_STATIC void CMUTIL_JsonObjectPutString(
 }
 
 CMUTIL_STATIC void CMUTIL_JsonObjectPutBoolean(
-        CMUTIL_JsonObject *jobj, const char *key, CMUTIL_Bool value)
+        CMUTIL_JsonObject *jobj, const char *key, CMBool value)
 {
     CMUTIL_JsonObjectPutBody(jobj, key, SetBoolean, value);
 }
@@ -625,7 +625,7 @@ CMUTIL_STATIC const char *CMUTIL_JsonArrayGetCString(
     CMUTIL_JsonArrayGetBody(jarr, index, GetCString, NULL);
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonArrayGetBoolean(
+CMUTIL_STATIC CMBool CMUTIL_JsonArrayGetBoolean(
         const CMUTIL_JsonArray *jarr, uint32_t index)
 {
     CMUTIL_JsonArrayGetBody(jarr, index, GetBoolean, CMFalse);
@@ -663,7 +663,7 @@ CMUTIL_STATIC void CMUTIL_JsonArrayAddString(
 }
 
 CMUTIL_STATIC void CMUTIL_JsonArrayAddBoolean(
-        CMUTIL_JsonArray *jarr, CMUTIL_Bool value)
+        CMUTIL_JsonArray *jarr, CMBool value)
 {
     CMUTIL_JsonArrayAddBody(jarr, value, SetBoolean);
 }
@@ -738,7 +738,7 @@ static const char* JSN_DELIMS = ":,[]{}";
 typedef struct CMUTIL_JsonParser {
     const char *orig, *curr;
     int64_t remain, linecnt;
-    CMUTIL_Bool silent;
+    CMBool silent;
     CMUTIL_Mem *memst;
 } CMUTIL_JsonParser;
 
@@ -760,7 +760,7 @@ CMUTIL_STATIC void CMUTIL_JsonParseConsume(
     }
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonStartsWith(
+CMUTIL_STATIC CMBool CMUTIL_JsonStartsWith(
         CMUTIL_JsonParser *pctx, const char *str)
 {
     register const char *p = str, *q = pctx->curr;
@@ -770,7 +770,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonStartsWith(
     return *p? CMFalse:CMTrue;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonSkipSpaces(CMUTIL_JsonParser *pctx)
+CMUTIL_STATIC CMBool CMUTIL_JsonSkipSpaces(CMUTIL_JsonParser *pctx)
 {
 RETRYPOINT:
     while (strchr(JSN_SPACES, *pctx->curr) && pctx->remain > 0)
@@ -802,7 +802,7 @@ RETRYPOINT:
     if (!a->silent) CMLogErrorS("parse error in line %d before '%s': %s",	\
                 a->linecnt, buf, msg); } while(0)
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonParseEscape(
+CMUTIL_STATIC CMBool CMUTIL_JsonParseEscape(
         CMUTIL_JsonParser *pctx, CMUTIL_String *sbuf)
 {
     char buf[3];
@@ -838,8 +838,8 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonParseBase(CMUTIL_JsonParser *pctx)
     return NULL;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonParseString(
-        CMUTIL_JsonParser *pctx, CMUTIL_String **res, CMUTIL_Bool *isconst)
+CMUTIL_STATIC CMBool CMUTIL_JsonParseString(
+        CMUTIL_JsonParser *pctx, CMUTIL_String **res, CMBool *isconst)
 {
     int isend = 0;
     CMUTIL_String *sbuf = NULL;
@@ -882,7 +882,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonParseString(
     return CMTrue;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_JsonParseConst(
+CMUTIL_STATIC CMBool CMUTIL_JsonParseConst(
         CMUTIL_JsonParser *pctx, CMUTIL_JsonValue *jval, CMUTIL_String *str)
 {
     const char *cstr = CMCall(str, GetCString);
@@ -937,7 +937,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonParseValue(CMUTIL_JsonParser *pctx)
 {
     CMUTIL_JsonValue *res = NULL;
     CMUTIL_String *sbuf = NULL;
-    CMUTIL_Bool isconst = CMFalse;
+    CMBool isconst = CMFalse;
 
     // remove preceding spaces
     if (!CMUTIL_JsonSkipSpaces(pctx))
@@ -963,7 +963,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonParseObject(CMUTIL_JsonParser *pctx)
     int isend = 0;
     CMUTIL_String *name = NULL;
     CMUTIL_JsonObject *res = NULL;
-    CMUTIL_Bool succeeded = CMFalse;
+    CMBool succeeded = CMFalse;
 
     if (*(pctx->curr) != '{') {
         CMUTIL_JSON_PARSE_ERROR(pctx, "JSON object does not starts with '{'");
@@ -1037,7 +1037,7 @@ ENDPOINT:
 CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonParseArray(CMUTIL_JsonParser *pctx)
 {
     CMUTIL_JsonArray *res = NULL;
-    CMUTIL_Bool succeeded = CMFalse;
+    CMBool succeeded = CMFalse;
 
     if (*(pctx->curr) != '[') {
         CMUTIL_JSON_PARSE_ERROR(pctx, "JSON array does not starts with '['");
@@ -1094,7 +1094,7 @@ ENDPOINT:
 }
 
 CMUTIL_Json *CMUTIL_JsonParseInternal(
-        CMUTIL_Mem *memst, CMUTIL_String *jsonstr, CMUTIL_Bool silent)
+        CMUTIL_Mem *memst, CMUTIL_String *jsonstr, CMBool silent)
 {
     CMUTIL_JsonParser parser = {
         CMCall(jsonstr, GetCString),

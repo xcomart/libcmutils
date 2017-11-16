@@ -130,7 +130,7 @@ typedef struct CMUTIL_File_Internal {
     char				*path;
     char				*name;
     CMUTIL_Mem          *memst;
-    CMUTIL_Bool			isref;
+    CMBool			isref;
     int                 dummy_padder;
 } CMUTIL_File_Internal;
 
@@ -204,13 +204,13 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_FileGetContents(const CMUTIL_File *file)
     return NULL;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileDelete(const CMUTIL_File *file)
+CMUTIL_STATIC CMBool CMUTIL_FileDelete(const CMUTIL_File *file)
 {
     return DeleteFile(CMCall(file, GetFullPath)) == 0 ?
             CMTrue:CMFalse;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsFile(const CMUTIL_File *file)
+CMUTIL_STATIC CMBool CMUTIL_FileIsFile(const CMUTIL_File *file)
 {
     struct stat s;
     if ( stat(CMCall(file, GetFullPath), &s) == 0 ) {
@@ -220,7 +220,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsFile(const CMUTIL_File *file)
     return CMFalse;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsDirectory(const CMUTIL_File *file)
+CMUTIL_STATIC CMBool CMUTIL_FileIsDirectory(const CMUTIL_File *file)
 {
     struct stat s;
     if ( stat(CMCall(file, GetFullPath), &s) == 0 ) {
@@ -230,7 +230,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsDirectory(const CMUTIL_File *file)
     return CMFalse;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_FileIsExists(const CMUTIL_File *file)
+CMUTIL_STATIC CMBool CMUTIL_FileIsExists(const CMUTIL_File *file)
 {
     struct stat s;
     return stat(CMCall(file, GetFullPath), &s) == 0?
@@ -311,12 +311,12 @@ CMUTIL_STATIC void CMUTIL_FileFindInternal(
         CMUTIL_FileList_Internal *flist,
         const char *dpath,
         const char *pattern,
-        CMUTIL_Bool recursive);
+        CMBool recursive);
 
 CMUTIL_STATIC void CMUTIL_FileFindFileOper(
         CMUTIL_FileList_Internal *flist,
         const char *pattern,
-        CMUTIL_Bool recursive,
+        CMBool recursive,
         const char *filepath,
         const char *fname)
 {
@@ -339,7 +339,7 @@ CMUTIL_STATIC void CMUTIL_FileFindInternal(
         CMUTIL_FileList_Internal *flist,
         const char *dpath,
         const char *pattern,
-        CMUTIL_Bool recursive)
+        CMBool recursive)
 {
     char pathbuf[2048];
 
@@ -377,7 +377,7 @@ CMUTIL_STATIC void CMUTIL_FileFindInternal(
 }
 
 CMUTIL_STATIC CMUTIL_FileList *CMUTIL_FileFind(
-        const CMUTIL_File *file, const char *pattern, CMUTIL_Bool recursive)
+        const CMUTIL_File *file, const char *pattern, CMBool recursive)
 {
     const CMUTIL_File_Internal *ifile = (const CMUTIL_File_Internal*)file;
     CMUTIL_FileList_Internal *flist = CMUTIL_FileListCreate(ifile->memst);
@@ -458,7 +458,7 @@ CMUTIL_File *CMUTIL_FileCreate(const char *path)
 # define MKDIR			mkdir
 #endif
 
-CMUTIL_Bool CMUTIL_PathCreate(const char *path, uint32_t mode)
+CMBool CMUTIL_PathCreate(const char *path, uint32_t mode)
 {
     int retval, i;
 

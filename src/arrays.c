@@ -27,7 +27,7 @@ CMUTIL_LogDefine("cmutil.array")
 
 typedef struct CMUTIL_Array_Internal {
     CMUTIL_Array	base;
-    CMUTIL_Bool		issorted;
+    CMBool		issorted;
     int             dummy_padder;
     void			**data;
     size_t			capacity;
@@ -227,7 +227,7 @@ CMUTIL_STATIC void *CMUTIL_ArrayFind(
     } else {
         uint32_t i;
         for (i=0; i<iarray->size; i++) {
-            CMUTIL_Bool found = CMFalse;
+            CMBool found = CMFalse;
             if (iarray->comparator) {
                 if (iarray->comparator(compval, iarray->data[i]) == 0)
                     found = CMTrue;
@@ -252,7 +252,7 @@ CMUTIL_STATIC size_t CMUTIL_ArrayGetSize(const CMUTIL_Array *array)
     return iarray->size;
 }
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_ArrayPush(CMUTIL_Array *array, void *item)
+CMUTIL_STATIC CMBool CMUTIL_ArrayPush(CMUTIL_Array *array, void *item)
 {
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
     if (iarray->issorted) {
@@ -294,7 +294,7 @@ typedef struct CMUTIL_ArrayIterator_st {
     int                         dummy_padder;
 } CMUTIL_ArrayIterator_st;
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_ArrayIterHasNext(
+CMUTIL_STATIC CMBool CMUTIL_ArrayIterHasNext(
         const CMUTIL_Iterator *iter)
 {
     const CMUTIL_ArrayIterator_st *iiter =

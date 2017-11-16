@@ -129,10 +129,10 @@ extern "C" {
 /**
  * @brief Boolean definition for this library.
  */
-typedef enum CMUTIL_Bool {
+typedef enum CMBool {
     CMTrue         =0x0001,
     CMFalse        =0x0000
-} CMUTIL_Bool;
+} CMBool;
 
 /**
  * @}
@@ -366,7 +366,7 @@ struct CMUTIL_Cond {
      * @return CMTrue if this condition is set in given interval,
      *     CMFalse otherwise.
      */
-    CMUTIL_Bool (*TimedWait)(
+    CMBool (*TimedWait)(
             CMUTIL_Cond *cond,
             long millisec);
 
@@ -430,7 +430,7 @@ struct CMUTIL_Cond {
  *     nonsignaled after a single waiting thread has been released.
  * @return Created conditional object.
  */
-CMUTIL_API CMUTIL_Cond *CMUTIL_CondCreate(CMUTIL_Bool manual_reset);
+CMUTIL_API CMUTIL_Cond *CMUTIL_CondCreate(CMBool manual_reset);
 
 /**
  * @brief Platform independent mutex implementation.
@@ -471,7 +471,7 @@ struct CMUTIL_Mutex {
      * @return CMTrue if mutex locked successfully,
      *         CMFalse if lock failed.
      */
-    CMUTIL_Bool (*TryLock)(CMUTIL_Mutex *mutex);
+    CMBool (*TryLock)(CMUTIL_Mutex *mutex);
 
     /**
      * @brief Destroys all resources related with this object.
@@ -506,7 +506,7 @@ struct CMUTIL_Thread {
      * @param thread This thread object.
      * @return This thread have been started successfully or not.
      */
-    CMUTIL_Bool (*Start)(CMUTIL_Thread *thread);
+    CMBool (*Start)(CMUTIL_Thread *thread);
 
     /**
      * @brief Join this thread.
@@ -527,7 +527,7 @@ struct CMUTIL_Thread {
      * @return CMTrue if this thread is running,
      *         CMFalse if this thread is not running.
      */
-    CMUTIL_Bool (*IsRunning)(const CMUTIL_Thread *thread);
+    CMBool (*IsRunning)(const CMUTIL_Thread *thread);
 
     /**
      * @brief Get the ID fo this thread. Returned ID is not system thread ID.
@@ -597,7 +597,7 @@ struct CMUTIL_Semaphore {
      * @return CMTrue if an ownership acquired successfully in time,
      *         CMFalse if failed to acquire ownership in time.
      */
-    CMUTIL_Bool (*Acquire)(
+    CMBool (*Acquire)(
             CMUTIL_Semaphore *semaphore, long millisec);
 
     /**
@@ -701,7 +701,7 @@ struct CMUTIL_Iterator {
      * @return CMTrue if this iterator has next element.
      *         CMFalse if there is no more elements.
      */
-    CMUTIL_Bool (*HasNext)(
+    CMBool (*HasNext)(
             const CMUTIL_Iterator *iter);
 
     /**
@@ -850,7 +850,7 @@ struct CMUTIL_Array {
      * @return CMTrue if push operation performed successfully.
      *         CMFalse otherwise.
      */
-    CMUTIL_Bool (*Push)(CMUTIL_Array *array, void *item);
+    CMBool (*Push)(CMUTIL_Array *array, void *item);
 
     /**
      * @brief Pop an item from this array like stack operation.
@@ -1069,7 +1069,7 @@ struct CMUTIL_Map {
 #define CMUTIL_MapCreate()	CMUTIL_MapCreateEx(\
         CMUTIL_MAP_DEFAULT, CMFalse, NULL)
 CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
-        uint32_t bucketsize, CMUTIL_Bool isucase, void(*freecb)(void*));
+        uint32_t bucketsize, CMBool isucase, void(*freecb)(void*));
 
 
 typedef struct CMUTIL_List CMUTIL_List;
@@ -1115,7 +1115,7 @@ struct CMUTIL_XmlNode {
     void (*SetName)(CMUTIL_XmlNode *node, const char *name);
     CMUTIL_XmlNodeKind (*GetType)(const CMUTIL_XmlNode *node);
     CMUTIL_String *(*ToDocument)(
-            const CMUTIL_XmlNode *node, CMUTIL_Bool beutify);
+            const CMUTIL_XmlNode *node, CMBool beutify);
     void (*SetUserData)(
             CMUTIL_XmlNode *node, void *udata, void(*freef)(void*));
     void *(*GetUserData)(const CMUTIL_XmlNode *node);
@@ -1191,9 +1191,9 @@ CMUTIL_API CMUTIL_Pool *CMUTIL_PoolCreate(
         int maxcnt,
         void *(*createproc)(void *udata),
         void (*destroyproc)(void *resource, void *udata),
-        CMUTIL_Bool (*testproc)(void *resource, void *udata),
+        CMBool (*testproc)(void *resource, void *udata),
         long pinginterval,
-        CMUTIL_Bool testonborrow,
+        CMBool testonborrow,
         void *udata,
         CMUTIL_Timer *timer);
 
@@ -1227,13 +1227,13 @@ struct CMUTIL_FileList {
 struct CMUTIL_File {
     CMUTIL_String *(*GetContents)(
             const CMUTIL_File *file);
-    CMUTIL_Bool (*Delete)(
+    CMBool (*Delete)(
             const CMUTIL_File *file);
-    CMUTIL_Bool (*IsFile)(
+    CMBool (*IsFile)(
             const CMUTIL_File *file);
-    CMUTIL_Bool (*IsDirectory)(
+    CMBool (*IsDirectory)(
             const CMUTIL_File *file);
-    CMUTIL_Bool (*IsExists)(
+    CMBool (*IsExists)(
             const CMUTIL_File *file);
     long (*Length)(
             const CMUTIL_File *file);
@@ -1357,14 +1357,14 @@ struct CMUTIL_File {
      */
     CMUTIL_FileList *(*Find)(
             const CMUTIL_File *file,
-            const char *pattern, CMUTIL_Bool recursive);
+            const char *pattern, CMBool recursive);
     void (*Destroy)(
             CMUTIL_File *file);
 };
 
 CMUTIL_API CMUTIL_File *CMUTIL_FileCreate(const char *path);
 
-CMUTIL_Bool CMUTIL_PathCreate(const char *path, uint32_t mode);
+CMBool CMUTIL_PathCreate(const char *path, uint32_t mode);
 
 typedef struct CMUTIL_Config CMUTIL_Config;
 struct CMUTIL_Config {
@@ -1375,6 +1375,8 @@ struct CMUTIL_Config {
     void (*SetLong)(CMUTIL_Config *conf, const char *key, long value);
     double (*GetDouble)(const CMUTIL_Config *conf, const char *key);
     void (*SetDouble)(CMUTIL_Config *conf, const char *key, double value);
+    CMBool (*GetBoolean)(const CMUTIL_Config *conf, const char *key);
+    void (*SetBoolean)(CMUTIL_Config *conf, const char *key, CMBool value);
     void(*Destroy)(CMUTIL_Config *conf);
 };
 
@@ -1416,7 +1418,7 @@ struct CMUTIL_Logger {
         CMUTIL_LogLevel level,
         const char *file,
         int line,
-        CMUTIL_Bool printStack,
+        CMBool printStack,
         const char *fmt,
         ...);
 };
@@ -1510,7 +1512,7 @@ struct CMUTIL_LogSystem {
         const CMUTIL_LogSystem *logsys,
         const char *name,
         CMUTIL_LogLevel level,
-        CMUTIL_Bool additivity);
+        CMBool additivity);
     CMUTIL_Logger *(*GetLogger)(
             const CMUTIL_LogSystem *logsys, const char *name);
     void(*Destroy)(CMUTIL_LogSystem *logsys);
@@ -1602,7 +1604,7 @@ typedef enum CMUTIL_JsonType {
 typedef struct CMUTIL_Json CMUTIL_Json;
 struct CMUTIL_Json {
     void (*ToString)(
-            const CMUTIL_Json *json, CMUTIL_String *buf, CMUTIL_Bool pretty);
+            const CMUTIL_Json *json, CMUTIL_String *buf, CMBool pretty);
     CMUTIL_JsonType (*GetType)(
             const CMUTIL_Json *json);
     CMUTIL_Json *(*Clone)(
@@ -1631,7 +1633,7 @@ struct CMUTIL_JsonValue {
             const CMUTIL_JsonValue *jval);
     const char *(*GetCString)(
             const CMUTIL_JsonValue *jval);
-    CMUTIL_Bool (*GetBoolean)(
+    CMBool (*GetBoolean)(
             const CMUTIL_JsonValue *jval);
     void (*SetLong)(
             CMUTIL_JsonValue *jval, int64_t inval);
@@ -1640,7 +1642,7 @@ struct CMUTIL_JsonValue {
     void (*SetString)(
             CMUTIL_JsonValue *jval, const char *inval);
     void (*SetBoolean)(
-            CMUTIL_JsonValue *jval, CMUTIL_Bool inval);
+            CMUTIL_JsonValue *jval, CMBool inval);
     void (*SetNull)(
             CMUTIL_JsonValue *jval);
 };
@@ -1662,7 +1664,7 @@ struct CMUTIL_JsonObject {
             const CMUTIL_JsonObject *jobj, const char *key);
     const char *(*GetCString)(
             const CMUTIL_JsonObject *jobj, const char *key);
-    CMUTIL_Bool (*GetBoolean)(
+    CMBool (*GetBoolean)(
             const CMUTIL_JsonObject *jobj, const char *key);
     void (*Put)(
             CMUTIL_JsonObject *jobj, const char *key, CMUTIL_Json *json);
@@ -1673,7 +1675,7 @@ struct CMUTIL_JsonObject {
     void (*PutString)(
             CMUTIL_JsonObject *jobj, const char *key, const char *value);
     void (*PutBoolean)(
-            CMUTIL_JsonObject *jobj, const char *key, CMUTIL_Bool value);
+            CMUTIL_JsonObject *jobj, const char *key, CMBool value);
     void (*PutNull)(
             CMUTIL_JsonObject *jobj, const char *key);
     CMUTIL_Json *(*Remove)(
@@ -1699,7 +1701,7 @@ struct CMUTIL_JsonArray {
             const CMUTIL_JsonArray *jarr, uint32_t index);
     const char *(*GetCString)(
             const CMUTIL_JsonArray *jarr, uint32_t index);
-    CMUTIL_Bool (*GetBoolean)(
+    CMBool (*GetBoolean)(
             const CMUTIL_JsonArray *jarr, uint32_t index);
     void (*Add)(
             CMUTIL_JsonArray *jarr, CMUTIL_Json *json);
@@ -1710,7 +1712,7 @@ struct CMUTIL_JsonArray {
     void (*AddString)(
             CMUTIL_JsonArray *jarr, const char *value);
     void (*AddBoolean)(
-            CMUTIL_JsonArray *jarr, CMUTIL_Bool value);
+            CMUTIL_JsonArray *jarr, CMBool value);
     void (*AddNull)(
             CMUTIL_JsonArray *jarr);
     CMUTIL_Json *(*Remove)(

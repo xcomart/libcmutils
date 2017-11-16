@@ -144,7 +144,7 @@
 *	empty ("") string).
 */
 
-CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat)
+CMBool CMUTIL_PatternIsValid(const char *pat)
 {
     int	 len;
 
@@ -227,7 +227,7 @@ CMUTIL_Bool CMUTIL_PatternIsValid(const char *pat)
 *   Some non-empty patterns (e.g., "") will match an empty filename ("").
 */
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
+CMUTIL_STATIC CMBool CMUTIL_PatternSubmatch(
         const char *pat, const char *fname)
 {
     int		fch;
@@ -416,7 +416,7 @@ CMUTIL_STATIC CMUTIL_Bool CMUTIL_PatternSubmatch(
 *	Conversion to lower case is dependent upon the current locale setting.
 */
 
-CMUTIL_Bool CMUTIL_PatternMatch(const char *pat, const char *fname)
+CMBool CMUTIL_PatternMatch(const char *pat, const char *fname)
 {
     /* Check args */
     if (fname == NULL)
@@ -464,7 +464,7 @@ CMUTIL_Bool CMUTIL_PatternMatch(const char *pat, const char *fname)
 *	fpattern_match().
 */
 
-CMUTIL_Bool CMUTIL_PatternMatchN(const char *pat, const char *fname)
+CMBool CMUTIL_PatternMatchN(const char *pat, const char *fname)
 {
     /* Check args */
     if (fname == NULL)

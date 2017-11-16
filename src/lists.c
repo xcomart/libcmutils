@@ -158,7 +158,7 @@ typedef struct CMUTIL_ListIter_st {
     const CMUTIL_List_Internal	*list;
 } CMUTIL_ListIter_st;
 
-CMUTIL_STATIC CMUTIL_Bool CMUTIL_ListIterHasNext(const CMUTIL_Iterator *iter)
+CMUTIL_STATIC CMBool CMUTIL_ListIterHasNext(const CMUTIL_Iterator *iter)
 {
     const CMUTIL_ListIter_st *iiter = (const CMUTIL_ListIter_st*)iter;
     return iiter->curr? CMTrue:CMFalse;
