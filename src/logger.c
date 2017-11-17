@@ -1100,8 +1100,8 @@ typedef struct CMUTIL_LogRollingFileAppender {
     char            *fpath;
     char            *rollpath;
     struct tm       lasttm;
-    CMUTIL_PointDiff tmst;
-    CMUTIL_PointDiff tmlen;
+    CMPtrDiff       tmst;
+    CMPtrDiff       tmlen;
 } CMUTIL_LogRollingFileAppender;
 
 CMUTIL_STATIC CMBool CMUTIL_LogRollingFileAppenderIsChanged(
@@ -1195,7 +1195,7 @@ CMUTIL_LogAppender *CMUTIL_LogRollingFileAppenderCreateInternal(
         const char *fpath, CMUTIL_LogTerm logterm,
         const char *rollpath, const char *pattern)
 {
-    CMUTIL_PointDiff base;
+    CMPtrDiff base;
     CMUTIL_LogRollingFileAppender *res =
             memst->Alloc(sizeof(CMUTIL_LogRollingFileAppender));
     struct tm curr;
@@ -1216,20 +1216,20 @@ CMUTIL_LogAppender *CMUTIL_LogRollingFileAppenderCreateInternal(
     res->fpath = memst->Strdup(fpath);
     res->rollpath = memst->Strdup(rollpath);
 
-    base = (CMUTIL_PointDiff)&(res->lasttm);
+    base = (CMPtrDiff)&(res->lasttm);
     switch (logterm) {
     case CMUTIL_LogTerm_Year:
-        res->tmst = (CMUTIL_PointDiff)&(res->lasttm.tm_year) - base; break;
+        res->tmst = (CMPtrDiff)&(res->lasttm.tm_year) - base; break;
     case CMUTIL_LogTerm_Month:
-        res->tmst = (CMUTIL_PointDiff)&(res->lasttm.tm_mon) - base; break;
+        res->tmst = (CMPtrDiff)&(res->lasttm.tm_mon) - base; break;
     case CMUTIL_LogTerm_Date:
-        res->tmst = (CMUTIL_PointDiff)&(res->lasttm.tm_mday) - base; break;
+        res->tmst = (CMPtrDiff)&(res->lasttm.tm_mday) - base; break;
     case CMUTIL_LogTerm_Hour:
-        res->tmst = (CMUTIL_PointDiff)&(res->lasttm.tm_hour) - base; break;
+        res->tmst = (CMPtrDiff)&(res->lasttm.tm_hour) - base; break;
     case CMUTIL_LogTerm_Minute:
-        res->tmst = (CMUTIL_PointDiff)&(res->lasttm.tm_min) - base; break;
+        res->tmst = (CMPtrDiff)&(res->lasttm.tm_min) - base; break;
     }
-    res->tmlen = (CMUTIL_PointDiff)&(res->lasttm.tm_wday) - base - res->tmst;
+    res->tmlen = (CMPtrDiff)&(res->lasttm.tm_wday) - base - res->tmst;
 
     file = CMUTIL_FileCreateInternal(memst, fpath);
     ctime = time(NULL);

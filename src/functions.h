@@ -34,9 +34,9 @@
 #define SPACES      " \r\n\t"
 
 #if defined(ARCH32)
-typedef unsigned int	CMUTIL_PointDiff;
+typedef uint32_t    CMPtrDiff;
 #else
-typedef uint64_t        CMUTIL_PointDiff;
+typedef uint64_t    CMPtrDiff;
 #endif
 
 #if defined(_MSC_VER)
