@@ -144,7 +144,7 @@ typedef struct CMUTIL_Socket_Internal {
     CMUTIL_Socket		base;
     SOCKET				sock;
     struct sockaddr_in	peer;
-    CMBool			silent;
+    CMBool              silent;
     CMUTIL_Mem          *memst;
 } CMUTIL_Socket_Internal;
 
@@ -153,7 +153,8 @@ CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
 
 # define CMUTIL_RBUF_LEN    1024
 CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SocketRead(
-        const CMUTIL_Socket *sock, CMUTIL_String *buffer, uint32_t size, long timeout)
+        const CMUTIL_Socket *sock, CMUTIL_String *buffer,
+        uint32_t size, long timeout)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
     int width, rc;
@@ -590,6 +591,7 @@ CONNECT_RETRY:
         return CMFalse;
     }
 #else
+    // set nonblocked-IO
     arg = 1;
     rc = ioctlsocket(s, (long)FIONBIO, &arg);
     if (rc < 0) {
@@ -1027,7 +1029,8 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketCheckWriteBuffer(
 }
 
 CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketRead(
-        const CMUTIL_Socket *sock, CMUTIL_String *buffer, uint32_t size, long timeout)
+        const CMUTIL_Socket *sock, CMUTIL_String *buffer,
+        uint32_t size, long timeout)
 {
     const CMUTIL_SSLSocket_Internal *isck =
             (const CMUTIL_SSLSocket_Internal*)sock;

@@ -664,7 +664,8 @@ CMUTIL_StringArray *CMUTIL_StringArrayCreateInternal(
     memset(res, 0x0, sizeof(CMUTIL_StringArray_Internal));
     memcpy(res, &g_cmutil_stringarray, sizeof(CMUTIL_StringArray));
     res->memst=  memst;
-    res->array = CMUTIL_ArrayCreateInternal(memst, initcapacity, NULL, NULL);
+    res->array = CMUTIL_ArrayCreateInternal(
+                memst, initcapacity, NULL, NULL, CMFalse);
     return (CMUTIL_StringArray*)res;
 }
 

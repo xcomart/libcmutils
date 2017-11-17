@@ -182,7 +182,7 @@ CMUTIL_STATIC CMUTIL_FileList_Internal *CMUTIL_FileListCreate(
     memset(res, 0x0, sizeof(CMUTIL_FileList_Internal));
     memcpy(res, &g_cmutil_filelist, sizeof(CMUTIL_FileList));
     res->memst = memst;
-    res->files = CMUTIL_ArrayCreateInternal(memst, 10, NULL, NULL);
+    res->files = CMUTIL_ArrayCreateInternal(memst, 10, NULL, NULL, CMFalse);
     return res;
 }
 

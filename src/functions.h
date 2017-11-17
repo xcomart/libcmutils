@@ -65,7 +65,8 @@ CMUTIL_Array *CMUTIL_ArrayCreateInternal(
         CMUTIL_Mem *mem,
         size_t initcapacity,
         int(*comparator)(const void*,const void*),
-        void(*freecb)(void*));
+        void(*freecb)(void*),
+        CMBool sorted);
 
 CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(
         CMUTIL_Mem *memst);

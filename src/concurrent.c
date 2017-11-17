@@ -510,7 +510,7 @@ void CMUTIL_ThreadInit()
     g_cmutil_thread_context->mutex =
             CMUTIL_MutexCreateInternal(CMUTIL_GetMem());
     g_cmutil_thread_context->threads = CMUTIL_ArrayCreateInternal(
-                CMUTIL_GetMem(), 10, CMUTIL_ThreadComparator, NULL);
+                CMUTIL_GetMem(), 10, CMUTIL_ThreadComparator, NULL, CMTrue);
 }
 
 void CMUTIL_ThreadClear()
@@ -1378,13 +1378,13 @@ CMUTIL_Timer *CMUTIL_TimerCreateInternal(
 
     // create timer task array which sorted by it's schedule time.
     res->scheduled = CMUTIL_ArrayCreateInternal(
-                memst, 5, CMUTIL_TimerTaskComp, NULL);
+                memst, 5, CMUTIL_TimerTaskComp, NULL, CMTrue);
 
     // create
     res->finished = CMUTIL_ArrayCreateInternal(
-                memst, 5, CMUTIL_TimerAddrComp, NULL);
+                memst, 5, CMUTIL_TimerAddrComp, NULL, CMTrue);
     res->alltasks = CMUTIL_ArrayCreateInternal(
-                memst, 5, CMUTIL_TimerAddrComp, NULL);
+                memst, 5, CMUTIL_TimerAddrComp, NULL, CMTrue);
 
     // create worker thread pool
     res->threads = CMUTIL_ListCreateInternal(memst, NULL);

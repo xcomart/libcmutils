@@ -64,6 +64,7 @@ typedef struct CMUTIL_JsonValue_Internal {
 typedef struct CMUTIL_JsonObject_Internal {
     CMUTIL_JsonObject	base;
     CMUTIL_Map			*map;
+    CMUTIL_Array        *keys;
     CMUTIL_Mem          *memst;
 } CMUTIL_JsonObject_Internal;
 
@@ -381,6 +382,8 @@ CMUTIL_STATIC void CMUTIL_JsonObjectDestroy(CMUTIL_Json *json)
     if (ijobj) {
         if (ijobj->map)
             CMCall(ijobj->map, Destroy);
+        if (ijobj->keys)
+            CMCall(ijobj->keys, Destroy);
         ijobj->memst->Free(ijobj);
     }
 }
@@ -401,17 +404,17 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonObjectGet(
     return (CMUTIL_Json*)CMCall(ijobj->map, Get, key);
 }
 
-#define CMUTIL_JsonObjectGetBody(jobj, key, method, v) do {					\
-    CMUTIL_Json *json = CMUTIL_JsonObjectGet(jobj, key);					\
-    if (json) {																\
-        if (CMCall(json, GetType) == CMUTIL_JsonTypeValue)				\
-            return CMCall((CMUTIL_JsonValue*)json, method );			\
-        else																\
-            CMLogErrorS("JsonObject item with key '%s' is not a value type.",\
-                        key);												\
-    } else {																\
-        CMLogErrorS("JsonObject has no item with key '%s'", key);			\
-    }																		\
+#define CMUTIL_JsonObjectGetBody(jobj, key, method, v) do {                 \
+    CMUTIL_Json *json = CMUTIL_JsonObjectGet(jobj, key);                    \
+    if (json) {                                                             \
+        if (CMCall(json, GetType) == CMUTIL_JsonTypeValue)                  \
+            return CMCall((CMUTIL_JsonValue*)json, method );                \
+        else                                                                \
+            CMLogError("JsonObject item with key '%s' is not a value type.",\
+                        key);                                               \
+    } else {                                                                \
+        CMLogError("JsonObject has no item with key '%s'", key);            \
+    }                                                                       \
     return v; } while(0)
 
 
@@ -452,13 +455,14 @@ CMUTIL_STATIC void CMUTIL_JsonObjectPut(
     json = CMCall(ijobj->map, Put, key, json);
     // destory previous mapped item
     if (json) CMCall(json, Destroy);
+    else CMCall(ijobj->keys, Add, CMStrdup(key));
 }
 
-#define CMUTIL_JsonObjectPutBody(jobj, key, method, value) do {				\
-    CMUTIL_JsonObject_Internal *ijobj = (CMUTIL_JsonObject_Internal*)jobj;	\
-    CMUTIL_JsonValue *jval = CMUTIL_JsonValueCreateInternal(ijobj->memst);	\
-    CMCall(jval, method, value);										\
-    CMCall(jobj, Put, key, (CMUTIL_Json*)jval);						\
+#define CMUTIL_JsonObjectPutBody(jobj, key, method, value) do {             \
+    CMUTIL_JsonObject_Internal *ijobj = (CMUTIL_JsonObject_Internal*)jobj;  \
+    CMUTIL_JsonValue *jval = CMUTIL_JsonValueCreateInternal(ijobj->memst);  \
+    CMCall(jval, method, value);                                            \
+    CMCall(jobj, Put, key, (CMUTIL_Json*)jval);                             \
     } while(0)
 
 CMUTIL_STATIC void CMUTIL_JsonObjectPutLong(
@@ -498,6 +502,9 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonObjectRemove(
         CMUTIL_JsonObject *jobj, const char *key)
 {
     CMUTIL_JsonObject_Internal *ijobj = (CMUTIL_JsonObject_Internal*)jobj;
+    uint32_t idx = 0;
+    if (CMCall(ijobj->keys, Find, key, &idx))
+        CMCall(ijobj->keys, RemoveAt, idx);
     return (CMUTIL_Json*)CMCall(ijobj->map, Remove, key);
 }
 
@@ -542,6 +549,9 @@ CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst)
     res->memst = memst;
     res->map = CMUTIL_MapCreateInternal(
                 memst, 256, CMFalse, CMUTIL_JsonDestroyInternal);
+    res->keys = CMUTIL_ArrayCreateInternal(
+                memst, 10, (int(*)(const void*,const void*))strcmp,
+                CMFree, CMFalse);
     return (CMUTIL_JsonObject*)res;
 }
 
@@ -586,19 +596,19 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonArrayGet(
     return NULL;
 }
 
-#define CMUTIL_JsonArrayGetBody(jarr, index, method, v) do {				\
-    const CMUTIL_JsonArray_Internal *ijarr = \
-            (const CMUTIL_JsonArray_Internal*)jarr;	\
-    if (CMCall(ijarr->arr, GetSize) > index) {							\
-        CMUTIL_Json* json = CMCall(jarr, Get, index);					\
-        if (CMCall(json, GetType) == CMUTIL_JsonTypeValue) {			\
-            return CMCall((CMUTIL_JsonValue*)json, method);			\
-        } else {															\
-            CMLogErrorS("item type is not 'Value' type.");					\
-        }																	\
-    } else {																\
-        CMLogErrorS("JsonArray index out of bound(%d), total %d.",			\
-                index, CMCall(ijarr->arr, GetSize));					\
+#define CMUTIL_JsonArrayGetBody(jarr, index, method, v) do {        \
+    const CMUTIL_JsonArray_Internal *ijarr =                        \
+            (const CMUTIL_JsonArray_Internal*)jarr;                 \
+    if (CMCall(ijarr->arr, GetSize) > index) {                      \
+        CMUTIL_Json* json = CMCall(jarr, Get, index);               \
+        if (CMCall(json, GetType) == CMUTIL_JsonTypeValue) {        \
+            return CMCall((CMUTIL_JsonValue*)json, method);         \
+        } else {                                                    \
+            CMLogError("item type is not 'Value' type.");           \
+        }                                                           \
+    } else {                                                        \
+        CMLogError("JsonArray index out of bound(%d), total %d.",   \
+                index, CMCall(ijarr->arr, GetSize));                \
     } return v;} while(0)
 
 CMUTIL_STATIC int64_t CMUTIL_JsonArrayGetLong(
@@ -638,10 +648,10 @@ CMUTIL_STATIC void CMUTIL_JsonArrayAdd(
     CMCall(ijarr->arr, Add, json);
 }
 
-#define CMUTIL_JsonArrayAddBody(jarr, value, method)	do{					\
-    CMUTIL_JsonArray_Internal *ijarr = (CMUTIL_JsonArray_Internal*)jarr;	\
-    CMUTIL_JsonValue *json = CMUTIL_JsonValueCreateInternal(ijarr->memst);	\
-    CMCall(json, method, value);										\
+#define CMUTIL_JsonArrayAddBody(jarr, value, method) do{                    \
+    CMUTIL_JsonArray_Internal *ijarr = (CMUTIL_JsonArray_Internal*)jarr;    \
+    CMUTIL_JsonValue *json = CMUTIL_JsonValueCreateInternal(ijarr->memst);  \
+    CMCall(json, method, value);                                            \
     CMUTIL_JsonArrayAdd(jarr, (CMUTIL_Json*)json); } while(0)
 
 CMUTIL_STATIC void CMUTIL_JsonArrayAddLong(
@@ -722,7 +732,7 @@ CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem *memst)
     memcpy(res, &g_cmutil_jsonarray, sizeof(CMUTIL_JsonArray));
     res->memst = memst;
     res->arr = CMUTIL_ArrayCreateInternal(
-                memst, 10, NULL, CMUTIL_JsonDestroyInternal);
+                memst, 10, NULL, CMUTIL_JsonDestroyInternal, CMFalse);
     return (CMUTIL_JsonArray*)res;
 }
 
@@ -797,9 +807,9 @@ RETRYPOINT:
     return pctx->remain > 0 ? CMTrue:CMFalse;
 }
 
-#define CMUTIL_JSON_PARSE_ERROR(a, msg) do {								\
-    char buf[30] = {0,}; strncat(buf, a->curr, 25); strcat(buf, "...");		\
-    if (!a->silent) CMLogErrorS("parse error in line %d before '%s': %s",	\
+#define CMUTIL_JSON_PARSE_ERROR(a, msg) do {                                \
+    char buf[30] = {0,}; strncat(buf, a->curr, 25); strcat(buf, "...");     \
+    if (!a->silent) CMLogErrorS("parse error in line %d before '%s': %s",   \
                 a->linecnt, buf, msg); } while(0)
 
 CMUTIL_STATIC CMBool CMUTIL_JsonParseEscape(

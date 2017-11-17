@@ -101,7 +101,7 @@ CMUTIL_STATIC void *CMUTIL_MapPut(
 
     if (!bucket) {
         bucket = CMUTIL_ArrayCreateInternal(
-                    imap->memst, 5, CMUTIL_MapComparator, NULL);
+                    imap->memst, 5, CMUTIL_MapComparator, NULL, CMTrue);
         imap->buckets[index] = bucket;
     }
 
@@ -387,7 +387,7 @@ CMUTIL_Map *CMUTIL_MapCreateInternal(
     imap->isucase = isucase;
     imap->keyset = CMUTIL_ArrayCreateInternal(
                 memst, bucketsize, (int(*)(const void*,const void*))strcmp,
-                NULL);
+                NULL, CMTrue);
     imap->memst = memst;
     imap->freecb = freecb;
 
