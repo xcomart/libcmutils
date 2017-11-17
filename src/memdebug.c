@@ -373,7 +373,7 @@ CMUTIL_STATIC void CMUTIL_MemRcyInit()
                     &g_cmutil_memdebug_system);
         g_cmutil_memrcyblocks[i].used = CMUTIL_ArrayCreateInternal(
                     &g_cmutil_memdebug_system, 10,
-                    CMUTIL_MemRcyComparator, CMUTIL_MemNodeDestroy);
+                    CMUTIL_MemRcyComparator, CMUTIL_MemNodeDestroy, CMTrue);
     }
     g_cmutil_memstackwalker = CMUTIL_StackWalkerCreateInternal(
                 &g_cmutil_memdebug_system);

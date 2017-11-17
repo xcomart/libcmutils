@@ -1362,7 +1362,7 @@ CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreateInternal(
                 memst, accept_host, listen_port, 256, CMTrue);
     if (!res->listener) goto FAILED;
     res->clients = CMUTIL_ArrayCreateInternal(
-                memst, 10, NULL, CMUTIL_LogSocketAppenderCliDestroyer);
+                memst, 10, NULL, CMUTIL_LogSocketAppenderCliDestroyer, CMFalse);
     res->climtx = CMUTIL_MutexCreateInternal(memst);
     sprintf(namebuf, "LogAppender(%s)-SocketAcceptor", name);
     res->isrunning = CMTrue;
@@ -1505,10 +1505,12 @@ CMUTIL_STATIC CMUTIL_ConfLogger *CMUTIL_LogSystemCreateLogger(
     res->additivity = additivity;
     res->lsys = ilsys;
     res->lvlapndrs = CMUTIL_ArrayCreateInternal(
-                ilsys->memst, lvllen, NULL, CMUTIL_DoubleArrayDestroyer);
+                ilsys->memst, lvllen, NULL,
+                CMUTIL_DoubleArrayDestroyer, CMFalse);
     for (i=0; i<lvllen; i++) {
         CMCall(res->lvlapndrs, Add, CMUTIL_ArrayCreateInternal(
-                        ilsys->memst, 3, CMUTIL_LogAppenderComparator, NULL));
+                   ilsys->memst, 3, CMUTIL_LogAppenderComparator,
+                   NULL, CMTrue));
     }
     CMCall(ilsys->cloggers, Add, res);
     for (i=level; i<lvllen; i++) {
@@ -1598,7 +1600,7 @@ CMUTIL_STATIC CMUTIL_Logger *CMUTIL_LogSystemGetLogger(
         res->fullname = q.fullname;
         res->namepath = CMUTIL_StringSplitInternal(ilsys->memst, name, ".");
         res->logrefs = CMUTIL_ArrayCreateInternal(
-                    ilsys->memst, 3, CMUTIL_LoggerRefComparator, NULL);
+                    ilsys->memst, 3, CMUTIL_LoggerRefComparator, NULL, CMTrue);
         res->minlevel = CMUTIL_LogLevel_Fatal;
         for (i=0; i<CMCall(ilsys->cloggers, GetSize); i++) {
             CMUTIL_ConfLogger_Internal *cl = (CMUTIL_ConfLogger_Internal*)
@@ -1681,16 +1683,16 @@ CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem *memst)
                 memst, 256, CMFalse, CMUTIL_LogAppenderDestroyer);
     res->cloggers = CMUTIL_ArrayCreateInternal(
                 memst, 5, CMUTIL_ConfLoggerComparator,
-                CMUTIL_ConfLoggerDestroyer);
+                CMUTIL_ConfLoggerDestroyer, CMTrue);
     res->levelloggers = CMUTIL_ArrayCreateInternal(
                 memst, CMUTIL_LogLevel_Fatal+1, NULL,
-                CMUTIL_DoubleArrayDestroyer);
+                CMUTIL_DoubleArrayDestroyer, CMFalse);
     for (i=0; i<(CMUTIL_LogLevel_Fatal+1); i++)
         CMCall(res->levelloggers, Add, CMUTIL_ArrayCreateInternal(
-                        memst, 3, CMUTIL_ConfLoggerComparator, NULL));
+                        memst, 3, CMUTIL_ConfLoggerComparator, NULL, CMTrue));
     res->loggers = CMUTIL_ArrayCreateInternal(
                 memst, 50, CMUTIL_LoggerComparator,
-                CMUTIL_LoggerDestroyer);
+                CMUTIL_LoggerDestroyer, CMTrue);
 
     return (CMUTIL_LogSystem*)res;
 }

@@ -233,7 +233,7 @@ CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem *memst)
     res->confs = CMUTIL_MapCreateInternal(
                 memst, CMUTIL_MAP_DEFAULT, CMFalse, memst->Free);
     res->sequence = CMUTIL_ArrayCreateInternal(
-                memst, 100, NULL, ConfItemDestroy);
+                memst, 100, NULL, ConfItemDestroy, CMFalse);
     res->revconf = CMUTIL_MapCreateInternal(
                 memst, CMUTIL_MAP_DEFAULT, CMFalse, NULL);
     return (CMUTIL_Config*)res;

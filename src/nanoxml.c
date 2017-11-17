@@ -383,7 +383,7 @@ CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
     res->attributes = CMUTIL_MapCreateInternal(
                 memst, 50, CMFalse, CMUTIL_XmlStringDestroyer);
     res->children = CMUTIL_ArrayCreateInternal(
-                memst, 5, NULL, CMUTIL_XmlNodeDestroyer);
+                memst, 5, NULL, CMUTIL_XmlNodeDestroyer, CMFalse);
     return (CMUTIL_XmlNode*)res;
 }
 
@@ -749,7 +749,7 @@ CMUTIL_XmlNode *CMUTIL_XmlParseStringInternal(
         if (*(ctx.encoding) && strcmp(ctx.encoding, "UTF-8") != 0)
             ctx.cconv = CMUTIL_CSConvCreateInternal(
                         memst, ctx.encoding, "UTF-8");
-        ctx.stack = CMUTIL_ArrayCreateInternal(memst, 3, NULL, NULL);
+        ctx.stack = CMUTIL_ArrayCreateInternal(memst, 3, NULL, NULL, CMFalse);
         res = CMUTIL_XmlParseNode(&ctx, NULL);
         bottom = (CMUTIL_XmlNode*)CMCall(ctx.stack, Bottom);
         if (bottom) {
@@ -910,7 +910,8 @@ CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node)
     CMUTIL_Json *res;
     CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
     CMUTIL_XmlToJsonCtx ctx;
-    ctx.stack = CMUTIL_ArrayCreateInternal(inode->memst, 5, NULL, NULL);
+    ctx.stack = CMUTIL_ArrayCreateInternal(
+                inode->memst, 5, NULL, NULL, CMFalse);
     ctx.memst = inode->memst;
     CMUTIL_XmlToJsonInternal(node, &ctx);
     res = (CMUTIL_Json*)CMCall(ctx.stack, Pop);

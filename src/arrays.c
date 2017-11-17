@@ -380,7 +380,8 @@ CMUTIL_Array *CMUTIL_ArrayCreateInternal(
         CMUTIL_Mem *mem,
         size_t initcapacity,
         int(*comparator)(const void*,const void*),
-        void(*freecb)(void*))
+        void(*freecb)(void*),
+        CMBool sorted)
 {
     CMUTIL_Array_Internal *iarray = mem->Alloc(sizeof(CMUTIL_Array_Internal));
     memset(iarray, 0x0, sizeof(CMUTIL_Array_Internal));
@@ -389,7 +390,7 @@ CMUTIL_Array *CMUTIL_ArrayCreateInternal(
     iarray->data = mem->Alloc(sizeof(void*) * (uint32_t)initcapacity);
     iarray->capacity = initcapacity;
     iarray->comparator = comparator;
-    iarray->issorted = comparator? CMTrue:CMFalse;
+    iarray->issorted = sorted;
     iarray->freecb = freecb;
     iarray->memst = mem;
 
@@ -402,7 +403,8 @@ CMUTIL_Array *CMUTIL_ArrayCreateEx(
         void(*freecb)(void*))
 {
     return CMUTIL_ArrayCreateInternal(
-                CMUTIL_GetMem(), initcapacity, comparator, freecb);
+                CMUTIL_GetMem(), initcapacity,
+                comparator, freecb, comparator? CMTrue:CMFalse);
 }
 
 
