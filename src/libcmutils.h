@@ -1,4 +1,4 @@
-/*
+﻿/*
                       GNU General Public License
     libcmutils is a bunch of commonly used utility functions for multiplatform.
     Copyright (C) 2016 Dennis Soungjin Park <xcomart@gmail.com>
@@ -77,6 +77,13 @@ extern "C" {
 # else
 #  define CMUTIL_API
 # endif
+#endif
+
+/*
+ * to remove anoying warning in qtcreator
+ */
+#ifndef __null
+# define __null (void*)0
 #endif
 
 /*
@@ -687,7 +694,7 @@ struct CMUTIL_RWLock {
 /**
  * @brief Create a read-write lock object.
  */
-CMUTIL_API CMUTIL_RWLock *CMUTIL_RWLockCreate();
+CMUTIL_API CMUTIL_RWLock *CMUTIL_RWLockCreate(void);
 
 /**
  * @brief Iterator of collection members.
@@ -1380,7 +1387,7 @@ struct CMUTIL_Config {
     void(*Destroy)(CMUTIL_Config *conf);
 };
 
-CMUTIL_API CMUTIL_Config *CMUTIL_ConfigCreate();
+CMUTIL_API CMUTIL_Config *CMUTIL_ConfigCreate(void);
 CMUTIL_API CMUTIL_Config *CMUTIL_ConfigLoad(const char *fconf);
 
 
@@ -1518,10 +1525,10 @@ struct CMUTIL_LogSystem {
     void(*Destroy)(CMUTIL_LogSystem *logsys);
 };
 
-CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemCreate();
+CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemCreate(void);
 CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJson(
         const char *jsonfile);
-CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemGet();
+CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemGet(void);
 
 
 typedef struct CMUTIL_StackWalker CMUTIL_StackWalker;
@@ -1534,7 +1541,7 @@ struct CMUTIL_StackWalker {
     void(*Destroy)(CMUTIL_StackWalker *walker);
 };
 
-CMUTIL_API CMUTIL_StackWalker *CMUTIL_StackWalkerCreate();
+CMUTIL_API CMUTIL_StackWalker *CMUTIL_StackWalkerCreate(void);
 
 typedef enum CMUTIL_SocketResult {
     CMUTIL_SocketOk = 0,
@@ -1647,7 +1654,7 @@ struct CMUTIL_JsonValue {
             CMUTIL_JsonValue *jval);
 };
 
-CMUTIL_API CMUTIL_JsonValue *CMUTIL_JsonValueCreate();
+CMUTIL_API CMUTIL_JsonValue *CMUTIL_JsonValueCreate(void);
 
 typedef struct CMUTIL_JsonObject CMUTIL_JsonObject;
 struct CMUTIL_JsonObject {
@@ -1684,7 +1691,7 @@ struct CMUTIL_JsonObject {
             CMUTIL_JsonObject *jobj, const char *key);
 };
 
-CMUTIL_API CMUTIL_JsonObject *CMUTIL_JsonObjectCreate();
+CMUTIL_API CMUTIL_JsonObject *CMUTIL_JsonObjectCreate(void);
 
 typedef struct CMUTIL_JsonArray CMUTIL_JsonArray;
 struct CMUTIL_JsonArray {
@@ -1721,7 +1728,7 @@ struct CMUTIL_JsonArray {
             CMUTIL_JsonArray *jarr, uint32_t index);
 };
 
-CMUTIL_API CMUTIL_JsonArray *CMUTIL_JsonArrayCreate();
+CMUTIL_API CMUTIL_JsonArray *CMUTIL_JsonArrayCreate(void);
 
 CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
 #define CMUTIL_JsonDestroy(a)   CMCall((CMUTIL_Json*)(a), Destroy)
