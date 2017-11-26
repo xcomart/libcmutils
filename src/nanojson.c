@@ -809,7 +809,7 @@ RETRYPOINT:
 
 #define CMUTIL_JSON_PARSE_ERROR(a, msg) do {                                \
     char buf[30] = {0,}; strncat(buf, a->curr, 25); strcat(buf, "...");     \
-    if (!a->silent) CMLogErrorS("parse error in line %d before '%s': %s",   \
+    if (!a->silent) CMLogError("parse error in line %d before '%s': %s",    \
                 a->linecnt, buf, msg); } while(0)
 
 CMUTIL_STATIC CMBool CMUTIL_JsonParseEscape(
@@ -915,27 +915,31 @@ CMUTIL_STATIC CMBool CMUTIL_JsonParseConst(
         } else if (strcasecmp(cstr, "false") == 0) {
             CMCall(jval, SetBoolean, CMFalse);
         } else {
-            if (!pctx->silent) CMLogError("cannot parse constant '%s'", cstr);
+            if (!pctx->silent)
+                CMUTIL_JSON_PARSE_ERROR(pctx, "cannot parse constant.");
             return CMFalse;
         }
     } else if (strchr("nN", *cstr)) {
         if (strcasecmp(cstr, "null") == 0) {
             CMCall(jval, SetNull);
         } else {
-            if (!pctx->silent) CMLogError("cannot parse constant '%s'", cstr);
+            if (!pctx->silent)
+                CMUTIL_JSON_PARSE_ERROR(pctx, "cannot parse constant.");
             return CMFalse;
         }
     } else if (strchr(cstr, '.')) {
         double value = 0.0;
         if (sscanf(cstr, "%lf", &value) != 1) {
-            if (!pctx->silent) CMLogError("cannot parse constant '%s'", cstr);
+            if (!pctx->silent)
+                CMUTIL_JSON_PARSE_ERROR(pctx, "cannot parse constant.");
             return CMFalse;
         }
         CMCall(jval, SetDouble, value);
     } else {
         int64_t value = 0;
         if (sscanf(cstr, PRINT64I, &value) != 1) {
-            if (!pctx->silent) CMLogError("cannot parse constant '%s'", cstr);
+            if (!pctx->silent)
+                CMUTIL_JSON_PARSE_ERROR(pctx, "cannot parse constant.");
             return CMFalse;
         }
         CMCall(jval, SetLong, value);
@@ -976,7 +980,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonParseObject(CMUTIL_JsonParser *pctx)
     CMBool succeeded = CMFalse;
 
     if (*(pctx->curr) != '{') {
-        CMUTIL_JSON_PARSE_ERROR(pctx, "JSON object does not starts with '{'");
+        CMUTIL_JSON_PARSE_ERROR(pctx, "JSON object does not starts with '{'.");
         return NULL;
     }
     CMUTIL_JsonParseConsume(pctx, 1);
@@ -1050,7 +1054,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonParseArray(CMUTIL_JsonParser *pctx)
     CMBool succeeded = CMFalse;
 
     if (*(pctx->curr) != '[') {
-        CMUTIL_JSON_PARSE_ERROR(pctx, "JSON array does not starts with '['");
+        CMUTIL_JSON_PARSE_ERROR(pctx, "JSON array does not starts with '['.");
         return NULL;
     }
     CMUTIL_JsonParseConsume(pctx, 1);

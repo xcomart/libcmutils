@@ -217,7 +217,8 @@ CMUTIL_STATIC void CMUTIL_XmlEscape(
         if (g_cmutil_xml_escape[(int)c]) {
             char *q;
             if (stpos < p)
-                CMCall(dest, AddNString, (const char*)stpos, (uint32_t)(p - stpos));
+                CMCall(dest, AddNString,
+                       (const char*)stpos, (uint32_t)(p - stpos));
             q = g_cmutil_xml_escape_str[(int)c];
             if (q)
                 CMCall(dest, AddString, q);
@@ -423,12 +424,12 @@ typedef struct CMUTIL_XmlParseCtx {
 #define DO_BOOL(...) do { if (!(__VA_ARGS__)) {	\
     char buf[50] = {0,};\
     strncat(buf, ctx->pos, 40); strcat(buf, "...");	\
-    CMLogErrorS("xml parse failed near '%s'", buf);	\
+    CMLogError("xml parse failed near '%s'", buf);	\
     return CMFalse; } } while(0)
 #define DO_OBJ(...) do { if (!(__VA_ARGS__)) { \
     char buf[50] = {0,};\
     strncat(buf, ctx->pos, 40); strcat(buf, "...");	\
-    CMLogErrorS("xml parse failed near '%s'", buf);	\
+    CMLogError("xml parse failed near '%s'", buf);	\
     return NULL; } } while(0)
 
 CMUTIL_STATIC CMBool CMUTIL_XmlUnescape(
