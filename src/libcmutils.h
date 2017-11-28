@@ -31,6 +31,7 @@
  *
  * Copyright 2016 Dennis Soungjin Park <xcomart@gmail.com>, all rights reserved.
  */
+
 #ifndef LIBCMUTILS_H__
 #define LIBCMUTILS_H__
 

@@ -60,7 +60,7 @@ CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
         sz = readlink("/proc/self/exe", buf, sizeof(buf));
 #elif defined(SUNOS)
         sz = readlink("/proc/self/path/a.out", buf, sizeof(buf));
-#elif defined(BSD)
+#elif defined(BSD) or defined(APPLE)
         sz = readlink("/proc/curproc/file", buf, sizeof(buf));
 #elif defined(MSWIN)
         sz = (size_t)GetModuleFileName(NULL, buf, sizeof(buf));
