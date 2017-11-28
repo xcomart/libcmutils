@@ -44,10 +44,10 @@ win32-msvc* {
 
 contains (CONFIG, SUPPORT_SSL) {
     DEFINES += CMUTIL_SUPPORT_SSL
-#    DEFINES += CMUTIL_SSL_USE_OPENSSL
+    DEFINES += CMUTIL_SSL_USE_OPENSSL
     !win32-msvc* {
-        PKGCONFIG += gnutls
-#        PKGCONFIG += openssl
+#        PKGCONFIG += gnutls
+        PKGCONFIG += openssl
     }
 }
 

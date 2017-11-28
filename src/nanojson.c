@@ -209,7 +209,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonArrayClone(const CMUTIL_Json *json)
     return (CMUTIL_Json*)res;
 }
 
-static CMUTIL_Json *(*g_cmutil_json_clonefuncs[])() = {
+static CMUTIL_Json *(*g_cmutil_json_clonefuncs[])(const CMUTIL_Json*) = {
     CMUTIL_JsonValueClone,
     CMUTIL_JsonObjectClone,
     CMUTIL_JsonArrayClone

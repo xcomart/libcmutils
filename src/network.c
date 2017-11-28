@@ -31,6 +31,7 @@ static WSADATA wsa_data;
 #if defined(CMUTIL_SUPPORT_SSL)
 # if defined(CMUTIL_SSL_USE_OPENSSL)
 #  include <openssl/ssl.h>
+#  include <openssl/err.h>
 # else
 #  include <gnutls/gnutls.h>
 # endif
@@ -942,7 +943,7 @@ typedef struct CMUTIL_SSLSocket_Internal {
 #if defined(CMUTIL_SSL_USE_OPENSSL)
     SSL                     *session;
     // for client side certification
-    SSL_CTX                 sslctx;
+    SSL_CTX                 *sslctx;
 #else
     gnutls_session_t        session;
     // for client side certification
@@ -969,7 +970,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketCheckReadBuffer(
     SOCKET fd;
 
 #if defined(CMUTIL_SSL_USE_OPENSSL)
-    fd = (SOCKET)SSL_get_fd(session->session);
+    fd = (SOCKET)SSL_get_fd(si->session);
     if (SSL_pending(si->session) > 0)
         return CMUTIL_SocketOk;
 #else
@@ -1006,7 +1007,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketCheckWriteBuffer(
     SOCKET fd;
 
 #if defined(CMUTIL_SSL_USE_OPENSSL)
-    fd = (SOCKET)SSL_get_fd(session->session);
+    fd = (SOCKET)SSL_get_fd(si->session);
 #else
     fd = si->base.sock;
 #endif  // !CMUTIL_SSL_USE_OPENSSL
@@ -1038,7 +1039,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketRead(
     char buf[1024];
     int rc, cnt = 0;
     size_t rsz;
-#if defined(SSL_USE_OPENSSL)
+#if defined(CMUTIL_SSL_USE_OPENSSL)
     int in_init=0;
 
     while (size > 0 && cnt < timeout * 10) {
@@ -1053,7 +1054,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketRead(
         res = CMCall(sock, CheckReadBuffer, timeout);
         if (res == CMUTIL_SocketOk) {
             rsz = size > 1024? 1024:size;
-            rc = SSL_read(isck->session, buf, rsz);
+            rc = SSL_read(isck->session, buf, (int)rsz);
 
             switch (SSL_get_error(isck->session, rc))
             {
@@ -1062,8 +1063,8 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketRead(
                     CMLogError("SSL read failed");
                     return CMUTIL_SocketReceiveFailed;
                 }
-                CMCall(buffer, AddNString, buf, rc);
-                size -= rc;
+                CMCall(buffer, AddNString, buf, (uint32_t)rc);
+                size -= (uint32_t)rc;
                 if (size == 0)
                     return CMUTIL_SocketOk;
                 break;
@@ -1174,7 +1175,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketWritePart(
 
         res = CMCall(sock, CheckWriteBuffer, timeout);
         if (res == CMUTIL_SocketOk) {
-            rc = SSL_write(isck->session, buf, size);
+            rc = SSL_write(isck->session, buf, (int)size);
 
             switch (SSL_get_error(isck->session, rc))
             {
@@ -1184,7 +1185,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SSLSocketWritePart(
                     return CMUTIL_SocketSendFailed;
                 }
                 buf += rc;
-                size -= rc;
+                size -= (uint32_t)rc;
                 if (size == 0)
                     return CMUTIL_SocketOk;
                 break;
@@ -1277,7 +1278,7 @@ CMUTIL_STATIC void CMUTIL_SSLSocketClose(
 #if defined(CMUTIL_SSL_USE_OPENSSL)
             //SSL_shutdown(isck->session);
             isck->base.sock = SSL_get_fd(isck->session);
-            SSL_free(session->session);
+            SSL_free(isck->session);
 #else
             //gnutls_bye(isck->session, GNUTLS_SHUT_WR);
             gnutls_deinit(isck->session);
@@ -1341,7 +1342,7 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
 {
     CMUTIL_SSLSocket_Internal *res = CMUTIL_SSLSocketCreate(memst, silent);
 #if defined(CMUTIL_SSL_USE_OPENSSL)
-    static const SSL_METHOD *method = SSLv23_server_method();
+    const SSL_METHOD *method = SSLv23_server_method();
     if (ca || (cert && key)) {
         res->sslctx = SSL_CTX_new(method);
         if (res->sslctx == NULL) {
@@ -1351,14 +1352,19 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
         }
     }
     if (ca)
-        SSL_CHECK(SSL_CTX_use_certificate_chain_file(
-                      res->sslctx, ca), CLEANUP);
+        SSL_CHECK(SSL_CTX_use_certificate_chain_file(res->sslctx, ca), FAILED);
     if (cert && key) {
         SSL_CHECK(SSL_CTX_use_certificate_file(
-                      res->sslctx, cert, SSL_FILETYPE_PEM), CLEANUP);
+                      res->sslctx, cert, SSL_FILETYPE_PEM), FAILED);
         SSL_CHECK(SSL_CTX_use_PrivateKey_file(
-                      res->sslctx, key, SSL_FILETYPE_PEM), CLEANUP);
-        SSL_CHECK(SSL_CTX_check_private_key(res->sslctx), CLEANUP);
+                      res->sslctx, key, SSL_FILETYPE_PEM), FAILED);
+        SSL_CHECK(SSL_CTX_check_private_key(res->sslctx), FAILED);
+    }
+
+    if (servername) {
+        char buf[1024];
+        strcpy(buf, servername);
+        SSL_CTX_set_tlsext_servername_arg(res->sslctx, buf);
     }
 
     res->session = SSL_new(res->sslctx);
@@ -1366,39 +1372,37 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
 #else
     if (ca || (cert && key))
         SSL_CHECK(gnutls_certificate_allocate_credentials(
-                      &res->cred), FAILEDPOINT);
+                      &res->cred), FAILED);
     if (ca)
         SSL_CHECK(gnutls_certificate_set_x509_trust_file(
-                      res->cred, ca, GNUTLS_X509_FMT_PEM), FAILEDPOINT);
+                      res->cred, ca, GNUTLS_X509_FMT_PEM), FAILED);
     if (cert && key)
         SSL_CHECK(gnutls_certificate_set_x509_key_file(
-                      res->cred, cert, key, GNUTLS_X509_FMT_PEM),
-                  FAILEDPOINT);
+                      res->cred, cert, key, GNUTLS_X509_FMT_PEM), FAILED);
 
-    SSL_CHECK(gnutls_init(&res->session, GNUTLS_CLIENT), FAILEDPOINT);
+    SSL_CHECK(gnutls_init(&res->session, GNUTLS_CLIENT), FAILED);
 
     if (servername) {
         SSL_CHECK(gnutls_server_name_set(
                       res->session, GNUTLS_NAME_DNS, servername,
-                      strlen(servername)), FAILEDPOINT);
+                      strlen(servername)), FAILED);
         gnutls_session_set_verify_cert(res->session, servername, 0);
     }
 
-    SSL_CHECK(gnutls_set_default_priority(res->session), FAILEDPOINT);
+    SSL_CHECK(gnutls_set_default_priority(res->session), FAILED);
     if (res->cred) {
         SSL_CHECK(gnutls_credentials_set(
-                      res->session, GNUTLS_CRD_CERTIFICATE, res->cred),
-                  FAILEDPOINT);
+                      res->session, GNUTLS_CRD_CERTIFICATE, res->cred), FAILED);
     }
 #endif  // !CMUTIL_SSL_USE_OPENSSL
     if (CMUTIL_SocketConnectBase(
                 (CMUTIL_Socket_Internal*)res, host, port, timeout, silent)) {
-        int ir;
         // handshake
 #if defined(CMUTIL_SSL_USE_OPENSSL)
         SSL_set_fd(res->session, res->base.sock);
-        SSL_CHECK(SSL_connect(res->session), FAILEPOINT);
+        SSL_CHECK(SSL_connect(res->session), FAILED);
 #else
+        int ir;
         gnutls_transport_set_int(res->session, res->base.sock);
         gnutls_handshake_set_timeout(
                     res->session, GNUTLS_DEFAULT_HANDSHAKE_TIMEOUT);
@@ -1426,14 +1430,14 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
                 }
                 CMLogError("SSL handshake failed : %s", gnutls_strerror(ir));
             }
-            goto FAILEDPOINT;
+            goto FAILED;
         }
 #endif  // !CMUTIL_SSL_USE_OPENSSL
         return (CMUTIL_Socket*)res;
     } else if (!silent) {
         CMLogError("CMUTIL_SocketConnectBase() failed.");
     }
-FAILEDPOINT:
+FAILED:
     CMCall((CMUTIL_Socket*)res, Close);
     return NULL;
 }
@@ -1455,14 +1459,14 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLServerSocketAccept(
 #if defined(CMUTIL_SSL_USE_OPENSSL)
         res->session = SSL_new(issock->sslctx);
         SSL_set_fd(res->session, res->base.sock);
-        SSL_CHECK(SSL_accept(res->session), FAILEDPOINT);
+        SSL_CHECK(SSL_accept(res->session), FAILED);
 #else
-        SSL_CHECK(gnutls_init(&(res->session), GNUTLS_SERVER), FAILEDPOINT);
+        SSL_CHECK(gnutls_init(&(res->session), GNUTLS_SERVER), FAILED);
         SSL_CHECK(gnutls_priority_set(
-                      res->session, issock->priority_cache), FAILEDPOINT);
+                      res->session, issock->priority_cache), FAILED);
         SSL_CHECK(gnutls_credentials_set(
                       res->session, GNUTLS_CRD_CERTIFICATE, issock->cred),
-                  FAILEDPOINT);
+                  FAILED);
 
         gnutls_handshake_set_timeout(
                     res->session, GNUTLS_DEFAULT_HANDSHAKE_TIMEOUT);
@@ -1474,11 +1478,11 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLServerSocketAccept(
             handshake_res = gnutls_handshake(res->session);
         } while (handshake_res < 0 &&
                  gnutls_error_is_fatal(handshake_res) == 0);
-        SSL_CHECK(handshake_res, FAILEDPOINT);
+        SSL_CHECK(handshake_res, FAILED);
 #endif  // !CMUTIL_SSL_USE_OPENSSL
     }
     return (CMUTIL_Socket*)res;
-FAILEDPOINT:
+FAILED:
     CMCall((CMUTIL_Socket*)res, Close);
     return NULL;
 }
@@ -1524,41 +1528,41 @@ CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreateInternal(
     if (CMUTIL_ServerSocketCreateBase(
                 (CMUTIL_ServerSocket_Internal*)res, host, port, qcnt)) {
 #if defined(CMUTIL_SSL_USE_OPENSSL)
-        static const SSL_METHOD *method = SSLv23_server_method();
+        const SSL_METHOD *method = SSLv23_server_method();
         res->sslctx = SSL_CTX_new(method);
         if (res->sslctx == NULL && !silent) {
             char buf[1024];
             ERR_error_string(ERR_peek_last_error(), buf);
             CMLogError("Unable to create SSL context : %s", buf);
-            goto FAILEDPOINT;
+            goto FAILED;
         }
         if (ca)
             SSL_CHECK(SSL_CTX_use_certificate_chain_file(
-                          res->sslctx, ca), FAILEDPOINT);
+                          res->sslctx, ca), FAILED);
         SSL_CHECK(SSL_CTX_use_certificate_file(
-                      res->sslctx, cert, SSL_FILETYPE_PEM), FAILEDPOINT);
+                      res->sslctx, cert, SSL_FILETYPE_PEM), FAILED);
         SSL_CHECK(SSL_CTX_use_PrivateKey_file(
-                      res->sslctx, key, SSL_FILETYPE_PEM), FAILEDPOINT);
+                      res->sslctx, key, SSL_FILETYPE_PEM), FAILED);
 
-        SSL_CHECK(SSL_CTX_check_private_key(res->sslctx), FAILEDPOINT);
+        SSL_CHECK(SSL_CTX_check_private_key(res->sslctx), FAILED);
 #else
         SSL_CHECK(gnutls_certificate_allocate_credentials(
-                      &(res->cred)), FAILEDPOINT);
+                      &(res->cred)), FAILED);
         // CA file(ex. "/etc/ssl/certs/ca-certificates.crt")
         if (ca)
             SSL_CHECK(gnutls_certificate_set_x509_trust_file(
-                          res->cred, ca, GNUTLS_X509_FMT_PEM), FAILEDPOINT);
+                          res->cred, ca, GNUTLS_X509_FMT_PEM), FAILED);
         // CERT file(ex. "cert.pem"), KEY file(ex. "key.pem")
         SSL_CHECK(gnutls_certificate_set_x509_key_file(
                       res->cred, cert, key,
-                      GNUTLS_X509_FMT_PEM), FAILEDPOINT);
+                      GNUTLS_X509_FMT_PEM), FAILED);
         SSL_CHECK(gnutls_priority_init(
-                      &(res->priority_cache), NULL, NULL), FAILEDPOINT);
+                      &(res->priority_cache), NULL, NULL), FAILED);
 # if GNUTLS_VERSION_NUMBER >= 0x030506
         /* only available since GnuTLS 3.5.6, on previous versions see
          * gnutls_certificate_set_dh_params(). */
         SSL_CHECK(gnutls_certificate_set_known_dh_params(
-                    res->cred, GNUTLS_SEC_PARAM_MEDIUM), FAILEDPOINT);
+                    res->cred, GNUTLS_SEC_PARAM_MEDIUM), FAILED);
 # else
         gnutls_dh_params_init(&res->dh_params);
         gnutls_dh_params_generate2(res->dh_params, 1024);
@@ -1567,7 +1571,7 @@ CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreateInternal(
 #endif
         return (CMUTIL_ServerSocket*)res;
     }
-FAILEDPOINT:
+FAILED:
     CMCall((CMUTIL_ServerSocket*)res, Close);
     return NULL;
 }
