@@ -57,3 +57,9 @@ void CMUTIL_UnusedP(void *p,...)
     (void)(p);
     // do nothing.
 }
+
+const char *CMUTIL_GetLibVersion()
+{
+    static char *verstr = LIBCMUTIL_VER;
+    return verstr;
+}
