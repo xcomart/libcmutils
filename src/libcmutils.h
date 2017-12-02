@@ -96,6 +96,17 @@ extern "C" {
 # define pid_t      DWORD
 #endif
 
+#define LIBCMUTIL_VER_MAJOR     0
+#define LIBCMUTIL_VER_MINOR     1
+#define LIBCMUTIL_VER_PATCH     0
+
+#define CMUTIL_TOSTR(x)         #x
+
+#define LIBCMUTIL_VER \
+    CMUTIL_TOSTR(LIBCMUTIL_VER_MAJOR)"."\
+    CMUTIL_TOSTR(LIBCMUTIL_VER_MINOR)"."\
+    CMUTIL_TOSTR(LIBCMUTIL_VER_PATCH)
+
 /**
  * @defgroup CMUTIL Types.
  * @{
@@ -239,6 +250,8 @@ typedef enum CMUTIL_MemOper {
      */
     CMUTIL_MemDebug
 } CMUTIL_MemOper;
+
+CMUTIL_API const char *CMUTIL_GetLibVersion(void);
 
 /**
  * @brief Initialize this library. This function must be called before calling
