@@ -1560,7 +1560,7 @@ CMUTIL_API CMUTIL_StackWalker *CMUTIL_StackWalkerCreate(void);
 typedef enum CMUTIL_SocketResult {
     CMUTIL_SocketOk = 0,
     CMUTIL_SocketTimeout,
-    CMUTIL_SocketSelectFailed,
+    CMUTIL_SocketPollFailed,
     CMUTIL_SocketReceiveFailed,
     CMUTIL_SocketSendFailed,
     CMUTIL_SocketUnsupported,
