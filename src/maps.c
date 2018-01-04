@@ -375,7 +375,7 @@ static CMUTIL_Map g_cmutil_map = {
 
 CMUTIL_Map *CMUTIL_MapCreateInternal(
         CMUTIL_Mem *memst, uint32_t bucketsize,
-        CMBool isucase, void(*freecb)(void*))
+        CMBool isucase, CMFreeCB freecb)
 {
     CMUTIL_Map_Internal *imap = memst->Alloc(sizeof(CMUTIL_Map_Internal));
     memset(imap, 0x0, sizeof(CMUTIL_Map_Internal));
@@ -395,7 +395,7 @@ CMUTIL_Map *CMUTIL_MapCreateInternal(
 }
 
 CMUTIL_Map *CMUTIL_MapCreateEx(
-        uint32_t bucketsize, CMBool isucase, void(*freecb)(void*))
+        uint32_t bucketsize, CMBool isucase, CMFreeCB freecb)
 {
     return CMUTIL_MapCreateInternal(
                 CMUTIL_GetMem(), bucketsize, isucase, freecb);

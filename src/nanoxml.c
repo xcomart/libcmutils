@@ -681,7 +681,6 @@ PARSE_NEXT:
                 CMUTIL_XmlNextSub(NULL, ctx, (uint64_t)(p - ctx->pos + 1));
                 goto PARSE_NEXT;
             }
-            break;
         default:
             // may be normal node
             DO_OBJ(CMUTIL_XmlNextToken(tagname, ctx));
@@ -709,7 +708,6 @@ PARSE_NEXT:
                 CMLogErrorS("invalid xml");
                 return NULL;
             }
-            break;
         }
     } else if (parent) {
         // text node
@@ -822,7 +820,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(
 {
     uint32_t i, ccnt;
     CMUTIL_Json *prev;
-    CMUTIL_Json *res;
+    CMUTIL_Json *res = NULL;
     CMUTIL_JsonObject *parent;
     CMUTIL_StringArray *attrnames;
     CMBool isattr = CMFalse;
@@ -845,7 +843,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(
             const char *svalue = CMCall(value, GetCString);
             prev = CMCall(ores, Get, sname);
             if (prev) {
-                if (CMCall(prev, GetType) == CMUTIL_JsonTypeArray) {
+                if (CMCall(prev, GetType) == CMJsonTypeArray) {
                     CMCall((CMUTIL_JsonArray*)prev, AddString, svalue);
                 } else {
                     CMUTIL_JsonArray *arr =
@@ -890,7 +888,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(
     }
     prev = CMCall(parent, Get, name);
     if (prev) {
-        if (CMCall(prev, GetType) == CMUTIL_JsonTypeArray) {
+        if (CMCall(prev, GetType) == CMJsonTypeArray) {
             CMCall((CMUTIL_JsonArray*)prev, Add, res);
         } else {
             CMUTIL_JsonArray *arr =

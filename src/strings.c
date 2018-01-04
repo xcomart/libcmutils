@@ -22,7 +22,7 @@
 #include <ctype.h>
 
 #if defined(_MSC_VER)
-struct CMUTIL_CSPair {
+static struct CMUTIL_CSPair {
     char    *csname;
     int     cpno;
 } g_msvc_cspiars[] = {
@@ -188,7 +188,7 @@ void CMUTIL_StringBaseInit()
     struct CMUTIL_CSPair *pair = NULL;
     g_cmutil_csmap = CMUTIL_MapCreateEx(CMUTIL_MAP_DEFAULT, CMTrue, NULL);
     pair = g_msvc_cspiars;
-    while (pair) {
+    while (pair->csname) {
         CMCall(g_cmutil_csmap, Put, pair->csname, pair);
         pair++;
     }
@@ -481,6 +481,34 @@ CMUTIL_STATIC void CMUTIL_StringDestroy(CMUTIL_String *string)
     }
 }
 
+CMUTIL_STATIC void CMUTIL_StringSelfTrim(CMUTIL_String *string)
+{
+    CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
+    if (istr) {
+
+        // right trim
+        size_t len = istr->size;
+        register char *p = istr->data + len - 1;
+        while (strchr(SPACES, *p) && (p > istr->data)) {
+            p--; len--;
+        }
+        *(p+1) = 0x0;
+
+        // left trim
+        p = istr->data;
+        while (strchr(SPACES, *p) && *p) {
+            p++; len--;
+        }
+
+        // move to front of buffer
+        if (p > istr->data)
+            memmove(istr->data, p, len+1);
+
+        // size reset
+        istr->size = len;
+    }
+}
+
 static CMUTIL_String g_cmutil_string = {
     CMUTIL_StringAddString,
     CMUTIL_StringAddNString,
@@ -504,7 +532,8 @@ static CMUTIL_String g_cmutil_string = {
     CMUTIL_StringGetCString,
     CMUTIL_StringClear,
     CMUTIL_StringClone,
-    CMUTIL_StringDestroy
+    CMUTIL_StringDestroy,
+    CMUTIL_StringSelfTrim
 };
 
 CMUTIL_String *CMUTIL_StringCreateInternal(

@@ -22,7 +22,7 @@
 //static CMUTIL_Mutex *g_cmutil_init_mutex = NULL;
 static int g_cmutil_init_cnt = 0;
 
-void CMUTIL_Init(CMUTIL_MemOper memoper)
+void CMUTIL_Init(CMMemOper memoper)
 {
     if (g_cmutil_init_cnt == 0) {
         CMUTIL_CallStackInit();

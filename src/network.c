@@ -69,7 +69,7 @@ int CMUTIL_NetworkGetHostByNameR(const char *name,
 #define declen(sz) do {                                 \
     if (buflen - sz - 1 > 0) buflen -= sz;              \
     else {                                              \
-        CMCall(g_cmutil_hostbyname_mutex, Unlock); \
+        CMCall(g_cmutil_hostbyname_mutex, Unlock);      \
         return -1;                                      \
     } } while(0)
 
@@ -178,10 +178,17 @@ void CMUTIL_NetworkInit()
 #else
     signal(SIGPIPE, SIG_IGN);
 #endif
-#if defined(CMUTIL_SUPPORT_SSL) && defined(CMUTIL_SSL_USE_OPENSSL)
+#if defined(CMUTIL_SUPPORT_SSL)
+# if defined(CMUTIL_SSL_USE_OPENSSL)
+    SSL_load_error_strings();
+    OpenSSL_add_ssl_algorithms();
+
     CMUTIL_SSL_InitOpenSSLLocks();
     CRYPTO_set_locking_callback(CMUTIL_SSL_LockCallback);
     CRYPTO_set_id_callback(CMUTIL_SSL_IDCallback);
+# else
+    gnutls_global_init();
+# endif
 #endif
 }
 
@@ -192,10 +199,17 @@ void CMUTIL_NetworkClear()
 #elif defined(APPLE)
     CMCall(g_cmutil_hostbyname_mutex, Destroy);
 #endif
-#if defined(CMUTIL_SUPPORT_SSL) && defined(CMUTIL_SSL_USE_OPENSSL)
+#if defined(CMUTIL_SUPPORT_SSL)
+# if defined(CMUTIL_SSL_USE_OPENSSL)
     CRYPTO_set_id_callback(NULL);
     CRYPTO_set_locking_callback(NULL);
     CMUTIL_SSL_ClearOpenSSLLocks();
+
+    EVP_cleanup();
+    ERR_free_strings();
+# else
+    gnutls_global_deinit();
+# endif
 #endif
 }
 
@@ -1494,14 +1508,11 @@ FAILED:
 CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLServerSocketAccept(
         const CMUTIL_ServerSocket *server, long timeout)
 {
-#if !defined(CMUTIL_SSL_USE_OPENSSL)
-    int handshake_res;
-#endif
     const CMUTIL_SSLServerSocket_Internal *issock =
             (const CMUTIL_SSLServerSocket_Internal*)server;
-    CMUTIL_SSLSocket_Internal *res = CMUTIL_SSLSocketCreate(
-                issock->base.memst, CMFalse);
     CMBool silent = issock->base.silent;
+    CMUTIL_SSLSocket_Internal *res = CMUTIL_SSLSocketCreate(
+                issock->base.memst, silent);
 
     if (CMUTIL_ServerSocketAcceptInternal(
                 server, (CMUTIL_Socket*)res, timeout)) {
@@ -1510,6 +1521,7 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLServerSocketAccept(
         SSL_set_fd(res->session, res->base.sock);
         SSL_CHECK(SSL_accept(res->session), FAILED);
 #else
+        int handshake_res;
         SSL_CHECK(gnutls_init(&(res->session), GNUTLS_SERVER), FAILED);
         SSL_CHECK(gnutls_priority_set(
                       res->session, issock->priority_cache), FAILED);

@@ -1,0 +1,49 @@
+// CMUTIL Logging System configuration
+{
+    "configuration": {
+        "appenders": [
+            {
+                "name": "SampleConsoleAppender",
+                "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",
+                "async": true,
+                "asyncBufferSize": 512,
+                "type": "Console",  // can be one of (console, file, rollingfile, socket)
+            },{
+                "name": "SampleFileAppender",
+                "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",
+                "async": true,
+                "asyncBufferSize": 512,
+                "type": "File",  // can be one of (console, file, rollingfile, socket)
+                "fileName": "log/sample_file_log.log",
+            },{
+                "name": "SampleRollingFileAppender",
+                "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",
+                "async": true,
+                "asyncBufferSize": 512,
+                "type": "RollingFile",  // can be one of (console, file, rollingfile, socket)
+                "fileName": "log/sample_rolling_file_log.log",
+                "rollterm": "date"  // can be one of (year, month, day, hour, minute)
+            },{
+                "name": "SampleSocketAppender",
+                "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",
+                "async": true,
+                "asyncBufferSize": 512,
+                "type": "Socket",  // can be one of (console, file, rollingfile, socket)
+                "listenPort": 9123,
+                "acceptHost": "INADDR_ANY"
+            }
+        ],
+        "loggers": [
+            {   // ROOT logger
+                "type": "root",
+                "level": "INFO",
+                "appenderRef":["SampleConsoleAppender","SampleRollingFileAppender"]
+            },{
+                "name": "cmutil.network",
+                "additive": false,
+                "level": "TRACE",
+                "appenderRef": "SampleConsoleAppender"
+            }
+        ]
+    }
+}

@@ -98,7 +98,8 @@ DISTFILES += \
     Makefile.in \
     demo/Makefile.am \
     demo/Makefile.in \
-    VERSION
+    VERSION \
+    demo/cmutil_log.json
 
 !win32-msvc* {
     INCLUDE_TARGET.commands += mkdir -p $$BUILD_DIR/include;\
