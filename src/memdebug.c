@@ -41,7 +41,7 @@ static CMUTIL_Mem g_cmutil_memdebug_system = {
 
 static CMUTIL_Mem *__CMUTIL_Mem = &g_cmutil_memdebug_system;
 
-static CMUTIL_MemOper g_cmutil_memoper = CMUTIL_MemSystem;
+static CMMemOper g_cmutil_memoper = CMMemSystem;
 static CMUTIL_StackWalker *g_cmutil_memstackwalker = NULL;
 static CMUTIL_Mutex *g_cmutil_memlog_mutex = NULL;
 
@@ -217,7 +217,7 @@ CMUTIL_STATIC void *CMUTIL_MemRcyAlloc(size_t size)
     node->next = NULL;
     node->flag = 0xFF;	// underflow writing checker
     *((uint8_t*)res + sizeof(CMUTIL_MemNode) + size) = 0xFF;	// overflow writing checker
-    if (g_cmutil_memoper == CMUTIL_MemDebug) {
+    if (g_cmutil_memoper == CMMemDebug) {
         node->stack = CMUTIL_StringCreateInternal(
                     &g_cmutil_memdebug_system, 256, NULL);
         CMCall(g_cmutil_memstackwalker, PrintStack, node->stack, 0);
@@ -271,7 +271,7 @@ CMUTIL_STATIC CMBool CMUTIL_MemCheckFlow(CMUTIL_MemNode *node)
 CMUTIL_STATIC void CMUTIL_MemRcyFree(void *ptr)
 {
     CMUTIL_MemNode *node =
-            (CMUTIL_MemNode*)(((char*)ptr) - sizeof(CMUTIL_MemNode));
+            (CMUTIL_MemNode*)(((CMUTIL_MemNode*)ptr) - 1);
     CMUTIL_MemRcyList *list = &g_cmutil_memrcyblocks[node->index];
 
     if (CMCall(list->used, Remove, node) == NULL) {
@@ -301,7 +301,7 @@ CMUTIL_STATIC void CMUTIL_MemRcyFree(void *ptr)
 CMUTIL_STATIC void *CMUTIL_MemRcyRealloc(void *ptr, size_t size)
 {
     CMUTIL_MemNode *node =
-            (CMUTIL_MemNode*)(((char*)ptr) - sizeof(CMUTIL_MemNode));
+            (CMUTIL_MemNode*)(((CMUTIL_MemNode*)ptr) - 1);
     int nidx = CMUTIL_MemRcyIndex(size);
     if (node->index >= MEM_BLOCK_SZ) {
         CMUTIL_MemLogWithStack("*** FATAL - memory index out of bound. "
@@ -326,7 +326,7 @@ CMUTIL_STATIC void *CMUTIL_MemRcyRealloc(void *ptr, size_t size)
         // update stack information
         if (node->stack)
             CMCall(node->stack, Destroy);
-        if (g_cmutil_memoper == CMUTIL_MemDebug) {
+        if (g_cmutil_memoper == CMMemDebug) {
             node->stack = CMUTIL_StringCreateInternal(
                         &g_cmutil_memdebug_system, 256, NULL);
             CMCall(g_cmutil_memstackwalker, PrintStack, node->stack, 0);
@@ -381,11 +381,11 @@ CMUTIL_STATIC void CMUTIL_MemRcyInit()
                 &g_cmutil_memdebug_system);
 }
 
-void CMUTIL_MemDebugInit(CMUTIL_MemOper memoper)
+void CMUTIL_MemDebugInit(CMMemOper memoper)
 {
     g_cmutil_memoper = memoper;
     switch (memoper) {
-    case CMUTIL_MemSystem:
+    case CMMemSystem:
         // do nothing
         break;
     default:
@@ -395,7 +395,7 @@ void CMUTIL_MemDebugInit(CMUTIL_MemOper memoper)
 
 void CMUTIL_MemDebugClear()
 {
-    if (g_cmutil_memoper != CMUTIL_MemSystem) {
+    if (g_cmutil_memoper != CMMemSystem) {
         uint32_t i;
         for (i=0; i<MEM_BLOCK_SZ; i++) {
             CMUTIL_MemRcyList *list = &g_cmutil_memrcyblocks[i];
@@ -404,7 +404,7 @@ void CMUTIL_MemDebugClear()
                 CMUTIL_MemLog("*** FATAL - index:%d count:%d total:%ld byte "
                         "memory leak detected.",
                         i, list->cnt - list->avlcnt, list->usedsize);
-                if (g_cmutil_memoper == CMUTIL_MemDebug) {
+                if (g_cmutil_memoper == CMMemDebug) {
                     uint32_t j;
                     for (j=0; j<CMCall(list->used, GetSize); j++) {
                         CMUTIL_MemNode *node = (CMUTIL_MemNode*)CMCall(
@@ -432,7 +432,7 @@ void CMUTIL_MemDebugClear()
             g_cmutil_memlog_mutex = NULL;
         }
         __CMUTIL_Mem = &g_cmutil_memdebug_system;
-        g_cmutil_memoper = CMUTIL_MemSystem;
+        g_cmutil_memoper = CMMemSystem;
     }
 }
 

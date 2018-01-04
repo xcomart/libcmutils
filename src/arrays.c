@@ -25,16 +25,19 @@ CMUTIL_LogDefine("cmutil.array")
 // CMUTIL_Array implementation
 //*****************************************************************************
 
+/**
+ * @brief Implementation structure of CMUTIL_Array.
+ */
 typedef struct CMUTIL_Array_Internal {
-    CMUTIL_Array	base;
-    CMBool		issorted;
+    CMUTIL_Array    base;           // CMUTIL_Array interface
+    void            **data;
+    size_t          capacity;
+    size_t          size;
+    CMCompareCB    comparator;
+    CMFreeCB        freecb;
+    CMUTIL_Mem      *memst;
+    CMBool          issorted;       // sorted array or not
     int             dummy_padder;
-    void			**data;
-    size_t			capacity;
-    size_t			size;
-    int				(*comparator)(const void*,const void*);
-    void			(*freecb)(void*);
-    CMUTIL_Mem	    *memst;
 } CMUTIL_Array_Internal;
 
 CMUTIL_STATIC void CMUTIL_ArrayCheckSize(
@@ -379,8 +382,8 @@ static CMUTIL_Array g_cmutil_array = {
 CMUTIL_Array *CMUTIL_ArrayCreateInternal(
         CMUTIL_Mem *mem,
         size_t initcapacity,
-        int(*comparator)(const void*,const void*),
-        void(*freecb)(void*),
+        CMCompareCB comparator,
+        CMFreeCB freecb,
         CMBool sorted)
 {
     CMUTIL_Array_Internal *iarray = mem->Alloc(sizeof(CMUTIL_Array_Internal));
@@ -397,10 +400,9 @@ CMUTIL_Array *CMUTIL_ArrayCreateInternal(
     return (CMUTIL_Array*)iarray;
 }
 
-CMUTIL_Array *CMUTIL_ArrayCreateEx(
-        size_t initcapacity,
-        int(*comparator)(const void*,const void*),
-        void(*freecb)(void*))
+CMUTIL_Array *CMUTIL_ArrayCreateEx(size_t initcapacity,
+        CMCompareCB comparator,
+        CMFreeCB freecb)
 {
     return CMUTIL_ArrayCreateInternal(
                 CMUTIL_GetMem(), initcapacity,

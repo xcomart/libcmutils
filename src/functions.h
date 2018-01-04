@@ -57,15 +57,14 @@ void CMUTIL_NetworkInit(void);
 void CMUTIL_NetworkClear(void);
 void CMUTIL_StringBaseInit(void);
 void CMUTIL_StringBaseClear(void);
-void CMUTIL_MemDebugInit(CMUTIL_MemOper memoper);
+void CMUTIL_MemDebugInit(CMMemOper memoper);
 void CMUTIL_MemDebugClear(void);
 
 
-CMUTIL_Array *CMUTIL_ArrayCreateInternal(
-        CMUTIL_Mem *mem,
+CMUTIL_Array *CMUTIL_ArrayCreateInternal(CMUTIL_Mem *mem,
         size_t initcapacity,
-        int(*comparator)(const void*,const void*),
-        void(*freecb)(void*),
+        CMCompareCB comparator,
+        CMFreeCB freecb,
         CMBool sorted);
 
 CMUTIL_StackWalker *CMUTIL_StackWalkerCreateInternal(
@@ -95,8 +94,7 @@ CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_Config *CMUTIL_ConfigLoadInternal(
         CMUTIL_Mem *memst, const char *fconf);
 
-CMUTIL_List *CMUTIL_ListCreateInternal(
-        CMUTIL_Mem *memst, void(*freecb)(void*));
+CMUTIL_List *CMUTIL_ListCreateInternal(CMUTIL_Mem *memst, CMFreeCB freecb);
 
 CMUTIL_LogAppender *CMUTIL_LogConsoleAppenderCreateInternal(
         CMUTIL_Mem *memst, const char *name, const char *pattern);
@@ -105,7 +103,7 @@ CMUTIL_LogAppender *CMUTIL_LogFileAppenderCreateInternal(
         const char *fpath, const char *pattern);
 CMUTIL_LogAppender *CMUTIL_LogRollingFileAppenderCreateInternal(
         CMUTIL_Mem *memst, const char *name,
-        const char *fpath, CMUTIL_LogTerm logterm,
+        const char *fpath, CMLogTerm logterm,
         const char *rollpath, const char *pattern);
 CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreateInternal(
         CMUTIL_Mem *memst, const char *name, const char *accept_host,
@@ -120,7 +118,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJsonInternal(
 CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem *memst);
 
 CMUTIL_Map *CMUTIL_MapCreateInternal(CMUTIL_Mem *memst, uint32_t bucketsize,
-        CMBool isucase, void(*freecb)(void*));
+        CMBool isucase, CMFreeCB freecb);
 
 CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem *memst);
@@ -160,12 +158,11 @@ CMBool CMUTIL_PatternMatch(const char *pat, const char *fname);
 CMBool CMUTIL_PatternMatchN(const char *pat, const char *fname);
 
 
-CMUTIL_Pool *CMUTIL_PoolCreateInternal(
-        CMUTIL_Mem *memst,
+CMUTIL_Pool *CMUTIL_PoolCreateInternal(CMUTIL_Mem *memst,
         int initcnt, int maxcnt,
-        void *(*createproc)(void *),
-        void (*destroyproc)(void *, void *),
-        CMBool (*testproc)(void *, void *),
+        CMPoolItemCreateCB createproc,
+        CMPoolItemFreeCB destroyproc,
+        CMPoolItemTestCB testproc,
         long pinginterval,
         CMBool testonborrow,
         void *udata, CMUTIL_Timer *timer);

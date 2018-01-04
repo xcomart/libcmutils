@@ -161,9 +161,9 @@ static CMUTIL_Pool g_cmutil_pool = {
 CMUTIL_Pool *CMUTIL_PoolCreateInternal(
         CMUTIL_Mem *memst,
         int initcnt, int maxcnt,
-        void *(*createproc)(void *),
-        void (*destroyproc)(void *, void *),
-        CMBool (*testproc)(void *, void *),
+        CMPoolItemCreateCB createproc,
+        CMPoolItemFreeCB destroyproc,
+        CMPoolItemTestCB testproc,
         long pinginterval,
         CMBool testonborrow,
         void *udata, CMUTIL_Timer *timer)
@@ -197,9 +197,9 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
 
 CMUTIL_Pool *CMUTIL_PoolCreate(
         int initcnt, int maxcnt,
-        void *(*createproc)(void *),
-        void (*destroyproc)(void *, void *),
-        CMBool (*testproc)(void *, void *),
+        CMPoolItemCreateCB createproc,
+        CMPoolItemFreeCB destroyproc,
+        CMPoolItemTestCB testproc,
         long pinginterval, CMBool testonborrow,
         void *udata, CMUTIL_Timer *timer)
 {

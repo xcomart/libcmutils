@@ -226,7 +226,7 @@ static CMUTIL_List g_cmutil_list = {
 };
 
 CMUTIL_List *CMUTIL_ListCreateInternal(
-        CMUTIL_Mem *memst, void(*freecb)(void*))
+        CMUTIL_Mem *memst, CMFreeCB freecb)
 {
     CMUTIL_List_Internal *ilist = memst->Alloc(sizeof(CMUTIL_List_Internal));
     memset(ilist, 0x0, sizeof(CMUTIL_List_Internal));
@@ -236,7 +236,7 @@ CMUTIL_List *CMUTIL_ListCreateInternal(
     return (CMUTIL_List*)ilist;
 }
 
-CMUTIL_List *CMUTIL_ListCreateEx(void(*freecb)(void*))
+CMUTIL_List *CMUTIL_ListCreateEx(CMFreeCB freecb)
 {
     return CMUTIL_ListCreateInternal(CMUTIL_GetMem(), freecb);
 }

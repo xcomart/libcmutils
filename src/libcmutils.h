@@ -211,6 +211,9 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
 // for backward compatibility
 #define CMUTIL_CALL CMUTIL_CALL__
 
+typedef int (*CMCompareCB)(const void*, const void*);
+typedef void (*CMFreeCB)(void*);
+
 /**
  * @defgroup CMUTILS_Initialization Initialization and memory operations.
  * @{
@@ -236,20 +239,20 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
  * @typedef CMUTIL_MemOper Memory operation types.
  * Refer CMUTIL_Init function for details.
  */
-typedef enum CMUTIL_MemOper {
+typedef enum CMMemOper {
     /**
      * Use system version malloc, realloc, strdup and free.
      */
-    CMUTIL_MemSystem = 0,
+    CMMemSystem = 0,
     /**
      * Use memory recycle technique.
      */
-    CMUTIL_MemRecycle,
+    CMMemRecycle,
     /**
      * Use memory operation with debugging informations.
      */
-    CMUTIL_MemDebug
-} CMUTIL_MemOper;
+    CMMemDebug
+} CMMemOper;
 
 CMUTIL_API const char *CMUTIL_GetLibVersion(void);
 
@@ -277,8 +280,7 @@ CMUTIL_API const char *CMUTIL_GetLibVersion(void);
  *  CMUTIL_MemRelease, CMUTIL_MemDebug and CMUTIL_MemRecycle.
  *
  */
-CMUTIL_API void CMUTIL_Init(
-        CMUTIL_MemOper memoper);
+CMUTIL_API void CMUTIL_Init(CMMemOper memoper);
 
 /**
  * @brief Clear allocated resource for this library.
@@ -961,8 +963,8 @@ struct CMUTIL_Array {
  */
 CMUTIL_API CMUTIL_Array *CMUTIL_ArrayCreateEx(
         size_t initcapacity,
-        int (*comparator)(const void*,const void*),
-        void(*freecb)(void*));
+        CMCompareCB comparator,
+        CMFreeCB freecb);
 
 
 typedef struct CMUTIL_String CMUTIL_String;
@@ -1016,6 +1018,7 @@ struct CMUTIL_String {
             const CMUTIL_String *string);
     void (*Destroy)(
             CMUTIL_String *string);
+    void (*SelfTrim)(CMUTIL_String *string);
 };
 
 #define CMUTIL_STRING_DEFAULT   32
@@ -1090,7 +1093,7 @@ struct CMUTIL_Map {
 #define CMUTIL_MapCreate()	CMUTIL_MapCreateEx(\
         CMUTIL_MAP_DEFAULT, CMFalse, NULL)
 CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
-        uint32_t bucketsize, CMBool isucase, void(*freecb)(void*));
+        uint32_t bucketsize, CMBool isucase, CMFreeCB freecb);
 
 
 typedef struct CMUTIL_List CMUTIL_List;
@@ -1108,7 +1111,7 @@ struct CMUTIL_List {
 };
 
 #define CMUTIL_ListCreate() CMUTIL_ListCreateEx(NULL)
-CMUTIL_API CMUTIL_List *CMUTIL_ListCreateEx(void(*freecb)(void*));
+CMUTIL_API CMUTIL_List *CMUTIL_ListCreateEx(CMFreeCB freecb);
 
 
 
@@ -1207,12 +1210,16 @@ struct CMUTIL_Pool {
     void (*Destroy)(CMUTIL_Pool *pool);
 };
 
+typedef void* (*CMPoolItemCreateCB)(void *udata);
+typedef void (*CMPoolItemFreeCB)(void *resource, void *udata);
+typedef CMBool (*CMPoolItemTestCB)(void *resource, void *udata);
+
 CMUTIL_API CMUTIL_Pool *CMUTIL_PoolCreate(
         int initcnt,
         int maxcnt,
-        void *(*createproc)(void *udata),
-        void (*destroyproc)(void *resource, void *udata),
-        CMBool (*testproc)(void *resource, void *udata),
+        CMPoolItemCreateCB createproc,
+        CMPoolItemFreeCB destroyproc,
+        CMPoolItemTestCB testproc,
         long pinginterval,
         CMBool testonborrow,
         void *udata,
@@ -1405,22 +1412,22 @@ CMUTIL_API CMUTIL_Config *CMUTIL_ConfigCreate(void);
 CMUTIL_API CMUTIL_Config *CMUTIL_ConfigLoad(const char *fconf);
 
 
-typedef enum CMUTIL_LogLevel {
-    CMUTIL_LogLevel_Trace = 0,
-    CMUTIL_LogLevel_Debug,
-    CMUTIL_LogLevel_Info,
-    CMUTIL_LogLevel_Warn,
-    CMUTIL_LogLevel_Error,
-    CMUTIL_LogLevel_Fatal
-} CMUTIL_LogLevel;
+typedef enum CMLogLevel {
+    CMLogLevel_Trace = 0,
+    CMLogLevel_Debug,
+    CMLogLevel_Info,
+    CMLogLevel_Warn,
+    CMLogLevel_Error,
+    CMLogLevel_Fatal
+} CMLogLevel;
 
-typedef enum CMUTIL_LogTerm {
-    CMUTIL_LogTerm_Year = 0,
-    CMUTIL_LogTerm_Month,
-    CMUTIL_LogTerm_Date,
-    CMUTIL_LogTerm_Hour,
-    CMUTIL_LogTerm_Minute
-} CMUTIL_LogTerm;
+typedef enum CMLogTerm {
+    CMLogTerm_Year = 0,
+    CMLogTerm_Month,
+    CMLogTerm_Date,
+    CMLogTerm_Hour,
+    CMLogTerm_Minute
+} CMLogTerm;
 
 typedef struct CMUTIL_LogAppender CMUTIL_LogAppender;
 
@@ -1429,14 +1436,14 @@ struct CMUTIL_ConfLogger {
     void(*AddAppender)(
         const CMUTIL_ConfLogger *logger,
         CMUTIL_LogAppender *appender,
-        CMUTIL_LogLevel level);
+        CMLogLevel level);
 };
 
 typedef struct CMUTIL_Logger CMUTIL_Logger;
 struct CMUTIL_Logger {
     void(*LogEx)(
         CMUTIL_Logger *logger,
-        CMUTIL_LogLevel level,
+        CMLogLevel level,
         const char *file,
         int line,
         CMBool printStack,
@@ -1452,7 +1459,7 @@ struct CMUTIL_LogAppender {
     void(*Append)(
         CMUTIL_LogAppender *appender,
         CMUTIL_Logger *logger,
-        CMUTIL_LogLevel level,
+        CMLogLevel level,
         CMUTIL_StringArray *stack,
         const char *file,
         int line,
@@ -1471,7 +1478,7 @@ CMUTIL_API CMUTIL_LogAppender *CMUTIL_LogFileAppenderCreate(
 CMUTIL_API CMUTIL_LogAppender *CMUTIL_LogRollingFileAppenderCreate(
     const char *name,
     const char *fpath,
-    CMUTIL_LogTerm logterm,
+    CMLogTerm logterm,
     const char *rollpath,
     const char *pattern);
 CMUTIL_API CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreate(
@@ -1486,7 +1493,7 @@ CMUTIL_API CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreate(
         if (___logger == NULL) {                                        \
             CMUTIL_LogSystem *lsys = CMUTIL_LogSystemGet();             \
             if (lsys) ___logger =                                       \
-                CMCall(CMUTIL_LogSystemGet(), GetLogger, name);    \
+                CMCall(CMUTIL_LogSystemGet(), GetLogger, name);         \
         }                                                               \
         return ___logger;                                               \
     }
@@ -1494,14 +1501,14 @@ CMUTIL_API CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreate(
 #define CMUTIL_Log__(level,stack,f,...) do {                            \
     CMUTIL_Logger *logger = __CMUTIL_GetLogger();                       \
     if (logger)                                                         \
-        logger->LogEx(logger, CMUTIL_LogLevel_##level,__FILE__,__LINE__,\
-                      CM##stack,f,##__VA_ARGS__);                  \
+        logger->LogEx(logger, CMLogLevel_##level,__FILE__,__LINE__,     \
+                      CM##stack,f,##__VA_ARGS__);                       \
     } while(0)
 #define CMUTIL_Log2__(level,stack,f,...)	do {                        \
     CMUTIL_Logger *logger = __CMUTIL_GetLogger();                       \
     if (logger)                                                         \
         logger->LogEx(logger, level,__FILE__,__LINE__,                  \
-                      CMUTIL_##stack,f,##__VA_ARGS__);                  \
+                      CM##stack,f,##__VA_ARGS__);                       \
     } while(0)
 
 #define CMLogTrace(f,...)   CMUTIL_Log__(Trace,False,f,##__VA_ARGS__)
@@ -1532,7 +1539,7 @@ struct CMUTIL_LogSystem {
     CMUTIL_ConfLogger *(*CreateLogger)(
         const CMUTIL_LogSystem *logsys,
         const char *name,
-        CMUTIL_LogLevel level,
+        CMLogLevel level,
         CMBool additivity);
     CMUTIL_Logger *(*GetLogger)(
             const CMUTIL_LogSystem *logsys, const char *name);
@@ -1616,35 +1623,35 @@ CMUTIL_API CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreate(
         const char *host, int port, int qcnt);
 
 
-typedef enum CMUTIL_JsonType {
-    CMUTIL_JsonTypeValue = 0,
-    CMUTIL_JsonTypeObject,
-    CMUTIL_JsonTypeArray
-} CMUTIL_JsonType;
+typedef enum CMJsonType {
+    CMJsonTypeValue = 0,
+    CMJsonTypeObject,
+    CMJsonTypeArray
+} CMJsonType;
 
 typedef struct CMUTIL_Json CMUTIL_Json;
 struct CMUTIL_Json {
     void (*ToString)(
             const CMUTIL_Json *json, CMUTIL_String *buf, CMBool pretty);
-    CMUTIL_JsonType (*GetType)(
+    CMJsonType (*GetType)(
             const CMUTIL_Json *json);
     CMUTIL_Json *(*Clone)(
             const CMUTIL_Json *json);
     void (*Destroy)(CMUTIL_Json *json);
 };
 
-typedef enum CMUTIL_JsonValueType {
-    CMUTIL_JsonValueLong = 0,
-    CMUTIL_JsonValueDouble,
-    CMUTIL_JsonValueString,
-    CMUTIL_JsonValueBoolean,
-    CMUTIL_JsonValueNull
-} CMUTIL_JsonValueType;
+typedef enum CMJsonValueType {
+    CMJsonValueLong = 0,
+    CMJsonValueDouble,
+    CMJsonValueString,
+    CMJsonValueBoolean,
+    CMJsonValueNull
+} CMJsonValueType;
 
 typedef struct CMUTIL_JsonValue CMUTIL_JsonValue;
 struct CMUTIL_JsonValue {
     CMUTIL_Json	parent;
-    CMUTIL_JsonValueType (*GetValueType)(
+    CMJsonValueType (*GetValueType)(
             const CMUTIL_JsonValue *jval);
     int64_t (*GetLong)(
             const CMUTIL_JsonValue *jval);

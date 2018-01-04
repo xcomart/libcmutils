@@ -149,7 +149,7 @@
 # if !defined(INVALID_SOCKET)
 #  define INVALID_SOCKET	-1
 # endif
-# define GETPID				(long)getpid
+# define GETPID				(pid_t)getpid
 # define S_CRLF				"\n"
 # define USLEEP				usleep
 #endif

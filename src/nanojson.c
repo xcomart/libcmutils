@@ -57,7 +57,7 @@ typedef struct CMUTIL_JsonValue_Internal {
     CMUTIL_JsonValue		base;
     CMUTIL_String			*data;
     CMUTIL_Mem              *memst;
-    CMUTIL_JsonValueType	type;
+    CMJsonValueType	type;
     int                     dummy_padder;
 } CMUTIL_JsonValue_Internal;
 
@@ -224,10 +224,10 @@ CMUTIL_STATIC void CMUTIL_JsonDestroyInternal(void *json) {
     CMUTIL_JsonDestroy(json);
 }
 
-CMUTIL_STATIC CMUTIL_JsonType CMUTIL_JsonValueGetType(const CMUTIL_Json *json)
+CMUTIL_STATIC CMJsonType CMUTIL_JsonValueGetType(const CMUTIL_Json *json)
 {
     CMUTIL_UNUSED(json);
-    return CMUTIL_JsonTypeValue;
+    return CMJsonTypeValue;
 }
 
 CMUTIL_STATIC void CMUTIL_JsonValueDestroy(CMUTIL_Json *json)
@@ -239,7 +239,7 @@ CMUTIL_STATIC void CMUTIL_JsonValueDestroy(CMUTIL_Json *json)
     }
 }
 
-CMUTIL_STATIC CMUTIL_JsonValueType CMUTIL_JsonValueGetValueType(
+CMUTIL_STATIC CMJsonValueType CMUTIL_JsonValueGetValueType(
         const CMUTIL_JsonValue *jval)
 {
     const CMUTIL_JsonValue_Internal *ijval =
@@ -288,7 +288,7 @@ CMUTIL_STATIC CMBool CMUTIL_JsonValueGetBoolean(
 
 CMUTIL_STATIC void CMUTIL_JsonValueSetBase(
         CMUTIL_JsonValue *jval, const char *buf, size_t length,
-        CMUTIL_JsonValueType type)
+        CMJsonValueType type)
 {
     CMUTIL_JsonValue_Internal *ijval = (CMUTIL_JsonValue_Internal*)jval;
     CMCall(ijval->data, Clear);
@@ -301,7 +301,7 @@ CMUTIL_STATIC void CMUTIL_JsonValueSetLong(
 {
     char buf[50];
     size_t size = (uint32_t)sprintf(buf, PRINT64I, value);
-    CMUTIL_JsonValueSetBase(jval, buf, size, CMUTIL_JsonValueLong);
+    CMUTIL_JsonValueSetBase(jval, buf, size, CMJsonValueLong);
 }
 
 CMUTIL_STATIC void CMUTIL_JsonValueSetDouble(
@@ -309,14 +309,14 @@ CMUTIL_STATIC void CMUTIL_JsonValueSetDouble(
 {
     char buf[50];
     size_t size = (uint32_t)sprintf(buf, "%lf", value);
-    CMUTIL_JsonValueSetBase(jval, buf, size, CMUTIL_JsonValueDouble);
+    CMUTIL_JsonValueSetBase(jval, buf, size, CMJsonValueDouble);
 }
 
 CMUTIL_STATIC void CMUTIL_JsonValueSetString(
         CMUTIL_JsonValue *jval, const char *value)
 {
     CMUTIL_JsonValueSetBase(
-                jval, value, strlen(value), CMUTIL_JsonValueString);
+                jval, value, strlen(value), CMJsonValueString);
 }
 
 CMUTIL_STATIC void CMUTIL_JsonValueSetBoolean(
@@ -324,12 +324,12 @@ CMUTIL_STATIC void CMUTIL_JsonValueSetBoolean(
 {
     const char *sval = value? "true":"false";
     CMUTIL_JsonValueSetBase(
-                jval, sval, strlen(sval), CMUTIL_JsonValueBoolean);
+                jval, sval, strlen(sval), CMJsonValueBoolean);
 }
 
 CMUTIL_STATIC void CMUTIL_JsonValueSetNull(CMUTIL_JsonValue *jval)
 {
-    CMUTIL_JsonValueSetBase(jval, "null", 4, CMUTIL_JsonValueNull);
+    CMUTIL_JsonValueSetBase(jval, "null", 4, CMJsonValueNull);
 }
 
 static CMUTIL_JsonValue g_cmutil_jsonvalue = {
@@ -370,10 +370,10 @@ CMUTIL_JsonValue *CMUTIL_JsonValueCreate()
 }
 
 
-CMUTIL_STATIC CMUTIL_JsonType CMUTIL_JsonObjectGetType(const CMUTIL_Json *json)
+CMUTIL_STATIC CMJsonType CMUTIL_JsonObjectGetType(const CMUTIL_Json *json)
 {
     CMUTIL_UNUSED(json);
-    return CMUTIL_JsonTypeObject;
+    return CMJsonTypeObject;
 }
 
 CMUTIL_STATIC void CMUTIL_JsonObjectDestroy(CMUTIL_Json *json)
@@ -407,7 +407,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonObjectGet(
 #define CMUTIL_JsonObjectGetBody(jobj, key, method, v) do {                 \
     CMUTIL_Json *json = CMUTIL_JsonObjectGet(jobj, key);                    \
     if (json) {                                                             \
-        if (CMCall(json, GetType) == CMUTIL_JsonTypeValue)                  \
+        if (CMCall(json, GetType) == CMJsonTypeValue)                  \
             return CMCall((CMUTIL_JsonValue*)json, method );                \
         else                                                                \
             CMLogError("JsonObject item with key '%s' is not a value type.",\
@@ -562,10 +562,10 @@ CMUTIL_JsonObject *CMUTIL_JsonObjectCreate()
 
 
 
-CMUTIL_STATIC CMUTIL_JsonType CMUTIL_JsonArrayGetType(const CMUTIL_Json *json)
+CMUTIL_STATIC CMJsonType CMUTIL_JsonArrayGetType(const CMUTIL_Json *json)
 {
     CMUTIL_UNUSED(json);
-    return CMUTIL_JsonTypeArray;
+    return CMJsonTypeArray;
 }
 
 CMUTIL_STATIC void CMUTIL_JsonArrayDestroy(CMUTIL_Json *json)
@@ -601,7 +601,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonArrayGet(
             (const CMUTIL_JsonArray_Internal*)jarr;                 \
     if (CMCall(ijarr->arr, GetSize) > index) {                      \
         CMUTIL_Json* json = CMCall(jarr, Get, index);               \
-        if (CMCall(json, GetType) == CMUTIL_JsonTypeValue) {        \
+        if (CMCall(json, GetType) == CMJsonTypeValue) {             \
             return CMCall((CMUTIL_JsonValue*)json, method);         \
         } else {                                                    \
             CMLogError("item type is not 'Value' type.");           \
@@ -895,8 +895,9 @@ CMUTIL_STATIC CMBool CMUTIL_JsonParseString(
 CMUTIL_STATIC CMBool CMUTIL_JsonParseConst(
         CMUTIL_JsonParser *pctx, CMUTIL_JsonValue *jval, CMUTIL_String *str)
 {
-    const char *cstr = CMCall(str, GetCString);
-    cstr = CMUTIL_StrTrim((char*)cstr);
+    const char *cstr = NULL;
+    CMCall(str, SelfTrim);
+    cstr = CMCall(str, GetCString);
     if (CMCall(str, GetSize) < 5) {
         if (strcasecmp(cstr, "true") == 0) {
             CMCall(jval, SetBoolean, CMTrue);
