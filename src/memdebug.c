@@ -1,4 +1,4 @@
-/*
+﻿/*
                       GNU General Public License
     libcmutils is a bunch of commonly used utility functions for multiplatform.
     Copyright (C) 2016 Dennis Soungjin Park <xcomart@gmail.com>
@@ -60,7 +60,7 @@ CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
         sz = readlink("/proc/self/exe", buf, sizeof(buf));
 #elif defined(SUNOS)
         sz = readlink("/proc/self/path/a.out", buf, sizeof(buf));
-#elif defined(BSD) or defined(APPLE)
+#elif defined(BSD) || defined(APPLE)
         sz = readlink("/proc/curproc/file", buf, sizeof(buf));
 #elif defined(MSWIN)
         sz = (size_t)GetModuleFileName(NULL, buf, sizeof(buf));

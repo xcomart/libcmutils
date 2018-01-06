@@ -1,4 +1,4 @@
-/*
+﻿/*
                       GNU General Public License
     libcmutils is a bunch of commonly used utility functions for multiplatform.
     Copyright (C) 2016 Dennis Soungjin Park <xcomart@gmail.com>
@@ -106,6 +106,8 @@
 # ifdef UNICODE
 #  undef UNICODE
 # endif
+# define WINVER 0x0600
+# define _WIN32_WINNT 0x0600
 # include <winsock2.h>
 # include <windows.h>
 # include <time.h>

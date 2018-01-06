@@ -1,4 +1,4 @@
-/*
+﻿/*
                       GNU General Public License
     libcmutils is a bunch of commonly used utility functions for multiplatform.
     Copyright (C) 2016 Dennis Soungjin Park <xcomart@gmail.com>
@@ -22,6 +22,7 @@
 #include <errno.h>
 
 #if defined(MSWIN)
+#include <winsock2.h>
 static WSADATA wsa_data;
 #else
 # include <signal.h>
@@ -42,8 +43,7 @@ static WSADATA wsa_data;
 CMUTIL_LogDefine("cmutils.network")
 
 #if defined(MSWIN)
-#define POLLIN  POLLRDNORM
-#define POLLOUT POLLWRNORM
+# define poll WSAPoll
 #elif defined(APPLE)
 static CMUTIL_Mutex *g_cmutil_hostbyname_mutex = NULL;
 struct hostent *CMUTIL_NetworkGetHostByName(const char *name)
@@ -269,7 +269,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SocketRead(
 #if defined(LINUX)
         rc = (int)recv(isock->sock, buf, toberead, MSG_NOSIGNAL);
 #else
-        rc = (int)recv(isock->sock, buf, toberead, 0);
+        rc = (int)recv(isock->sock, buf, (int)toberead, 0);
 #endif
         if (rc == SOCKET_ERROR) {
             if (!isock->silent)
@@ -434,7 +434,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SocketWritePart(
                        size, MSG_NOSIGNAL);
 #else
         rc = (int)send(isock->sock, CMCall(data, GetCString) + offset,
-                       size, 0);
+                       (int)size, 0);
 #endif
         if (rc == SOCKET_ERROR) {
             if (errno == EAGAIN
@@ -468,7 +468,7 @@ CMUTIL_STATIC CMUTIL_SocketResult CMUTIL_SocketWriteSocket(
     WSAPROTOCOL_INFO pi;
     CMUTIL_String *sendbuf = NULL;
 
-    ir = WSADuplicateSocket(isent->sock, pid, &pi);
+    ir = WSADuplicateSocket(isent->sock, (DWORD)pid, &pi);
     if (ir != 0)
         return CMUTIL_SocketUnknownError;
     sendbuf = CMUTIL_StringCreateInternal(isock->memst, sizeof(pi), NULL);
@@ -1701,8 +1701,8 @@ CMBool CMUTIL_SocketPairInternal(
     s[0] = s[1] = INVALID_SOCKET;
 
     listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listener == -1)
-        return SOCKET_ERROR;
+    if (listener == INVALID_SOCKET)
+        goto FAILED;
 
     memset(&a, 0, sizeof(a));
     a.inaddr.sin_family = AF_INET;
@@ -1743,10 +1743,10 @@ CMBool CMUTIL_SocketPairInternal(
 
     e = WSAGetLastError();
     closesocket(listener);
-    closesocket(socks[0]);
-    closesocket(socks[1]);
+    closesocket(s[0]);
+    closesocket(s[1]);
     WSASetLastError(e);
-    socks[0] = socks[1] = INVALID_SOCKET;
+    s[0] = s[1] = INVALID_SOCKET;
     goto FAILED;
 SUCCESS:
     is1->sock = s[0];
