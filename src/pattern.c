@@ -1,4 +1,4 @@
-
+﻿
 /******************************************************************************
 * fpattern.c
 *	Functions for matching filename patterns to filenames.
@@ -57,9 +57,9 @@
 
 /* System includes */
 
+#include "functions.h"
 #include <ctype.h>
 #include <stddef.h>
-#include "functions.h"
 
 #if defined(TEST)
 #include <locale.h>
