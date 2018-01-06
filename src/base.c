@@ -55,7 +55,7 @@ void CMUTIL_Clear()
 void CMUTIL_UnusedP(void *p,...)
 {
     (void)(p);
-    // do nothing.
+    // does nothing.
 }
 
 const char *CMUTIL_GetLibVersion()

@@ -108,7 +108,7 @@ typedef struct CMUTIL_XmlNode_Internal {
     CMUTIL_Mem          *memst;
     void				*udata;
     void				(*freef)(void*);
-    CMUTIL_XmlNodeKind	type;
+    CMXmlNodeKind	type;
     int                 dummy_padder;
 } CMUTIL_XmlNode_Internal;
 
@@ -199,7 +199,7 @@ CMUTIL_STATIC void CMUTIL_XmlSetName(CMUTIL_XmlNode *node, const char *name)
     CMCall(inode->tagname, AddString, name);
 }
 
-CMUTIL_STATIC CMUTIL_XmlNodeKind CMUTIL_XmlGetType(
+CMUTIL_STATIC CMXmlNodeKind CMUTIL_XmlGetType(
         const CMUTIL_XmlNode *node)
 {
     const CMUTIL_XmlNode_Internal *inode =
@@ -264,9 +264,9 @@ CMUTIL_STATIC void CMUTIL_XmlToDocumentPrivate(
         CMBool beutify,
         uint32_t depth)
 {
-    if (inode->type == CMUTIL_XmlNodeText) {
+    if (inode->type == CMXmlNodeText) {
         CMUTIL_XmlEscape(buffer, inode->tagname);
-    } else if (inode->type == CMUTIL_XmlNodeTag) {
+    } else if (inode->type == CMXmlNodeTag) {
         uint32_t i;
         size_t childcnt = CMCall(inode->children, GetSize);
         const char *tname = CMCall(inode->tagname, GetCString);
@@ -371,7 +371,7 @@ CMUTIL_STATIC void CMUTIL_XmlNodeDestroyer(void *data)
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
         CMUTIL_Mem *memst,
-        CMUTIL_XmlNodeKind type, const char *tagname, size_t namelen)
+        CMXmlNodeKind type, const char *tagname, size_t namelen)
 {
     CMUTIL_XmlNode_Internal *res =
             memst->Alloc(sizeof(CMUTIL_XmlNode_Internal));
@@ -389,20 +389,20 @@ CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateInternal(
-        CMUTIL_Mem *memst, CMUTIL_XmlNodeKind type, const char *tagname)
+        CMUTIL_Mem *memst, CMXmlNodeKind type, const char *tagname)
 {
     return CMUTIL_XmlNodeCreateWithLenInternal(
                 memst, type, tagname, strlen(tagname));
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreate(
-        CMUTIL_XmlNodeKind type, const char *tagname)
+        CMXmlNodeKind type, const char *tagname)
 {
     return CMUTIL_XmlNodeCreateInternal(CMUTIL_GetMem(), type, tagname);
 }
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLen(
-        CMUTIL_XmlNodeKind type, const char *tagname, size_t namelen)
+        CMXmlNodeKind type, const char *tagname, size_t namelen)
 {
     return CMUTIL_XmlNodeCreateWithLenInternal(
                 CMUTIL_GetMem(), type, tagname, namelen);
@@ -660,7 +660,7 @@ PARSE_NEXT:
                     CMUTIL_XmlUnescape(afval, bfval, ctx);
                     CMCall(bfval, Destroy);
                     child = CMUTIL_XmlNodeCreateWithLenInternal(
-                                ctx->memst, CMUTIL_XmlNodeText,
+                                ctx->memst, CMXmlNodeText,
                                 CMCall(afval, GetCString),
                                 CMCall(afval, GetSize));
                     CMCall(afval, Destroy);
@@ -685,7 +685,7 @@ PARSE_NEXT:
             // may be normal node
             DO_OBJ(CMUTIL_XmlNextToken(tagname, ctx));
             child = CMUTIL_XmlNodeCreateInternal(
-                        ctx->memst, CMUTIL_XmlNodeTag, tagname);
+                        ctx->memst, CMXmlNodeTag, tagname);
             if (parent)
                 CMCall(parent, AddChild, child);
             CMCall(ctx->stack, Push, child);
@@ -721,7 +721,7 @@ PARSE_NEXT:
         CMUTIL_XmlUnescape(afval, bfval, ctx);
         CMCall(bfval, Destroy);
         child = CMUTIL_XmlNodeCreateWithLenInternal(
-                        ctx->memst, CMUTIL_XmlNodeText,
+                        ctx->memst, CMXmlNodeText,
                         CMCall(afval, GetCString),
                         CMCall(afval, GetSize));
         CMCall(afval, Destroy);
@@ -861,7 +861,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(
     }
     if (CMCall(node, ChildCount) == 1) {
         CMUTIL_XmlNode *child = CMCall(node, ChildAt, 0);
-        if (CMUTIL_XmlNodeText == CMCall(child, GetType)) {
+        if (CMXmlNodeText == CMCall(child, GetType)) {
             const char *text = CMCall(child, GetName);
             text = CMUTIL_StrTrim((char*)text);
             if (strlen(text) > 0) {

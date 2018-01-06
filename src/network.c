@@ -1680,3 +1680,97 @@ CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreate(
                 CMUTIL_GetMem(), host, port, qcnt,
                 cert, key, ca, CMFalse);
 }
+
+CMBool CMUTIL_SocketPairInternal(
+        CMUTIL_Mem *mem, CMUTIL_Socket **s1, CMUTIL_Socket **s2)
+{
+    CMUTIL_Socket_Internal *is1 = CMUTIL_SocketCreate(mem, CMTrue);
+    CMUTIL_Socket_Internal *is2 = CMUTIL_SocketCreate(mem, CMTrue);
+    SOCKET s[2];
+
+#if defined(WIN32)
+    union {
+       struct sockaddr_in inaddr;
+       struct sockaddr addr;
+    } a;
+    SOCKET listener = INVALID_SOCKET;
+    int e;
+    socklen_t addrlen = sizeof(a.inaddr);
+    int reuse = 1;
+
+    s[0] = s[1] = INVALID_SOCKET;
+
+    listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listener == -1)
+        return SOCKET_ERROR;
+
+    memset(&a, 0, sizeof(a));
+    a.inaddr.sin_family = AF_INET;
+    a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    a.inaddr.sin_port = 0;
+
+    for (;;) {
+        if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR,
+               (char*) &reuse, (socklen_t) sizeof(reuse)) == -1)
+            break;
+        if  (bind(listener, &a.addr, sizeof(a.inaddr)) == SOCKET_ERROR)
+            break;
+
+        memset(&a, 0, sizeof(a));
+        if  (getsockname(listener, &a.addr, &addrlen) == SOCKET_ERROR)
+            break;
+        // win32 getsockname may only set the port number, p=0.0005.
+        // ( http://msdn.microsoft.com/library/ms738543.aspx ):
+        a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        a.inaddr.sin_family = AF_INET;
+
+        if (listen(listener, 1) == SOCKET_ERROR)
+            break;
+
+        s[0] = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, 0);
+        if (s[0] == INVALID_SOCKET)
+            break;
+        if (connect(s[0], &a.addr, sizeof(a.inaddr)) == SOCKET_ERROR)
+            break;
+
+        s[1] = accept(listener, NULL, NULL);
+        if (s[1] == INVALID_SOCKET)
+            break;
+
+        closesocket(listener);
+        goto SUCCESS;
+    }
+
+    e = WSAGetLastError();
+    closesocket(listener);
+    closesocket(socks[0]);
+    closesocket(socks[1]);
+    WSASetLastError(e);
+    socks[0] = socks[1] = INVALID_SOCKET;
+    goto FAILED;
+SUCCESS:
+    is1->sock = s[0];
+    is2->sock = s[1];
+#else
+    int ir;
+    ir = socketpair(AF_LOCAL, SOCK_STREAM, 0, s);
+    if (ir != 0)
+        goto FAILED;
+    is1->sock = s[0];
+    is2->sock = s[1];
+#endif
+    *s1 = (CMUTIL_Socket*)is1;
+    *s2 = (CMUTIL_Socket*)is2;
+    return CMTrue;
+FAILED:
+    CMCall((CMUTIL_Socket*)is1, Close);
+    CMCall((CMUTIL_Socket*)is2, Close);
+    *s1 = *s2 = NULL;
+    return CMFalse;
+}
+
+CMBool CMUTIL_SocketPair(
+        CMUTIL_Socket **s1, CMUTIL_Socket **s2)
+{
+    return CMUTIL_SocketPairInternal(CMUTIL_GetMem(), s1, s2);
+}
