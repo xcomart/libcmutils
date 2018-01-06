@@ -5,7 +5,7 @@ AC_INIT([cmutils library],
 		[1.0.0],
 		[Dennis Soungjin Park <xcomart@gmail.com>],
 		[cmutils])
-AC_CONFIG_SRCDIR([src/arrays.c])
+AC_CONFIG_SRCDIR([src])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE()
 
@@ -29,5 +29,6 @@ AC_TYPE_SIZE_T
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([gethostbyname gethostname gettimeofday localtime_r memmove memset realpath select socket strcasecmp strchr strerror strrchr strstr])
 
-AC_CONFIG_FILES([Makefile src/Makefile demo/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile demo/Makefile
+src/Makefile])
 AC_OUTPUT

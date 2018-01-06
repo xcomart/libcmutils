@@ -1117,12 +1117,12 @@ CMUTIL_API CMUTIL_List *CMUTIL_ListCreateEx(CMFreeCB freecb);
 
 
 
-typedef enum CMUTIL_XmlNodeKind {
-    CMUTIL_XmlNodeUnknown = 0,
-    CMUTIL_XmlNodeText,
-    CMUTIL_XmlNodeTag
-} CMUTIL_XmlNodeKind;
-#define CMUTIL_XmlNodeKind		CMUTIL_XmlNodeKind
+typedef enum CMXmlNodeKind {
+    CMXmlNodeUnknown = 0,
+    CMXmlNodeText,
+    CMXmlNodeTag
+} CMXmlNodeKind;
+#define CMXmlNodeKind		CMXmlNodeKind
 
 typedef struct CMUTIL_XmlNode CMUTIL_XmlNode;
 struct CMUTIL_XmlNode {
@@ -1137,7 +1137,7 @@ struct CMUTIL_XmlNode {
     CMUTIL_XmlNode *(*GetParent)(const CMUTIL_XmlNode *node);
     const char *(*GetName)(const CMUTIL_XmlNode *node);
     void (*SetName)(CMUTIL_XmlNode *node, const char *name);
-    CMUTIL_XmlNodeKind (*GetType)(const CMUTIL_XmlNode *node);
+    CMXmlNodeKind (*GetType)(const CMUTIL_XmlNode *node);
     CMUTIL_String *(*ToDocument)(
             const CMUTIL_XmlNode *node, CMBool beutify);
     void (*SetUserData)(
@@ -1151,9 +1151,9 @@ CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlParseString(
         const char *xmlstr, size_t len);
 CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlParseFile(const char *fpath);
 CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlNodeCreate(
-        CMUTIL_XmlNodeKind type, const char *tagname);
+        CMXmlNodeKind type, const char *tagname);
 CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLen(
-        CMUTIL_XmlNodeKind type, const char *tagname, size_t len);
+        CMXmlNodeKind type, const char *tagname, size_t len);
 
 
 
@@ -1622,6 +1622,8 @@ CMUTIL_API CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreate(
         const char *cert, const char *key, const char *ca,
         const char *host, int port, int qcnt);
 
+CMUTIL_API CMBool CMUTIL_SocketPair(
+        CMUTIL_Socket **s1, CMUTIL_Socket **s2);
 
 typedef enum CMJsonType {
     CMJsonTypeValue = 0,
@@ -1755,6 +1757,228 @@ CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
 #define CMUTIL_JsonDestroy(a)   CMCall((CMUTIL_Json*)(a), Destroy)
 
 CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
+
+
+//////////////////////////////////////////////////////////////////////////////
+// NIO Implementations
+//////////////////////////////////////////////////////////////////////////////
+
+typedef struct CMUTIL_NIOBuffer CMUTIL_NIOBuffer;
+struct CMUTIL_NIOBuffer {
+    CMUTIL_NIOBuffer *(*Flip)(
+            CMUTIL_NIOBuffer *buffer);
+    CMBool (*HasRemaining)(
+            const CMUTIL_NIOBuffer *buffer);
+    CMUTIL_NIOBuffer *(*Clear)(
+            CMUTIL_NIOBuffer *buffer);
+    int (*Capacity)(
+            const CMUTIL_NIOBuffer *buffer);
+    CMUTIL_NIOBuffer *(*Put)(
+            CMUTIL_NIOBuffer *buffer, int data);
+    CMUTIL_NIOBuffer *(*PutBytes)(
+            CMUTIL_NIOBuffer *buffer, const uint8_t *data,
+            int length);
+    CMUTIL_NIOBuffer *(*PutBytesPart)(
+            CMUTIL_NIOBuffer *buffer, const uint8_t *data,
+            int offset, int length);
+    int (*Get)(
+            CMUTIL_NIOBuffer *buffer);
+    int (*GetAt)(
+            CMUTIL_NIOBuffer *buffer, int index);
+    CMUTIL_NIOBuffer *(*GetBytes)(
+            CMUTIL_NIOBuffer *buffer, uint8_t *dest, int length);
+    CMUTIL_NIOBuffer *(*GetBytesPart)(
+            CMUTIL_NIOBuffer *buffer, uint8_t *dest, int offset, int length);
+    void (*Compact)(
+            CMUTIL_NIOBuffer *buffer);
+    CMUTIL_NIOBuffer *(*Mark)(
+            CMUTIL_NIOBuffer *buffer);
+    CMUTIL_NIOBuffer *(*Reset)(
+            CMUTIL_NIOBuffer *buffer);
+    CMUTIL_NIOBuffer *(*Rewind)(
+            CMUTIL_NIOBuffer *buffer);
+    int (*Limit)(
+            const CMUTIL_NIOBuffer *buffer);
+    int (*Position)(
+            const CMUTIL_NIOBuffer *buffer);
+    CMBool (*Equals)(
+            const CMUTIL_NIOBuffer *buffer, const CMUTIL_NIOBuffer *buffer2);
+    int (*CompareTo)(
+            const CMUTIL_NIOBuffer *buffer, const CMUTIL_NIOBuffer *buffer2);
+    void (*Destroy)(
+            CMUTIL_NIOBuffer *buffer);
+};
+
+CMUTIL_API CMUTIL_NIOBuffer *CMUTIL_NIOBufferCreate(int capacity);
+
+typedef struct CMUTIL_NIOChannel CMUTIL_NIOChannel;
+typedef struct CMUTIL_NIOSelector CMUTIL_NIOSelector;
+typedef struct CMUTIL_NIOSelectionKey CMUTIL_NIOSelectionKey;
+
+struct CMUTIL_NIOChannel {
+    void (*Close)(
+            CMUTIL_NIOChannel *channel);
+    CMBool (*IsOpen)(
+            const CMUTIL_NIOChannel *channel);
+    CMBool (*IsRegistered)(
+            const CMUTIL_NIOChannel *channel);
+    CMUTIL_NIOSelectionKey *(*KeyFor)(
+            const CMUTIL_NIOChannel *channel, CMUTIL_NIOSelector *selector);
+    CMUTIL_NIOSelectionKey *(*Register)(
+            CMUTIL_NIOChannel *channel, CMUTIL_NIOSelector *selector, int ops);
+    int (*ValidOps)(
+            const CMUTIL_NIOChannel *channel);
+};
+
+/**
+ * @brief Operation-set bit for socket-accept operations.
+ *
+ * Suppose that a selection key's interest set contains OP_ACCEPT
+ * at the start of a selection operation.
+ * If the selector detects that the corresponding server-socket channel is
+ * ready to accept another connection, or has an error pending,
+ * then it will add OP_ACCEPT to the key's ready set
+ * and add the key to its selected-key set.
+ */
+#define CMUTIL_NIO_OP_ACCEPT    (0x1 << 0)
+/**
+ * @brief Operation-set bit for socket-connect operations.
+ *
+ * Suppose that a selection key's interest set contains OP_CONNECT
+ * at the start of a selection operation.
+ * If the selector detects that the corresponding socket channel is
+ * ready to complete its connection sequence, or has an error pending,
+ * then it will add OP_CONNECT to the key's ready set
+ * and add the key to its selected-key set.
+ */
+#define CMUTIL_NIO_OP_CONNECT   (0x1 << 1)
+/**
+ * @brief Operation-set bit for read operations.
+ *
+ * Suppose that a selection key's interest set contains OP_READ
+ * at the start of a selection operation.
+ * If the selector detects that the corresponding channel is ready for reading,
+ * has reached end-of-stream, has been remotely shut down for further reading,
+ * or has an error pending,
+ * then it will add OP_READ to the key's ready-operation set
+ * and add the key to its selected-key set.
+ */
+#define CMUTIL_NIO_OP_READ      (0x1 << 2)
+/**
+ * @brief Operation-set bit for write operations.
+ *
+ * Suppose that a selection key's interest set contains OP_WRITE
+ * at the start of a selection operation.
+ * If the selector detects that the corresponding channel is ready for writing,
+ * has been remotely shut down for further writing, or has an error pending,
+ * then it will add OP_WRITE to the key's ready set
+ * and add the key to its selected-key set.
+ */
+#define CMUTIL_NIO_OP_WRITE     (0x1 << 3)
+
+struct CMUTIL_NIOSelectionKey {
+    CMUTIL_NIOChannel *(*Attach)(
+            CMUTIL_NIOSelectionKey *selkey, CMUTIL_NIOChannel *channel);
+    CMUTIL_NIOChannel *(*Attachment)(
+            CMUTIL_NIOSelectionKey *selkey);
+    /**
+     * @brief Retrieves this key's interest set.
+     *
+     * It is guaranteed that the returned set will only contain operation bits
+     * that are valid for this key's channel.
+     *
+     * This method may be invoked at any time.
+     * Whether or not it blocks, and for how long, is implementation-dependent.
+     *
+     * @return This key's interest set
+     */
+    int (*InterestOps)(
+            const CMUTIL_NIOSelectionKey *selkey);
+    /**
+     * @brief Sets this key's interest set to the given value.
+     *
+     * This method may be invoked at any time.
+     * Whether or not it blocks, and for how long, is implementation-dependent.
+     *
+     * @param ops The new interest set
+     * @return This selection key
+     */
+    CMUTIL_NIOSelectionKey *(*SetInterestOps)(
+            CMUTIL_NIOSelectionKey *selkey, int ops);
+    CMBool (*IsAcceptible)(
+            const CMUTIL_NIOSelectionKey *selkey);
+    CMBool (*IsConnectable)(
+            const CMUTIL_NIOSelectionKey *selkey);
+    CMBool (*IsReadable)(
+            const CMUTIL_NIOSelectionKey *selkey);
+    CMBool (*IsWritable)(
+            const CMUTIL_NIOSelectionKey *selkey);
+    /**
+     * @brief Tells whether or not this key is valid.
+     *
+     * A key is valid upon creation and remains so until it is cancelled,
+     * its channel is closed, or its selector is closed.
+     *
+     * @return CMTrue if, and only if, this key is valid
+     */
+    CMBool (*IsValid)(
+            const CMUTIL_NIOSelectionKey *selkey);
+    /**
+     * @brief Retrieves this key's ready-operation set.
+     *
+     * It is guaranteed that the returned set will only contain operation bits
+     * that are valid for this key's channel.
+     *
+     * @return This key's ready-operation set
+     */
+    int (*ReadyOps)(
+            const CMUTIL_NIOSelectionKey *selkey);
+    /**
+     * @brief Returns the selector for which this key was created.
+     *
+     * This method will continue to return the selector even after
+     * the key is cancelled.
+     */
+    CMUTIL_NIOSelector *(*Selector)(
+            CMUTIL_NIOSelectionKey *selkey);
+    /**
+     * @brief Requests that the registration of this key's channel with
+     * its selector be cancelled.
+     *
+     * Upon return the key will be invalid and will have been added to its
+     * selector's cancelled-key set.
+     * The key will be removed from all of the selector's key sets during
+     * the next selection operation.
+     *
+     * If this key has already been cancelled then
+     * invoking this method unpredictable.
+     *
+     * This method may be invoked at any time.
+     * It synchronizes on the selector's cancelled-key set,
+     * and therefore may block briefly if invoked concurrently
+     * with a cancellation or selection operation involving the same selector.
+     */
+    void (*Cancel)(
+            CMUTIL_NIOSelectionKey *selkey);
+};
+
+struct CMUTIL_NIOSelector {
+    void (*Close)(
+            CMUTIL_NIOSelector *selector);
+    CMBool (*IsOpen)(
+            const CMUTIL_NIOSelector *selector);
+    CMUTIL_Array *(*Keys)(
+            CMUTIL_NIOSelector *selector);
+    int (*Select)(
+            CMUTIL_NIOSelector *selector);
+    int (*SelectTimeout)(
+            CMUTIL_NIOSelector *selector, long timeout);
+    CMUTIL_Array *(*SelectedKeys)(
+            CMUTIL_NIOSelector *selector);
+    CMUTIL_NIOSelector *(*WakeUp)(
+            CMUTIL_NIOSelector *selector);
+};
+
 
 #ifdef __cplusplus
 }

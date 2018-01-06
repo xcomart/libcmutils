@@ -25,28 +25,29 @@ typedef enum CMUTIL_ConfType {
 } CMUTIL_ConfType;
 
 typedef struct CMUTIL_ConfItem {
-    char			*key;
-    char			*comment;
-    CMUTIL_ConfType	type;
-    uint32_t			index;
+    char            *key;
+    char            *comment;
+    CMUTIL_ConfType type;
+    uint32_t        index;
     CMUTIL_Mem      *memst;
 } CMUTIL_ConfItem;
 
 typedef struct CMUTIL_Config_Internal {
-    CMUTIL_Map		*confs;
-    CMUTIL_Array	*sequence;
-    CMUTIL_Map		*revconf;
+    CMUTIL_Map      *confs;
+    CMUTIL_Array    *sequence;
+    CMUTIL_Map      *revconf;
+    CMUTIL_Mem      *memst;
     int             maxkeylen;
     int             dummy_padder;
-    CMUTIL_Mem      *memst;
 } CMUTIL_Config_Internal;
 
-CMUTIL_STATIC char *NextTermBefore(
-        char *dest, char *line, const char *delim, char escapechar)
+CMUTIL_STATIC char *CMUTIL_NextTermBefore(
+        char *dest, char *line, const char *delim, char escapechar, int maxlen)
 {
     register char *p = line;
     register char *q = dest;
-    while (*p && (!strchr(delim, *p) || *(p - 1) == escapechar)) *q++ = *p++;
+    while (*p && (!strchr(delim, *p) || *(p - 1) == escapechar) && maxlen-- > 0)
+        *q++ = *p++;
     *q = 0x0;
     return p;
 }
@@ -64,7 +65,8 @@ CMUTIL_STATIC char *NextTermBefore(
 //	return in;
 //}
 
-CMUTIL_STATIC int AppendTrimmedLine(CMUTIL_String *rstr, char *in, char *spaces)
+CMUTIL_STATIC int CMUTIL_AppendTrimmedLine(
+        CMUTIL_String *rstr, char *in, char *spaces)
 {
     int iscont = 0;
     char *p = in, *last = NULL;
@@ -83,7 +85,7 @@ CMUTIL_STATIC int AppendTrimmedLine(CMUTIL_String *rstr, char *in, char *spaces)
 
 }
 
-CMUTIL_STATIC void ConfItemDestroy(void *data)
+CMUTIL_STATIC void CMUTIL_ConfItemDestroy(void *data)
 {
     if (data) {
         CMUTIL_ConfItem *item = (CMUTIL_ConfItem*)data;
@@ -113,7 +115,7 @@ CMUTIL_STATIC void CMUTIL_ConfigDestroy(CMUTIL_Config *conf)
 }
 
 #define DOFAILED	if (!*p) do { \
-        failed = 1; ConfItemDestroy(item); goto FAILED; } while(0)
+        failed = 1; CMUTIL_ConfItemDestroy(item); goto FAILED; } while(0)
 
 void CMUTIL_ConfigSave(const CMUTIL_Config *conf, const char *confpath)
 {
@@ -233,7 +235,7 @@ CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem *memst)
     res->confs = CMUTIL_MapCreateInternal(
                 memst, CMUTIL_MAP_DEFAULT, CMFalse, memst->Free);
     res->sequence = CMUTIL_ArrayCreateInternal(
-                memst, 100, NULL, ConfItemDestroy, CMFalse);
+                memst, 100, NULL, CMUTIL_ConfItemDestroy, CMFalse);
     res->revconf = CMUTIL_MapCreateInternal(
                 memst, CMUTIL_MAP_DEFAULT, CMFalse, NULL);
     return (CMUTIL_Config*)res;
@@ -261,7 +263,7 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
             CMUTIL_ConfItem *item = NULL;
             char *p = NULL;
 
-            if (AppendTrimmedLine(str, line, " \r\t\n"))
+            if (CMUTIL_AppendTrimmedLine(str, line, " \r\t\n"))
                 continue;
 
             item = (CMUTIL_ConfItem*)memst->Alloc(sizeof(CMUTIL_ConfItem));
@@ -280,12 +282,12 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
             {
                 int keylen = 0;
                 char *v = NULL;
-                char name[1024], value[2048];
-                p = NextTermBefore(name, p, " =\t", '\\');
+                char name[1025], value[2049];
+                p = CMUTIL_NextTermBefore(name, p, " =\t", '\\', 1024);
                 DOFAILED;
                 p = CMUTIL_StrSkipSpaces(p, " =\t");
                 DOFAILED;
-                p = NextTermBefore(value, p, "#\n", '\\');
+                p = CMUTIL_NextTermBefore(value, p, "#\n", '\\', 2048);
                 v = CMUTIL_StrTrim(value);
                 if (*p == '#')
                     item->comment = memst->Strdup(CMUTIL_StrRTrim(p));

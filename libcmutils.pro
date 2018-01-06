@@ -71,7 +71,8 @@ SOURCES += \
     src/pattern.c \
     src/pool.c \
     src/strings.c \
-    src/system.c
+    src/system.c \
+    src/nio.c
 
 HEADERS += \
     src/functions.h \
@@ -81,23 +82,15 @@ HEADERS += \
 DISTFILES += \
     LICENSE \
     README.md \
-    compile \
-    configure \
-    depcomp \
-    install-sh \
-    missing \
-    config.h.in \
     configure.ac \
     NEWS \
-    reconf \
     AUTHORS \
     ChangeLog \
     COPYING \
     INSTALL \
     Makefile.am \
-    Makefile.in \
     demo/Makefile.am \
-    demo/Makefile.in \
+    src/Makefile.am \
     VERSION \
     demo/cmutil_log.json
 

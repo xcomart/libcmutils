@@ -126,9 +126,9 @@ CMUTIL_Json *CMUTIL_JsonParseInternal(
         CMUTIL_Mem *memst, CMUTIL_String *jsonstr, CMBool silent);
 
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(CMUTIL_Mem *memst,
-        CMUTIL_XmlNodeKind type, const char *tagname, size_t namelen);
+        CMXmlNodeKind type, const char *tagname, size_t namelen);
 CMUTIL_XmlNode *CMUTIL_XmlNodeCreateInternal(
-        CMUTIL_Mem *memst, CMUTIL_XmlNodeKind type, const char *tagname);
+        CMUTIL_Mem *memst, CMXmlNodeKind type, const char *tagname);
 CMUTIL_XmlNode *CMUTIL_XmlParseStringInternal(
         CMUTIL_Mem *memst, const char *xmlstr, size_t len);
 CMUTIL_XmlNode *CMUTIL_XmlParseInternal(
@@ -181,6 +181,9 @@ CMUTIL_StringArray *CMUTIL_StringSplitInternal(
 CMUTIL_Library *CMUTIL_LibraryCreateInternal(
         CMUTIL_Mem *memst, const char *path);
 CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path);
+
+CMUTIL_NIOBuffer *CMUTIL_NIOBufferCreateInternal(
+        CMUTIL_Mem *mem, int capacity);
 
 #endif // FUNCTIONS_H
 
