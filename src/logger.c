@@ -1279,7 +1279,7 @@ CMUTIL_STATIC void CMUTIL_LogSocketAppenderWrite(
     for (i = 0; i < CMCall(iap->clients, GetSize); i++) {
         CMUTIL_Socket *cli = (CMUTIL_Socket*)
                 CMCall(iap->clients, GetAt, i);
-        if (CMCall(cli, Write, logmsg, 1000) != CMUTIL_SocketOk) {
+        if (CMCall(cli, Write, logmsg, 1000) != CMSocketOk) {
             CMCall(iap->clients, RemoveAt, i);
             i--;
             CMCall(cli, Close);

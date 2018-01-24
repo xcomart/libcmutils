@@ -19,24 +19,31 @@
 
 #include "functions.h"
 
+CMUTIL_LogDefine("cmutil.maps")
+
 //*****************************************************************************
 // CMUTIL_Map implementation
 //*****************************************************************************
 
 typedef struct CMUTIL_MapItem {
-    char	*key;
-    void	*value;
+    char    *key;
+    void    *value;
 } CMUTIL_MapItem;
 
+typedef struct CMUTIL_MapCItem {
+    const char  *key;
+    void        *value;
+} CMUTIL_MapCItem;
+
 typedef struct CMUTIL_Map_Internal {
-    CMUTIL_Map		base;
-    CMUTIL_Array	**buckets;
-    size_t			size;
-    CMUTIL_Array	*keyset;
-    void			(*freecb)(void*);
+    CMUTIL_Map      base;
+    CMUTIL_Array    **buckets;
+    size_t          size;
+    CMUTIL_Array    *keyset;
+    void            (*freecb)(void*);
     CMUTIL_Mem      *memst;
-    CMBool     isucase;
-    uint32_t			bucketsize;
+    CMBool          isucase;
+    uint32_t        bucketsize;
 } CMUTIL_Map_Internal;
 
 CMUTIL_STATIC uint32_t CMUTIL_MapHash(const char *in, uint32_t bucketsz)
@@ -85,17 +92,16 @@ CMUTIL_STATIC int CMUTIL_MapComparator(const void *a, const void *b)
     return strcmp(ia->key, ib->key);
 }
 
-CMUTIL_STATIC void *CMUTIL_MapPut(
-        CMUTIL_Map *map, const char* key, void* value)
+CMUTIL_STATIC CMUTIL_MapItem *CMUTIL_MapPutBase(
+        CMUTIL_Map_Internal *imap, const char* key, void* value, void **prev)
 {
-    CMUTIL_Map_Internal *imap = (CMUTIL_Map_Internal*)map;
     uint32_t index = imap->isucase?
                 CMUTIL_MapHashUpper(key, imap->bucketsize) :
                 CMUTIL_MapHash(key, imap->bucketsize);
     CMUTIL_Array *bucket = imap->buckets[index];
     CMUTIL_MapItem *item = imap->memst->Alloc(sizeof(CMUTIL_MapItem));
     CMUTIL_MapItem *ires = NULL;
-    void *res = NULL;
+    *prev = NULL;
 
     memset(item, 0x0, sizeof(CMUTIL_MapItem));
 
@@ -110,15 +116,26 @@ CMUTIL_STATIC void *CMUTIL_MapPut(
         CMUTIL_MapToUpper(item->key);
     item->value = value;
     ires = CMCall(bucket, Add, item);
-    CMCall(imap->keyset, Add, item->key);
     if (ires) {
-        res = ires->value;
+        *prev = ires->value;
+        CMUTIL_MapItem tv = {item->key, NULL};
+        CMCall(imap->keyset, Remove, &tv);
         imap->memst->Free(ires->key);
         imap->memst->Free(ires);
     } else {
         imap->size++;
     }
+    return item;
+}
 
+CMUTIL_STATIC void *CMUTIL_MapPut(
+        CMUTIL_Map *map, const char* key, void* value)
+{
+    CMUTIL_Map_Internal *imap = (CMUTIL_Map_Internal*)map;
+    void *res = NULL;
+    CMUTIL_MapItem *item = CMUTIL_MapPutBase(imap, key, value, &res);
+    if (item)
+        CMCall(imap->keyset, Add, item->key);
     return res;
 }
 
@@ -146,25 +163,21 @@ CMUTIL_STATIC void *CMUTIL_MapGet(const CMUTIL_Map *map, const char* key)
     void *res = NULL;
 
     if (bucket) {
+        CMUTIL_MapCItem item = {key, NULL};
+        uint32_t idx = 0;
+        CMUTIL_MapItem *ires = NULL;
         if (imap->isucase) {
-            CMUTIL_MapItem *ires = NULL;
-            char skey[512];
-            CMUTIL_MapItem item = {skey, NULL};
-            uint32_t idx = 0;
-            strcpy(skey, key);
+            char *skey = imap->memst->Strdup(key);
             CMUTIL_MapToUpper(skey);
+            item.key = skey;
             ires = CMCall(bucket, Find, &item, &idx);
-            if (ires)
-                res = ires->value;
+            imap->memst->Free(skey);
         } else {
-            CMUTIL_MapItem *ires = NULL;
-            CMUTIL_MapItem item = {(char*)key, NULL};
-            uint32_t idx = 0;
-
             ires = CMCall(bucket, Find, &item, &idx);
-            if (ires)
-                res = ires->value;
         }
+
+        if (ires)
+            res = ires->value;
     }
 
     return res;
@@ -181,14 +194,14 @@ CMUTIL_STATIC void *CMUTIL_MapRemove(CMUTIL_Map *map, const char* key)
 
     if (bucket) {
         CMUTIL_MapItem *ires = NULL;
+        CMUTIL_MapCItem item = {key, NULL};
         if (imap->isucase) {
-            char skey[512];
-            CMUTIL_MapItem item = {skey, NULL};
-            strcpy(skey, key);
+            char *skey = imap->memst->Strdup(key);
             CMUTIL_MapToUpper(skey);
+            item.key = skey;
             ires = (CMUTIL_MapItem*)CMCall(bucket, Remove, &item);
+            imap->memst->Free(skey);
         } else {
-            CMUTIL_MapItem item = {(char*)key, NULL};
             ires = (CMUTIL_MapItem*)CMCall(bucket, Remove, &item);
         }
         if (ires) {
@@ -359,6 +372,34 @@ CMUTIL_STATIC void CMUTIL_MapPrintTo(const CMUTIL_Map *map, CMUTIL_String *out)
     CMCall(imap->keyset, Destroy);
 }
 
+CMUTIL_STATIC void *CMUTIL_MapGetAt(
+        const CMUTIL_Map *map, uint32_t index)
+{
+    const CMUTIL_Map_Internal *imap = (const CMUTIL_Map_Internal*)map;
+    if (index < imap->size) {
+        const char *key = (const char*)CMCall(imap->keyset, GetAt, index);
+        return CMCall(map, Get, key);
+    } else {
+        CMLogErrorS("index out of bound map size: %u, index: %u",
+                    (uint32_t)imap->size, index);
+        return NULL;
+    }
+}
+
+CMUTIL_STATIC void *CMUTIL_MapRemoveAt(
+        CMUTIL_Map *map, uint32_t index)
+{
+    CMUTIL_Map_Internal *imap = (CMUTIL_Map_Internal*)map;
+    if (index < imap->size) {
+        const char *key = (const char*)CMCall(imap->keyset, GetAt, index);
+        return CMCall(map, Remove, key);
+    } else {
+        CMLogErrorS("index out of bound map size: %u, index: %u",
+                    (uint32_t)imap->size, index);
+        return NULL;
+    }
+}
+
 static CMUTIL_Map g_cmutil_map = {
     CMUTIL_MapPut,
     CMUTIL_MapPutAll,
@@ -370,7 +411,9 @@ static CMUTIL_Map g_cmutil_map = {
     CMUTIL_MapClear,
     CMUTIL_MapClearLink,
     CMUTIL_MapDestroy,
-    CMUTIL_MapPrintTo
+    CMUTIL_MapPrintTo,
+    CMUTIL_MapGetAt,
+    CMUTIL_MapRemoveAt
 };
 
 CMUTIL_Map *CMUTIL_MapCreateInternal(
@@ -400,3 +443,4 @@ CMUTIL_Map *CMUTIL_MapCreateEx(
     return CMUTIL_MapCreateInternal(
                 CMUTIL_GetMem(), bucketsize, isucase, freecb);
 }
+
