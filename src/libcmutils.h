@@ -80,6 +80,24 @@ extern "C" {
 # endif
 #endif
 
+#if !defined(MSWIN)
+# if !defined(SOCKET)
+#  define SOCKET			int
+# endif
+# if !defined(closesocket)
+#  define closesocket		close
+# endif
+# if !defined(ioctlsocket)
+#  define ioctlsocket		ioctl
+# endif
+# if !defined(SOCKET_ERROR)
+#  define SOCKET_ERROR		-1
+# endif
+# if !defined(INVALID_SOCKET)
+#  define INVALID_SOCKET	-1
+# endif
+#endif
+
 /*
  * to remove anoying warning in qtcreator
  */
@@ -1076,17 +1094,32 @@ CMUTIL_API int CMUTIL_StringHexToBytes(char *dest, const char *src, int len);
 
 typedef struct CMUTIL_Map CMUTIL_Map;
 struct CMUTIL_Map {
-    void *(*Put)(CMUTIL_Map *map, const char* key, void* value);
-    void (*PutAll)(CMUTIL_Map *map, const CMUTIL_Map *src);
-    void *(*Get)(const CMUTIL_Map *map, const char* key);
-    void *(*Remove)(CMUTIL_Map *map, const char* key);
-    CMUTIL_StringArray *(*GetKeys)(const CMUTIL_Map *map);
-    size_t (*GetSize)(const CMUTIL_Map *map);
-    CMUTIL_Iterator *(*Iterator)(const CMUTIL_Map *map);
-    void (*Clear)(CMUTIL_Map *map);
-    void (*ClearLink)(CMUTIL_Map *map);
-    void (*Destroy)(CMUTIL_Map *map);
-    void (*PrintTo)(const CMUTIL_Map *map, CMUTIL_String *out);
+    void *(*Put)(
+            CMUTIL_Map *map, const char* key, void* value);
+    void (*PutAll)(
+            CMUTIL_Map *map, const CMUTIL_Map *src);
+    void *(*Get)(
+            const CMUTIL_Map *map, const char* key);
+    void *(*Remove)(
+            CMUTIL_Map *map, const char* key);
+    CMUTIL_StringArray *(*GetKeys)(
+            const CMUTIL_Map *map);
+    size_t (*GetSize)(
+            const CMUTIL_Map *map);
+    CMUTIL_Iterator *(*Iterator)(
+            const CMUTIL_Map *map);
+    void (*Clear)(
+            CMUTIL_Map *map);
+    void (*ClearLink)(
+            CMUTIL_Map *map);
+    void (*Destroy)(
+            CMUTIL_Map *map);
+    void (*PrintTo)(
+            const CMUTIL_Map *map, CMUTIL_String *out);
+    void *(*GetAt)(
+            const CMUTIL_Map *map, uint32_t index);
+    void *(*RemoveAt)(
+            CMUTIL_Map *map, uint32_t index);
 };
 
 #define CMUTIL_MAP_DEFAULT	256
@@ -1094,6 +1127,7 @@ struct CMUTIL_Map {
         CMUTIL_MAP_DEFAULT, CMFalse, NULL)
 CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
         uint32_t bucketsize, CMBool isucase, CMFreeCB freecb);
+
 
 
 typedef struct CMUTIL_List CMUTIL_List;
@@ -1564,40 +1598,44 @@ struct CMUTIL_StackWalker {
 
 CMUTIL_API CMUTIL_StackWalker *CMUTIL_StackWalkerCreate(void);
 
-typedef enum CMUTIL_SocketResult {
-    CMUTIL_SocketOk = 0,
-    CMUTIL_SocketTimeout,
-    CMUTIL_SocketPollFailed,
-    CMUTIL_SocketReceiveFailed,
-    CMUTIL_SocketSendFailed,
-    CMUTIL_SocketUnsupported,
-    CMUTIL_SocketUnknownError = 0x7FFFFFFF
-} CMUTIL_SocketResult;
+typedef enum CMSocketResult {
+    CMSocketOk = 0,
+    CMSocketTimeout,
+    CMSocketPollFailed,
+    CMSocketReceiveFailed,
+    CMSocketSendFailed,
+    CMSocketUnsupported,
+    CMSocketUnknownError = 0x7FFFFFFF
+} CMSocketResult;
 
 typedef struct CMUTIL_Socket CMUTIL_Socket;
 struct CMUTIL_Socket {
-    CMUTIL_SocketResult (*Read)(
+    CMSocketResult (*Read)(
             const CMUTIL_Socket *socket,
             CMUTIL_String *buffer, uint32_t size, long timeout);
-    CMUTIL_SocketResult (*Write)(
+    CMSocketResult (*Write)(
             const CMUTIL_Socket *socket, CMUTIL_String *data, long timeout);
-    CMUTIL_SocketResult (*WritePart)(
+    CMSocketResult (*WritePart)(
             const CMUTIL_Socket *socket, CMUTIL_String *data,
             int offset, uint32_t length, long timeout);
-    CMUTIL_SocketResult (*CheckReadBuffer)(
+    CMSocketResult (*CheckReadBuffer)(
             const CMUTIL_Socket *sock, long timeout);
-    CMUTIL_SocketResult (*CheckWriteBuffer)(
+    CMSocketResult (*CheckWriteBuffer)(
             const CMUTIL_Socket *sock, long timeout);
     CMUTIL_Socket *(*ReadSocket)(
             const CMUTIL_Socket *socket,
-            long timeout, CMUTIL_SocketResult *rval);
-    CMUTIL_SocketResult (*WriteSocket)(
+            long timeout, CMSocketResult *rval);
+    CMSocketResult (*WriteSocket)(
             const CMUTIL_Socket *socket,
             CMUTIL_Socket *tobesent, pid_t pid, long timeout);
     void (*GetRemoteAddr)(
             const CMUTIL_Socket *socket, char *hostbuf, int *port);
     void (*Close)(
             CMUTIL_Socket *socket);
+    SOCKET (*GetRawSocket)(
+            const CMUTIL_Socket *socket);
+    int (*ReadByte)(
+            const CMUTIL_Socket *socket);
 };
 
 CMUTIL_API CMUTIL_Socket *CMUTIL_SocketConnect(
@@ -1978,7 +2016,6 @@ struct CMUTIL_NIOSelector {
     CMUTIL_NIOSelector *(*WakeUp)(
             CMUTIL_NIOSelector *selector);
 };
-
 
 #ifdef __cplusplus
 }

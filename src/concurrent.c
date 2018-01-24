@@ -1283,7 +1283,7 @@ CMUTIL_STATIC void *CMUTIL_TimerMainLoop(void *param)
         }
         CMCall(itimer->mutex, Unlock);
 
-        usleep((uint32_t)itimer->precision);
+        USLEEP((uint32_t)itimer->precision);
         gettimeofday(&curr, NULL);
     }
     return NULL;

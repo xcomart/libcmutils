@@ -19,6 +19,9 @@
 
 #include "functions.h"
 
+#if !defined(MSWIN)
+# include <poll.h>
+#endif
 CMUTIL_LogDefine("cmutil.nio")
 
 //*****************************************************************************
@@ -308,17 +311,124 @@ CMUTIL_NIOBuffer *CMUTIL_NIOBufferCreate(int capacity)
     return CMUTIL_NIOBufferCreateInternal(CMUTIL_GetMem(), capacity);
 }
 
-typedef struct CMUTIL_NIOSelectionKey_Internal {
-    CMUTIL_NIOSelectionKey  base;
-} CMUTIL_NIOSelectionKey_Internal;
+typedef struct CMUTIL_NIOChannel_Internal {
+    CMUTIL_NIOChannel   base;
+    CMUTIL_Mem          *memst;
+    SOCKET              fd;
+} CMUTIL_NIOChannel_Internal;
 
 typedef struct CMUTIL_NIOSelector_Internal {
     CMUTIL_NIOSelector  base;
-    CMUTIL_Array        *keys;
+    CMUTIL_Mem          *memst;
+    CMUTIL_Map          *keys;
     CMUTIL_Socket       *sender;
     CMUTIL_Socket       *receiver;
+    CMUTIL_RWLock       *rwlock;
+    CMUTIL_Array        *selected;
 } CMUTIL_NIOSelector_Internal;
 
-typedef struct CMUTIL_NIOChannel_Internal {
-    CMUTIL_NIOChannel   base;
-} CMUTIL_NIOChannel_Internal;
+typedef struct CMUTIL_NIOSelectionKey_Internal {
+    CMUTIL_NIOSelectionKey      base;
+    CMUTIL_NIOSelector_Internal *selector;
+    CMUTIL_NIOChannel_Internal  *channel;
+    int                         interops;
+    int                         selectedops;
+    CMBool                      canceled;
+    char                        dummy_padder[4];
+} CMUTIL_NIOSelectionKey_Internal;
+
+CMUTIL_STATIC int CMUTIL_NIOSelectorSelectTimeout(
+        CMUTIL_NIOSelector *selector, long timeout)
+{
+    CMUTIL_NIOSelector_Internal *is = (CMUTIL_NIOSelector_Internal*)selector;
+    struct pollfd *pfds = NULL;
+    size_t cnt = CMCall(is->keys, GetSize);
+    uint32_t i;
+    int res = 0;
+    int ntout;
+
+    CMCall(is->selected, Clear);
+    cnt++;
+    pfds = is->memst->Alloc(sizeof(struct pollfd) * cnt);
+    memset(pfds, 0x0, sizeof(struct pollfd) * cnt);
+    for (i=0; i<(cnt-1); i++) {
+        CMUTIL_NIOSelectionKey_Internal *ik =
+                (CMUTIL_NIOSelectionKey_Internal*)CMCall(is->keys, GetAt, i);
+        if (ik->interops & CMUTIL_NIO_OP_ACCEPT ||
+                ik->interops & CMUTIL_NIO_OP_READ)
+            pfds[i].events = POLLIN;
+        if (ik->interops & CMUTIL_NIO_OP_CONNECT ||
+                ik->interops & CMUTIL_NIO_OP_WRITE)
+            pfds[i].events |= POLLOUT;
+        pfds[i].fd = ik->channel->fd;
+        ik->selectedops = 0;
+    }
+    pfds[cnt-1].events = POLLIN;
+    pfds[cnt-1].fd = CMCall(is->receiver, GetRawSocket);
+    cnt++;
+
+    // poll's timeout is int type, so implements long type timeout.
+    while (timeout > 0 && res == 0) {
+        if (timeout > INT32_MAX) {
+            ntout = INT32_MAX;
+        } else {
+            ntout = (int)timeout;
+        }
+        timeout -= ntout;
+        res = poll(pfds, cnt, ntout);
+    }
+
+    if (res > 0) {
+        for (i=0; i<(cnt-1); i++) {
+            if (pfds[i].revents) {
+                CMUTIL_NIOSelectionKey_Internal *ik =
+                        (CMUTIL_NIOSelectionKey_Internal*)CMCall(
+                            is->keys, GetAt, i);
+                if (ik->canceled)
+                    continue;
+                if (pfds[i].revents | POLLIN) {
+                    if (ik->interops & CMUTIL_NIO_OP_ACCEPT)
+                        ik->selectedops |= CMUTIL_NIO_OP_ACCEPT;
+                    if (ik->interops & CMUTIL_NIO_OP_READ)
+                        ik->selectedops |= CMUTIL_NIO_OP_READ;
+                }
+                if (pfds[i].revents | POLLOUT) {
+                    if (ik->interops & CMUTIL_NIO_OP_CONNECT)
+                        ik->selectedops |= CMUTIL_NIO_OP_CONNECT;
+                    if (ik->interops & CMUTIL_NIO_OP_WRITE)
+                        ik->selectedops |= CMUTIL_NIO_OP_WRITE;
+                }
+                CMCall(is->selected, Add, ik);
+            }
+        }
+        if (pfds[cnt-1].revents) {
+            CMCall(is->receiver, ReadByte);
+            res = -1;
+        }
+    } else if (res < 0) {
+        CMLogError("poll failed.");
+    }
+
+    return res;
+}
+
+CMUTIL_STATIC int CMUTIL_NIOSelectorSelect(
+        CMUTIL_NIOSelector *selector)
+{
+    int res;
+    // blocking until state being changed.
+    while ((res = CMCall(selector, SelectTimeout, INT32_MAX)) == 0);
+    return res;
+}
+
+CMUTIL_STATIC void CMUTIL_NIOSelectorClose(
+        CMUTIL_NIOSelector *selector)
+{
+
+}
+
+CMUTIL_STATIC CMBool CMUTIL_NIOSelectorIsOpen(
+        const CMUTIL_NIOSelector *selector)
+{
+
+}

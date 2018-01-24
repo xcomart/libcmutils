@@ -106,8 +106,12 @@
 # ifdef UNICODE
 #  undef UNICODE
 # endif
-# define WINVER 0x0600
-# define _WIN32_WINNT 0x0600
+# if !defined(WINVER)
+#  define WINVER 0x0600
+# endif
+# if !defined(_WIN32_WINNT)
+#  define _WIN32_WINNT WINVER
+# endif
 # include <winsock2.h>
 # include <windows.h>
 # include <time.h>
@@ -136,21 +140,6 @@
 #  include <sys/ioctl.h>
 # endif
 
-# if !defined(SOCKET)
-#  define SOCKET			int
-# endif
-# if !defined(closesocket)
-#  define closesocket		close
-# endif
-# if !defined(ioctlsocket)
-#  define ioctlsocket		ioctl
-# endif
-# if !defined(SOCKET_ERROR)
-#  define SOCKET_ERROR		-1
-# endif
-# if !defined(INVALID_SOCKET)
-#  define INVALID_SOCKET	-1
-# endif
 # define GETPID				(pid_t)getpid
 # define S_CRLF				"\n"
 # define USLEEP				usleep
