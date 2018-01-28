@@ -1619,9 +1619,9 @@ struct CMUTIL_Socket {
             const CMUTIL_Socket *socket, CMUTIL_String *data,
             int offset, uint32_t length, long timeout);
     CMSocketResult (*CheckReadBuffer)(
-            const CMUTIL_Socket *sock, long timeout);
+            const CMUTIL_Socket *socket, long timeout);
     CMSocketResult (*CheckWriteBuffer)(
-            const CMUTIL_Socket *sock, long timeout);
+            const CMUTIL_Socket *socket, long timeout);
     CMUTIL_Socket *(*ReadSocket)(
             const CMUTIL_Socket *socket,
             long timeout, CMSocketResult *rval);
@@ -1636,6 +1636,8 @@ struct CMUTIL_Socket {
             const CMUTIL_Socket *socket);
     int (*ReadByte)(
             const CMUTIL_Socket *socket);
+    CMSocketResult (*WriteByte)(
+            const CMUTIL_Socket *socket, uint8_t c);
 };
 
 CMUTIL_API CMUTIL_Socket *CMUTIL_SocketConnect(
@@ -1801,6 +1803,52 @@ CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 // NIO Implementations
 //////////////////////////////////////////////////////////////////////////////
 
+/**
+ * @brief Operation-set bit for socket-accept operations.
+ *
+ * Suppose that a selection key's interest set contains OP_ACCEPT
+ * at the start of a selection operation.
+ * If the selector detects that the corresponding server-socket channel is
+ * ready to accept another connection, or has an error pending,
+ * then it will add OP_ACCEPT to the key's ready set
+ * and add the key to its selected-key set.
+ */
+#define CMUTIL_NIO_OP_ACCEPT    (0x1 << 0)
+/**
+ * @brief Operation-set bit for socket-connect operations.
+ *
+ * Suppose that a selection key's interest set contains OP_CONNECT
+ * at the start of a selection operation.
+ * If the selector detects that the corresponding socket channel is
+ * ready to complete its connection sequence, or has an error pending,
+ * then it will add OP_CONNECT to the key's ready set
+ * and add the key to its selected-key set.
+ */
+#define CMUTIL_NIO_OP_CONNECT   (0x1 << 1)
+/**
+ * @brief Operation-set bit for read operations.
+ *
+ * Suppose that a selection key's interest set contains OP_READ
+ * at the start of a selection operation.
+ * If the selector detects that the corresponding channel is ready for reading,
+ * has reached end-of-stream, has been remotely shut down for further reading,
+ * or has an error pending,
+ * then it will add OP_READ to the key's ready-operation set
+ * and add the key to its selected-key set.
+ */
+#define CMUTIL_NIO_OP_READ      (0x1 << 2)
+/**
+ * @brief Operation-set bit for write operations.
+ *
+ * Suppose that a selection key's interest set contains OP_WRITE
+ * at the start of a selection operation.
+ * If the selector detects that the corresponding channel is ready for writing,
+ * has been remotely shut down for further writing, or has an error pending,
+ * then it will add OP_WRITE to the key's ready set
+ * and add the key to its selected-key set.
+ */
+#define CMUTIL_NIO_OP_WRITE     (0x1 << 3)
+
 typedef struct CMUTIL_NIOBuffer CMUTIL_NIOBuffer;
 struct CMUTIL_NIOBuffer {
     CMUTIL_NIOBuffer *(*Flip)(
@@ -1867,52 +1915,6 @@ struct CMUTIL_NIOChannel {
     int (*ValidOps)(
             const CMUTIL_NIOChannel *channel);
 };
-
-/**
- * @brief Operation-set bit for socket-accept operations.
- *
- * Suppose that a selection key's interest set contains OP_ACCEPT
- * at the start of a selection operation.
- * If the selector detects that the corresponding server-socket channel is
- * ready to accept another connection, or has an error pending,
- * then it will add OP_ACCEPT to the key's ready set
- * and add the key to its selected-key set.
- */
-#define CMUTIL_NIO_OP_ACCEPT    (0x1 << 0)
-/**
- * @brief Operation-set bit for socket-connect operations.
- *
- * Suppose that a selection key's interest set contains OP_CONNECT
- * at the start of a selection operation.
- * If the selector detects that the corresponding socket channel is
- * ready to complete its connection sequence, or has an error pending,
- * then it will add OP_CONNECT to the key's ready set
- * and add the key to its selected-key set.
- */
-#define CMUTIL_NIO_OP_CONNECT   (0x1 << 1)
-/**
- * @brief Operation-set bit for read operations.
- *
- * Suppose that a selection key's interest set contains OP_READ
- * at the start of a selection operation.
- * If the selector detects that the corresponding channel is ready for reading,
- * has reached end-of-stream, has been remotely shut down for further reading,
- * or has an error pending,
- * then it will add OP_READ to the key's ready-operation set
- * and add the key to its selected-key set.
- */
-#define CMUTIL_NIO_OP_READ      (0x1 << 2)
-/**
- * @brief Operation-set bit for write operations.
- *
- * Suppose that a selection key's interest set contains OP_WRITE
- * at the start of a selection operation.
- * If the selector detects that the corresponding channel is ready for writing,
- * has been remotely shut down for further writing, or has an error pending,
- * then it will add OP_WRITE to the key's ready set
- * and add the key to its selected-key set.
- */
-#define CMUTIL_NIO_OP_WRITE     (0x1 << 3)
 
 struct CMUTIL_NIOSelectionKey {
     CMUTIL_NIOChannel *(*Attach)(

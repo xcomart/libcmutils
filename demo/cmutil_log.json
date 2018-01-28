@@ -7,7 +7,7 @@
                 "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",
                 "async": true,
                 "asyncBufferSize": 512,
-                "type": "Console",  // can be one of (console, file, rollingfile, socket)
+                "type": "Console"  // can be one of (console, file, rollingfile, socket)
             },{
                 "name": "SampleFileAppender",
                 "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",

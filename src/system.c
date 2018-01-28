@@ -416,14 +416,15 @@ static CMUTIL_File g_cmutil_file = {
 CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path)
 {
     if (path) {
-        char rpath[2048];
+        char rpath[2048] = {0,};
         const char *p;
         CMUTIL_File_Internal *res = memst->Alloc(sizeof(CMUTIL_File_Internal));
 
 #if defined(MSWIN)
         GetFullPathName(path, 2048, rpath, NULL);
 #else
-        realpath(path, rpath);
+        if (realpath(path, rpath) == NULL)
+            strncpy(rpath, path, 2047);
 #endif
 
         memset(res, 0x0, sizeof(CMUTIL_File_Internal));

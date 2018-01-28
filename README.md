@@ -44,7 +44,7 @@ The source code freely to use under **GPL v3** - see [LICENSE file](LICENSE)
 	* JSON configuration file support.
 	* Custom appender can be used.
     * FileAppender, RollingFileAppender, SocketAppender
-        and ConsoleAppender implemented internally.
+        and ConsoleAppender implemented out of the box.
 	* Asynchronous logging support.
 * Platform independent non-blocking TCP/IP networking implementation.
 	* ServerSocket / ClientSocket implemented.

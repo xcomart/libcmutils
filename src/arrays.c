@@ -33,7 +33,7 @@ typedef struct CMUTIL_Array_Internal {
     void            **data;
     size_t          capacity;
     size_t          size;
-    CMCompareCB    comparator;
+    CMCompareCB     comparator;
     CMFreeCB        freecb;
     CMUTIL_Mem      *memst;
     CMBool          issorted;       // sorted array or not

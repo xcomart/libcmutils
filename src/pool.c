@@ -22,22 +22,22 @@
 CMUTIL_LogDefine("cmutils.pool")
 
 typedef struct CMUTIL_Pool_Internal {
-    CMUTIL_Pool			base;
-    CMUTIL_Timer		*timer;
-    CMUTIL_Semaphore	*semp;
-    long				pingintv;
-    CMUTIL_List			*avail;
-    CMUTIL_Mutex		*avlmtx;
-    void				*udata;
-    void				*(*createf)(void*);
-    void				(*destroyf)(void*,void*);
-    CMBool			(*testf)(void*,void*);
-    CMUTIL_TimerTask	*pingtester;
+    CMUTIL_Pool         base;
+    CMUTIL_Timer        *timer;
+    CMUTIL_Semaphore    *semp;
+    long                pingintv;
+    CMUTIL_List         *avail;
+    CMUTIL_Mutex        *avlmtx;
+    void                *udata;
+    void                *(*createf)(void*);
+    void                (*destroyf)(void*,void*);
+    CMBool              (*testf)(void*,void*);
+    CMUTIL_TimerTask    *pingtester;
     CMUTIL_Mem          *memst;
-    CMBool			intimer;
-    uint32_t				totcnt;
-    uint32_t				maxcnt;
-    CMBool			testonb;
+    CMBool              intimer;
+    uint32_t            totcnt;
+    uint32_t            maxcnt;
+    CMBool              testonb;
 } CMUTIL_Pool_Internal;
 
 CMUTIL_STATIC void *CMUTIL_PoolCheckOut(
@@ -183,6 +183,7 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
     res->pingintv = pinginterval;
     res->testonb = testonborrow;
     res->udata = udata;
+    res->maxcnt = maxcnt;
     if (timer)
         res->timer = timer;
     else {
