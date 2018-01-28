@@ -325,6 +325,9 @@ typedef struct CMUTIL_NIOSelector_Internal {
     CMUTIL_Socket       *receiver;
     CMUTIL_RWLock       *rwlock;
     CMUTIL_Array        *selected;
+    CMUTIL_Mutex        *mtx;
+    CMBool              closing;
+    int                 dummy_padder;
 } CMUTIL_NIOSelector_Internal;
 
 typedef struct CMUTIL_NIOSelectionKey_Internal {
@@ -387,16 +390,12 @@ CMUTIL_STATIC int CMUTIL_NIOSelectorSelectTimeout(
                 if (ik->canceled)
                     continue;
                 if (pfds[i].revents | POLLIN) {
-                    if (ik->interops & CMUTIL_NIO_OP_ACCEPT)
-                        ik->selectedops |= CMUTIL_NIO_OP_ACCEPT;
-                    if (ik->interops & CMUTIL_NIO_OP_READ)
-                        ik->selectedops |= CMUTIL_NIO_OP_READ;
+                    ik->selectedops |= (ik->interops & CMUTIL_NIO_OP_ACCEPT);
+                    ik->selectedops |= (ik->interops & CMUTIL_NIO_OP_READ);
                 }
                 if (pfds[i].revents | POLLOUT) {
-                    if (ik->interops & CMUTIL_NIO_OP_CONNECT)
-                        ik->selectedops |= CMUTIL_NIO_OP_CONNECT;
-                    if (ik->interops & CMUTIL_NIO_OP_WRITE)
-                        ik->selectedops |= CMUTIL_NIO_OP_WRITE;
+                    ik->selectedops |= (ik->interops & CMUTIL_NIO_OP_CONNECT);
+                    ik->selectedops |= (ik->interops & CMUTIL_NIO_OP_WRITE);
                 }
                 CMCall(is->selected, Add, ik);
             }
@@ -424,11 +423,25 @@ CMUTIL_STATIC int CMUTIL_NIOSelectorSelect(
 CMUTIL_STATIC void CMUTIL_NIOSelectorClose(
         CMUTIL_NIOSelector *selector)
 {
-
+    CMUTIL_NIOSelector_Internal *is = (CMUTIL_NIOSelector_Internal*)selector;
+    uint8_t c = '0';
+    if (is) {
+        CMUTIL_StringArray *karr = NULL;
+        size_t i, size;
+        is->closing = CMTrue;
+        CMCall(is->sender, WriteByte, c);
+        karr = CMCall(is->keys, GetKeys);
+        size = CMCall(karr, GetSize);
+        for (i=0; i<size; i++) {
+            CMUTIL_String *key = CMCall(karr, GetAt, i);
+        }
+        is->memst->Free(is);
+    }
 }
 
 CMUTIL_STATIC CMBool CMUTIL_NIOSelectorIsOpen(
         const CMUTIL_NIOSelector *selector)
 {
+    CMUTIL_NIOSelector_Internal *is = (CMUTIL_NIOSelector_Internal*)selector;
 
 }

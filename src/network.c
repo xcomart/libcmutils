@@ -735,7 +735,7 @@ CMUTIL_STATIC int CMUTIL_SocketReadByte(const CMUTIL_Socket *sock)
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
     int rc;
     uint32_t rsize;
-    uint8_t buf;
+    uint8_t buf = 0;
     struct pollfd pfd;
 
     /*
@@ -756,11 +756,11 @@ CMUTIL_STATIC int CMUTIL_SocketReadByte(const CMUTIL_Socket *sock)
         if (rc < 0) {
             if (!isock->silent)
                 CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
-            return CMSocketPollFailed;
+            return -1;
         } else if (rc == 0) {
             if (!isock->silent)
                 CMLogError("socket read timeout.");
-            return CMSocketTimeout;
+            return -1;
         }
 
 #if defined(LINUX)
@@ -783,6 +783,62 @@ CMUTIL_STATIC int CMUTIL_SocketReadByte(const CMUTIL_Socket *sock)
     return buf;
 }
 
+CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteByte(
+        const CMUTIL_Socket *sock, uint8_t c)
+{
+    const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
+    int tout, rc;
+    struct pollfd pfd;
+
+    /*
+    Kernel object handles are process specific.
+    That is, a process must either create the object
+    or open an existing object to obtain a kernel object handle.
+    The per-process limit on kernel handles is 2^24.
+    So SOCKET can be casted to 32bit integer in 64bit windows.
+    */
+    memset(&pfd, 0x0, sizeof(struct pollfd));
+    pfd.fd = isock->sock;
+    pfd.events = POLLOUT;
+    tout = INT32_MAX;
+
+    while (CMTrue) {
+        rc = poll(&pfd, 1, tout);
+        if (rc < 0) {
+            if (!isock->silent)
+                CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
+            return CMSocketPollFailed;
+        }
+        else if (rc == 0) {
+            if (!isock->silent)
+                CMLogError("socket write timeout");
+            return CMSocketTimeout;
+        }
+
+#if defined(LINUX)
+        rc = (int)send(isock->sock, &c, 1, MSG_NOSIGNAL);
+#else
+        rc = (int)send(isock->sock, &c, 1, 0);
+#endif
+        if (rc == SOCKET_ERROR) {
+            if (errno == EAGAIN
+#if !defined(MSWIN)
+                || errno == EWOULDBLOCK
+#endif
+                )
+                continue;
+            if (!isock->silent)
+                CMLogError("socket write error.(%d:%s)",
+                           errno, strerror(errno));
+            return CMSocketSendFailed;
+        }
+        if (rc > 0)
+            break;
+    }
+
+    return CMSocketOk;
+}
+
 static CMUTIL_Socket g_cmutil_socket = {
     CMUTIL_SocketRead,
     CMUTIL_SocketWrite,
@@ -794,7 +850,8 @@ static CMUTIL_Socket g_cmutil_socket = {
     CMUTIL_SocketGetRemoteAddr,
     CMUTIL_SocketClose,
     CMUTIL_SocketGetRawSocket,
-    CMUTIL_SocketReadByte
+    CMUTIL_SocketReadByte,
+    CMUTIL_SocketWriteByte
 };
 
 CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
@@ -1104,7 +1161,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketCheckReadBuffer(
 #else
     fd = si->base.sock;
     if (gnutls_record_check_pending(si->session) > 0)
-        return CMUTIL_SocketOk;
+        return CMSocketOk;
 #endif  // !CMUTIL_SSL_USE_OPENSSL
 
     pfd.fd = fd;
@@ -1217,7 +1274,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
         int handshake_res = 0;
 
         res = CMCall(sock, CheckReadBuffer, timeout);
-        if (res != CMUTIL_SocketOk) {
+        if (res != CMSocketOk) {
             CMLogError("CheckReadBuffer() failed");
             return res;
         }
@@ -1232,7 +1289,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
                      gnutls_error_is_fatal(handshake_res) == 0);
             if (handshake_res < 0) {
                 CMLogError("handshake failed : %s", gnutls_strerror(rc));
-                return CMUTIL_SocketReceiveFailed;
+                return CMSocketReceiveFailed;
             }
             break;
         case GNUTLS_E_AGAIN:
@@ -1246,11 +1303,11 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
                     CMLogWarn("Warning : %s", gnutls_strerror(rc));
                 } else {
                     CMLogError("receive failed : %s", gnutls_strerror(rc));
-                    return CMUTIL_SocketReceiveFailed;
+                    return CMSocketReceiveFailed;
                 }
             } else if (rc == 0) {
                 CMLogError("peer closed connection");
-                return CMUTIL_SocketReceiveFailed;
+                return CMSocketReceiveFailed;
             } else {
                 CMCall(buffer, AddNString, buf, (uint32_t)rc);
                 size -= (uint32_t)rc;
@@ -1338,7 +1395,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
         int handshake_res = 0;
 
         res = CMCall(sock, CheckWriteBuffer, timeout);
-        if (res != CMUTIL_SocketOk)
+        if (res != CMSocketOk)
             return res;
 
         rc = (int)gnutls_record_send(isck->session, buf, (uint32_t)size);
@@ -1350,7 +1407,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
                      gnutls_error_is_fatal(handshake_res) == 0);
             if (handshake_res < 0) {
                 CMLogError("handshake failed : %s", gnutls_strerror(rc));
-                return CMUTIL_SocketSendFailed;
+                return CMSocketSendFailed;
             }
             break;
         case GNUTLS_E_AGAIN:
@@ -1364,11 +1421,11 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
                     CMLogWarn("Warning : %s", gnutls_strerror(rc));
                 } else {
                     CMLogError("send failed : %s", gnutls_strerror(rc));
-                    return CMUTIL_SocketSendFailed;
+                    return CMSocketSendFailed;
                 }
             } else if (rc == 0) {
                 CMLogError("peer closed connection");
-                return CMUTIL_SocketSendFailed;
+                return CMSocketSendFailed;
             } else {
                 buf += rc;
                 size -= (uint32_t)rc;
@@ -1396,7 +1453,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWriteSocket(
 CMUTIL_STATIC void CMUTIL_SSLSocketClose(
         CMUTIL_Socket *sock)
 {
-    CMUTIL_SSLSocket_Internal *isck = (CMUTIL_SSLSocket_Internal*)socket;
+    CMUTIL_SSLSocket_Internal *isck = (CMUTIL_SSLSocket_Internal*)sock;
     if (isck) {
         if (isck->session) {
 #if defined(CMUTIL_SSL_USE_OPENSSL)
@@ -1481,7 +1538,7 @@ CMUTIL_STATIC int CMUTIL_SSLSocketReadByte(
         int handshake_res = 0;
 
         res = CMCall(sock, CheckReadBuffer, INT32_MAX);
-        if (res != CMUTIL_SocketOk) {
+        if (res != CMSocketOk) {
             CMLogError("CheckReadBuffer() failed");
             return res;
         }
@@ -1523,6 +1580,101 @@ CMUTIL_STATIC int CMUTIL_SSLSocketReadByte(
     return -1;
 }
 
+CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWriteByte(
+        const CMUTIL_Socket *sock, uint8_t c)
+{
+    const CMUTIL_SSLSocket_Internal *isck =
+            (const CMUTIL_SSLSocket_Internal*)sock;
+    CMSocketResult res;
+    int rc, cnt = 0;
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+    int in_init=0;
+
+    while (CMTrue) {
+        if (SSL_in_init(isck->session) &&
+                !SSL_total_renegotiations(isck->session)) {
+            in_init = 1;
+        } else {
+            if (in_init)
+                in_init = 0;
+        }
+
+        res = CMCall(sock, CheckWriteBuffer, INT32_MAX);
+        if (res == CMSocketOk) {
+            rc = SSL_write(isck->session, &c, 1);
+
+            switch (SSL_get_error(isck->session, rc))
+            {
+            case SSL_ERROR_NONE:
+                if (rc <= 0) {
+                    CMLogError("SSL write failed");
+                    return CMSocketSendFailed;
+                }
+                return CMSocketOk;
+            case SSL_ERROR_WANT_WRITE:
+            case SSL_ERROR_WANT_READ:
+            case SSL_ERROR_WANT_X509_LOOKUP:
+                cnt++;
+                USLEEP(100000);
+                break;
+            case SSL_ERROR_ZERO_RETURN:
+                CMLogError("peer closed connection");
+                return CMSocketSendFailed;
+            default:
+                CMLogError("SSL write failed");
+                return CMSocketSendFailed;
+            }
+        } else {
+            CMLogError("CheckWriteBuffer() failed");
+            return res;
+        }
+
+    }
+#else
+
+    while (CMTrue) {
+        int handshake_res = 0;
+
+        res = CMCall(sock, CheckWriteBuffer, INT32_MAX);
+        if (res != CMSocketOk)
+            return res;
+
+        rc = (int)gnutls_record_send(isck->session, &c, 1);
+        switch (rc) {
+        case GNUTLS_E_REHANDSHAKE:
+            do {
+                handshake_res = gnutls_handshake(isck->session);
+            } while (handshake_res < 0 &&
+                     gnutls_error_is_fatal(handshake_res) == 0);
+            if (handshake_res < 0) {
+                CMLogError("handshake failed : %s", gnutls_strerror(rc));
+                return CMSocketSendFailed;
+            }
+            break;
+        case GNUTLS_E_AGAIN:
+        case GNUTLS_E_INTERRUPTED:
+            cnt++;
+            usleep(100000);
+            break;
+        default:
+            if (rc < 0) {
+                if (gnutls_error_is_fatal(rc) == 0) {
+                    CMLogWarn("Warning : %s", gnutls_strerror(rc));
+                } else {
+                    CMLogError("send failed : %s", gnutls_strerror(rc));
+                    return CMSocketSendFailed;
+                }
+            } else if (rc == 0) {
+                CMLogError("peer closed connection");
+                return CMSocketSendFailed;
+            } else {
+                return CMSocketOk;
+            }
+        }
+    }
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+}
+
 static CMUTIL_Socket g_cmutil_sslsocket = {
     CMUTIL_SSLSocketRead,
     CMUTIL_SocketWrite,
@@ -1534,7 +1686,8 @@ static CMUTIL_Socket g_cmutil_sslsocket = {
     CMUTIL_SocketGetRemoteAddr,
     CMUTIL_SSLSocketClose,
     CMUTIL_SSLSocketGetRawSocket,
-    CMUTIL_SSLSocketReadByte
+    CMUTIL_SSLSocketReadByte,
+    CMUTIL_SSLSocketWriteByte
 };
 
 CMUTIL_STATIC CMUTIL_SSLSocket_Internal *CMUTIL_SSLSocketCreate(
@@ -1917,20 +2070,18 @@ CMBool CMUTIL_SocketPairInternal(
     closesocket(listener);
     closesocket(s[0]);
     closesocket(s[1]);
-    WSASetLastError(e);
     s[0] = s[1] = INVALID_SOCKET;
+    WSASetLastError(e);
     goto FAILED;
 SUCCESS:
-    is1->sock = s[0];
-    is2->sock = s[1];
 #else
     int ir;
     ir = socketpair(AF_LOCAL, SOCK_STREAM, 0, s);
     if (ir != 0)
         goto FAILED;
+#endif
     is1->sock = s[0];
     is2->sock = s[1];
-#endif
     *s1 = (CMUTIL_Socket*)is1;
     *s2 = (CMUTIL_Socket*)is2;
     return CMTrue;

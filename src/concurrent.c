@@ -652,6 +652,8 @@ CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
     ithread->name = memst->Strdup(name);
 
     CMCall(g_cmutil_thread_context->mutex, Lock);
+    if (g_cmutil_thread_context->threadIndex == UINT32_MAX)
+        g_cmutil_thread_context->threadIndex = 0;
     ithread->id = ++(g_cmutil_thread_context->threadIndex);
     CMCall(g_cmutil_thread_context->mutex, Unlock);
 
