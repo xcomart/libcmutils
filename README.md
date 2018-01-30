@@ -25,48 +25,48 @@ The source code freely to use under **GPL v3** - see [LICENSE file](LICENSE)
 ## 3. Features
 
 * Implementation of commonly used data structures in object based approach.
-	* Dynamic array operations
-	* Dynamic string operations
-	* Hashmap implementation
-	* Linked List implementation
+  * Dynamic array operations
+  * Dynamic string operations
+  * Hashmap implementation
+  * Linked List implementation
 * Implementation of platform independent concurrent operations.
-	* Conditional object
-	* Mutex
-	* Thread
-	* Semaphore
-	* Read/Write Lock
-	* Generic Resource Pool
+  * Conditional object
+  * Mutex
+  * Thread
+  * Semaphore
+  * Read/Write Lock
+  * Generic Resource Pool
 * Simple JSON/XML implementation.
-	* JSON parser/builder with comment support
-	* XML parser/builder
+  * JSON parser/builder with comment support
+  * XML parser/builder
 * Extensible logging system.
-	* Log4J like implementation.
-	* JSON configuration file support.
-	* Custom appender can be used.
-    * FileAppender, RollingFileAppender, SocketAppender
-        and ConsoleAppender implemented out of the box.
-	* Asynchronous logging support.
+  * Log4J like implementation.
+  * JSON configuration file support.
+  * Custom appender can be used.
+  * FileAppender, RollingFileAppender, SocketAppender
+    and ConsoleAppender implemented out of the box.
+  * Asynchronous logging support.
 * Platform independent non-blocking TCP/IP networking implementation.
-	* ServerSocket / ClientSocket implemented.
-    * SSL communication implemented with same as ServerSocket / ClientSocket.
-        (gnutls backend / OpenSSL backend can be chosen)
-	* Passing socket to another process using IPC.
+  * ServerSocket / ClientSocket implemented.
+  * SSL communication implemented with same as ServerSocket / ClientSocket.
+    (gnutls backend / OpenSSL backend can be chosen)
+  * Passing socket to another process using IPC.
 * Supports memory management by three types of strategy
-	* System - Uses system version malloc, realloc, strdup and free.
-	* Recycle - Creates 2^n sized memory blocks using checkout/release methods.
-		This strategy checks boundary exceeding, leaking and double freeing etc.
-		Proper option for production system.
-	* Debug - Same as Recycle, except every memory allocation will generates
-		callstack informations. Increadibly slow.
-		So you may only use when memory leak detected.
+  * System - Uses system version malloc, realloc, strdup and free.
+  * Recycle - Creates 2^n sized memory blocks using checkout/release methods.
+    This strategy checks boundary exceeding, leaking and double freeing etc.
+    Proper option for production system.
+  * Debug - Same as Recycle, except every memory allocation will generates
+    callstack informations. Increadibly slow.
+    So you may only use when memory leak detected.
 
 ## 4. Installation
 
-### Windows platforms(Visual Studio)
+### Windows platforms(Visual Studio tool-chain)
 
 under construction.
 
-### Windows platforms(MinGW)
+### Windows platforms(MinGW tool-chain)
 
 under construction.
 

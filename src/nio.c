@@ -332,13 +332,21 @@ typedef struct CMUTIL_NIOSelector_Internal {
 
 typedef struct CMUTIL_NIOSelectionKey_Internal {
     CMUTIL_NIOSelectionKey      base;
+    CMUTIL_Mem                  *memst;
     CMUTIL_NIOSelector_Internal *selector;
     CMUTIL_NIOChannel_Internal  *channel;
     int                         interops;
     int                         selectedops;
     CMBool                      canceled;
-    char                        dummy_padder[4];
+    CMBool                      valid;
 } CMUTIL_NIOSelectionKey_Internal;
+
+CMUTIL_STATIC void CMUTIL_NIOSelectionKeyDestroy(
+        CMUTIL_NIOSelectionKey_Internal *ssk)
+{
+    if (ssk)
+        ssk->memst->Free(ssk);
+}
 
 CMUTIL_STATIC int CMUTIL_NIOSelectorSelectTimeout(
         CMUTIL_NIOSelector *selector, long timeout)
@@ -434,7 +442,18 @@ CMUTIL_STATIC void CMUTIL_NIOSelectorClose(
         size = CMCall(karr, GetSize);
         for (i=0; i<size; i++) {
             CMUTIL_String *key = CMCall(karr, GetAt, i);
+            const char *skey = CMCall(key, GetCString);
+            CMUTIL_NIOSelectionKey_Internal *selkey =
+                    (CMUTIL_NIOSelectionKey_Internal*)CMCall(
+                        is->keys, Remove, skey);
+            if (selkey->canceled) {
+                CMUTIL_NIOSelectionKeyDestroy(selkey);
+            } else {
+                selkey->selector = NULL;
+                selkey->valid = CMFalse;
+            }
         }
+        CMCall(karr, Destroy);
         is->memst->Free(is);
     }
 }
