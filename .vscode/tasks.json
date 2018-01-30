@@ -6,7 +6,16 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "mkdir -p ../libcmutils-build;cd ../libcmutils-build;qmake ../libcmutils/libcmutils.pro;make"
+//            "command": "mkdir -p ../libcmutils-build;cd ../libcmutils-build;qmake ../libcmutils/libcmutils.pro;make"
+            "command": "cd ../libcmutils-build;make"
+        },
+        {
+            "label": "cmake",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceRoot}/../libcmutils-build"
+            },
+            "command": "rm -r ${workspaceRoot}/../libcmutils-build;mkdir -p ${workspaceRoot}/../libcmutils-build && cd ${workspaceRoot}/../libcmutils-build && cmake ${workspaceRoot}"
         }
     ]
 }
