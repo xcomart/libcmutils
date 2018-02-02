@@ -19,6 +19,47 @@
             "targets": [
               {
                 "artifacts": [
+                  "/home/comart/Work/cmlibs/libcmutils/build/libcmutils.a"
+                ],
+                "buildDirectory": "/home/comart/Work/cmlibs/libcmutils/build",
+                "fileGroups": [
+                  {
+                    "compileFlags": "-g  ",
+                    "defines": [
+                      "CMUTIL_SSL_USE_OPENSSL",
+                      "CMUTIL_SUPPORT_SSL"
+                    ],
+                    "isGenerated": false,
+                    "language": "C",
+                    "sources": [
+                      "src/arrays.c",
+                      "src/base.c",
+                      "src/callstack.c",
+                      "src/concurrent.c",
+                      "src/config.c",
+                      "src/lists.c",
+                      "src/logger.c",
+                      "src/maps.c",
+                      "src/memdebug.c",
+                      "src/nanojson.c",
+                      "src/nanoxml.c",
+                      "src/network.c",
+                      "src/nio.c",
+                      "src/pattern.c",
+                      "src/pool.c",
+                      "src/strings.c",
+                      "src/system.c"
+                    ]
+                  }
+                ],
+                "fullName": "libcmutils.a",
+                "linkerLanguage": "C",
+                "name": "cmutilsStatic",
+                "sourceDirectory": "/home/comart/Work/cmlibs/libcmutils",
+                "type": "STATIC_LIBRARY"
+              },
+              {
+                "artifacts": [
                   "/home/comart/Work/cmlibs/libcmutils/build/libcmutils.so"
                 ],
                 "buildDirectory": "/home/comart/Work/cmlibs/libcmutils/build",
@@ -58,54 +99,13 @@
                 "name": "cmutils",
                 "sourceDirectory": "/home/comart/Work/cmlibs/libcmutils",
                 "type": "SHARED_LIBRARY"
-              },
-              {
-                "artifacts": [
-                  "/home/comart/Work/cmlibs/libcmutils/build/libcmutils.a"
-                ],
-                "buildDirectory": "/home/comart/Work/cmlibs/libcmutils/build",
-                "fileGroups": [
-                  {
-                    "compileFlags": "-g  ",
-                    "defines": [
-                      "CMUTIL_SSL_USE_OPENSSL",
-                      "CMUTIL_SUPPORT_SSL"
-                    ],
-                    "isGenerated": false,
-                    "language": "C",
-                    "sources": [
-                      "src/arrays.c",
-                      "src/base.c",
-                      "src/callstack.c",
-                      "src/concurrent.c",
-                      "src/config.c",
-                      "src/lists.c",
-                      "src/logger.c",
-                      "src/maps.c",
-                      "src/memdebug.c",
-                      "src/nanojson.c",
-                      "src/nanoxml.c",
-                      "src/network.c",
-                      "src/nio.c",
-                      "src/pattern.c",
-                      "src/pool.c",
-                      "src/strings.c",
-                      "src/system.c"
-                    ]
-                  }
-                ],
-                "fullName": "libcmutils.a",
-                "linkerLanguage": "C",
-                "name": "cmutilsStatic",
-                "sourceDirectory": "/home/comart/Work/cmlibs/libcmutils",
-                "type": "STATIC_LIBRARY"
               }
             ]
           }
         ]
       }
     ],
-    "cookie": "0.19852725320729991",
+    "cookie": "0.4814304197907411",
     "inReplyTo": "codemodel",
     "type": "reply"
   }
