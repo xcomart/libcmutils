@@ -964,31 +964,179 @@ int CMUTIL_StringHexToBytes(char *dest, const char *src, int len)
     int isodd = len % 2;
     p = dest;
 
+    if (isodd) {
+        // pad first byte to zero when given source has odd number.
+        /* upper 4 bits */
+        *p = 0;
+        /* lower 4 bits */
+        *p |= (CMUTIL_StringHexChar(*hexstr++) & 0xF);
+        len -= 1; p++;
+        isodd = 0;
+    }
     /* every 2 hex characters are converted to one byte */
     while (len > 0) {
-        if (isodd) {
-            // pad first byte to zero when given source has odd number.
+        if (*hexstr) {
             /* upper 4 bits */
-            *p = 0;
+            *p = (char)((CMUTIL_StringHexChar(*hexstr++) & 0xF) << 4);
+
             /* lower 4 bits */
             *p |= (CMUTIL_StringHexChar(*hexstr++) & 0xF);
-            len -= 1; p++;
-            isodd = 0;
         } else {
-            if (*hexstr) {
-                /* upper 4 bits */
-                *p = (char)((CMUTIL_StringHexChar(*hexstr++) & 0xF) << 4);
-
-                /* lower 4 bits */
-                *p |= (CMUTIL_StringHexChar(*hexstr++) & 0xF);
-            } else {
-                *p = (char)0xFF;	// padding with 0xFF
-            }
-            len -= 2; p++;
+            *p = (char)0xFF;	// padding with 0xFF
         }
+        len -= 2; p++;
     }
     /* return number of result bytes */
     return (int)(p - dest);
+}
+
+typedef struct CMUTIL_ByteBuffer_Internal {
+    CMUTIL_ByteBuffer   base;
+    uint8_t             *buffer;
+    CMUTIL_Mem          *memst;
+    size_t              size;
+    size_t              capacity;
+} CMUTIL_ByteBuffer_Internal;
+
+CMUTIL_STATIC void CMUTIL_ByteBufferCheckSize(
+        CMUTIL_ByteBuffer_Internal *bbi,
+        uint32_t insize)
+{
+    size_t reqsz = bbi->size + insize;
+    if (bbi->capacity < reqsz) {
+        size_t ncapa = bbi->capacity * 2;
+        while (ncapa < reqsz)
+            ncapa *= 2;
+        bbi->memst->Realloc(bbi->buffer, ncapa);
+        bbi->capacity = ncapa;
+    }
+}
+
+CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddByte(
+        CMUTIL_ByteBuffer *buffer,
+        uint8_t b)
+{
+    return CMCall(buffer, AddBytes, &b, 1);
+}
+
+CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytes(
+        CMUTIL_ByteBuffer *buffer,
+        const uint8_t *bytes,
+        uint32_t length)
+{
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    CMUTIL_ByteBufferCheckSize(bbi, length);
+    memcpy(bbi->buffer + bbi->size, bytes, length);
+    bbi->size += length;
+    return buffer;
+}
+
+CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytesPart(
+        CMUTIL_ByteBuffer *buffer,
+        const uint8_t *bytes,
+        uint32_t offset,
+        uint32_t length)
+{
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    CMUTIL_ByteBufferCheckSize(bbi, length);
+    memcpy(bbi->buffer + bbi->size, bytes, length);
+    bbi->size += length;
+    return buffer;
+}
+
+CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferInsertByteAt(
+        CMUTIL_ByteBuffer *buffer,
+        uint8_t b,
+        uint32_t index)
+{
+    return CMCall(buffer, InsertBytesAt, &b, index, 1);
+}
+
+CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferInsertBytesAt(
+        CMUTIL_ByteBuffer *buffer,
+        const uint8_t *bytes,
+        uint32_t index,
+        uint32_t length)
+{
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    if (index > bbi->size) {
+        CMLogErrorS("index out of bounds: size - %u, request - %u",
+                    (uint32_t)bbi->size, index);
+        return NULL;
+    }
+    if (index == bbi->size)
+        return CMCall(buffer, AddBytes, bytes, length);
+    CMUTIL_ByteBufferCheckSize(bbi, length);
+    memmove(bbi->buffer + index,
+            bbi->buffer + index + length,
+            bbi->size - index);
+    memcpy(bbi->buffer + index, bytes, length);
+    bbi->size += length;
+    return buffer;
+}
+
+CMUTIL_STATIC uint8_t CMUTIL_ByteBufferGetAt(
+        const CMUTIL_ByteBuffer *buffer,
+        uint32_t index)
+{
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    return *(bbi->buffer + index);
+}
+
+CMUTIL_STATIC size_t CMUTIL_ByteBufferGetSize(
+        const CMUTIL_ByteBuffer *buffer)
+{
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    return bbi->size;
+}
+
+CMUTIL_STATIC uint8_t *CMUTIL_ByteBufferGetBytes(
+        CMUTIL_ByteBuffer *buffer)
+{
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    return bbi->buffer;
+}
+
+CMUTIL_STATIC void CMUTIL_ByteBufferDestroy(
+        CMUTIL_ByteBuffer *buffer)
+{
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    if (bbi) {
+        if (bbi->buffer)
+            bbi->memst->Free(bbi->buffer);
+        bbi->memst->Free(bbi);
+    }
+}
+
+static CMUTIL_ByteBuffer g_cmutil_bytebuffer = {
+    CMUTIL_ByteBufferAddByte,
+    CMUTIL_ByteBufferAddBytes,
+    CMUTIL_ByteBufferAddBytesPart,
+    CMUTIL_ByteBufferInsertByteAt,
+    CMUTIL_ByteBufferInsertBytesAt,
+    CMUTIL_ByteBufferGetAt,
+    CMUTIL_ByteBufferGetSize,
+    CMUTIL_ByteBufferGetBytes,
+    CMUTIL_ByteBufferDestroy
+};
+
+CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateInternal(
+        CMUTIL_Mem  *memst,
+        size_t initcapacity)
+{
+    CMUTIL_ByteBuffer_Internal *res =
+            memst->Alloc(sizeof(CMUTIL_ByteBuffer_Internal));
+    memset(res, 0x0, sizeof(CMUTIL_ByteBuffer_Internal));
+    memcpy(res, &g_cmutil_bytebuffer, sizeof(CMUTIL_ByteBuffer));
+    res->buffer = memst->Alloc(sizeof(uint8_t) * initcapacity);
+    res->capacity = initcapacity;
+    return (CMUTIL_ByteBuffer*)res;
+}
+
+CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateEx(
+        size_t initcapacity)
+{
+    return CMUTIL_ByteBufferCreateInternal(CMUTIL_GetMem(), initcapacity);
 }
 
 /* end of file */

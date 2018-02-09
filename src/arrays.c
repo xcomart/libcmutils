@@ -55,7 +55,7 @@ CMUTIL_STATIC void CMUTIL_ArrayCheckSize(
 
 CMUTIL_STATIC int CMUTIL_ArraySearchPrivate(
         const CMUTIL_Array_Internal *arr,
-        const void *obj, int(*cb_cmp)(const void*,const void*), uint32_t* pidx)
+        const void *obj, CMCompareCB cb_cmp, uint32_t* pidx)
 {
     int found = 0;
     size_t stpos, edpos, idx = 0;

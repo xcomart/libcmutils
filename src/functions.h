@@ -171,6 +171,9 @@ CMUTIL_String *CMUTIL_StringCreateInternal(
         CMUTIL_Mem *memst,
         size_t initcapacity,
         const char *initcontent);
+CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateInternal(
+        CMUTIL_Mem  *memst,
+        size_t initcapacity);
 CMUTIL_StringArray *CMUTIL_StringArrayCreateInternal(
         CMUTIL_Mem *memst, size_t initcapacity);
 CMUTIL_CSConv *CMUTIL_CSConvCreateInternal(
