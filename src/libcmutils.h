@@ -1092,6 +1092,48 @@ CMUTIL_API CMUTIL_StringArray *CMUTIL_StringSplit(
     const char *haystack, const char *needle);
 CMUTIL_API int CMUTIL_StringHexToBytes(char *dest, const char *src, int len);
 
+
+typedef struct CMUTIL_ByteBuffer CMUTIL_ByteBuffer;
+struct CMUTIL_ByteBuffer {
+    CMUTIL_ByteBuffer *(*AddByte)(
+            CMUTIL_ByteBuffer *buffer,
+            uint8_t b);
+    CMUTIL_ByteBuffer *(*AddBytes)(
+            CMUTIL_ByteBuffer *buffer,
+            const uint8_t *bytes,
+            uint32_t length);
+    CMUTIL_ByteBuffer *(*AddBytesPart)(
+            CMUTIL_ByteBuffer *buffer,
+            const uint8_t *bytes,
+            uint32_t offset,
+            uint32_t length);
+    CMUTIL_ByteBuffer *(*InsertByteAt)(
+            CMUTIL_ByteBuffer *buffer,
+            uint8_t b,
+            uint32_t index);
+    CMUTIL_ByteBuffer *(*InsertBytesAt)(
+            CMUTIL_ByteBuffer *buffer,
+            const uint8_t *bytes,
+            uint32_t index,
+            uint32_t length);
+    uint8_t (*GetAt)(
+            const CMUTIL_ByteBuffer *buffer,
+            uint32_t index);
+    size_t (*GetSize)(
+            const CMUTIL_ByteBuffer *buffer);
+    uint8_t *(*GetBytes)(
+            CMUTIL_ByteBuffer *buffer);
+    void (*Destroy)(
+            CMUTIL_ByteBuffer *buffer);
+};
+
+#define CMUTIL_BYTEBUFFER_DEFAULT	32
+#define CMUTIL_ByteBufferCreate()	\
+        CMUTIL_ByteBufferCreateEx(CMUTIL_BYTEBUFFER_DEFAULT)
+CMUTIL_API CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateEx(
+        size_t initcapacity);
+
+
 typedef struct CMUTIL_Map CMUTIL_Map;
 struct CMUTIL_Map {
     void *(*Put)(
@@ -1664,6 +1706,14 @@ CMUTIL_API CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreate(
 
 CMUTIL_API CMBool CMUTIL_SocketPair(
         CMUTIL_Socket **s1, CMUTIL_Socket **s2);
+
+
+typedef struct CMUTIL_DGramPacket CMUTIL_DGramPacket;
+struct CMUTIL_DGramPacket {
+
+};
+
+
 
 typedef enum CMJsonType {
     CMJsonTypeValue = 0,
