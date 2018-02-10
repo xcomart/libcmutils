@@ -213,6 +213,43 @@ void CMUTIL_NetworkClear()
 #endif
 }
 
+
+CMSocketResult CMUTIL_SocketAddrGet(
+        const CMUTIL_SocketAddr *saddr, char *hostbuf, int *port)
+{
+    uint8_t ip[4];
+    uint32_t addr = ntohl(saddr->sin_addr.s_addr);
+    memcpy(ip, &addr, sizeof(addr));
+    sprintf(hostbuf, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+    *port = (int)ntohs(saddr->sin_port);
+    return CMSocketOk;
+}
+
+CMSocketResult CMUTIL_SocketAddrSet(
+        CMUTIL_SocketAddr *saddr, char *host, int port)
+{
+    int rval;
+    struct addrinfo hint, *ainfo;
+    memset(&hint, 0x0, sizeof(hint));
+    hint.ai_family = AF_INET;
+    rval = getaddrinfo(host, NULL, &hint, &ainfo);
+    if (rval) {
+        if (ainfo) {
+            memcpy(saddr, ainfo->ai_addr, ainfo->ai_addrlen);
+            return CMSocketOk;
+        } else {
+            CMLogErrorS("no available address");
+        }
+    } else {
+        if (rval == EAI_SYSTEM) {
+            CMLogErrorS("getaddrinfo() failed: %s", strerror(errno));
+        } else {
+            CMLogErrorS("getaddrinfo() failed: %s", gai_strerror(rval));
+        }
+    }
+    return CMSocketUnsupported;
+}
+
 typedef struct CMUTIL_Socket_Internal {
     CMUTIL_Socket		base;
     SOCKET				sock;
@@ -539,23 +576,22 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteSocket(
     return res;
 }
 
-CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckBuffer(
-        const CMUTIL_Socket *sock, long timeout, CMBool isread)
+CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckBase(
+        SOCKET sock, long timeout, CMBool isread, CMBool silent)
 {
-    const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
     int rc, tout;
     struct pollfd pfd;
 
     memset(&pfd, 0x0, sizeof(struct pollfd));
 
-    pfd.fd = isock->sock;
+    pfd.fd = sock;
     pfd.events = isread? POLLIN:POLLOUT;
 
     tout = (int)timeout;
 
     rc = poll(&pfd, 1, tout);
     if (rc < 0) {
-        if (!isock->silent)
+        if (!silent)
             CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
         return CMSocketPollFailed;
     } else if (rc == 0) {
@@ -563,6 +599,13 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckBuffer(
     } else {
         return CMSocketOk;
     }
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckBuffer(
+        const CMUTIL_Socket *sock, long timeout, CMBool isread)
+{
+    const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
+    return CMUTIL_SocketCheckBase(isock->sock, timeout, isread, isock->silent);
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckReadBuffer(
@@ -578,17 +621,10 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckWriteBuffer(
 }
 
 CMUTIL_STATIC void CMUTIL_SocketGetRemoteAddr(
-        const CMUTIL_Socket *sock, char *hostbuf, int *port)
+        const CMUTIL_Socket *sock, CMUTIL_SocketAddr *addr)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
-    unsigned long laddr;
-    *port = (int)ntohs(isock->peer.sin_port);
-    laddr = ntohl(isock->peer.sin_addr.s_addr);
-    sprintf(hostbuf, "%u.%u.%u.%u",
-            (unsigned int)((laddr >> 24) & 0xFF),
-            (unsigned int)((laddr >> 16) & 0xFF),
-            (unsigned int)((laddr >>  8) & 0xFF),
-            (unsigned int)((laddr >>  0) & 0xFF));
+    memcpy(addr, &(isock->peer), sizeof(CMUTIL_SocketAddr));
 }
 
 CMUTIL_STATIC void CMUTIL_SocketClose(CMUTIL_Socket *sock)
@@ -867,11 +903,23 @@ CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
     return res;
 }
 
+CMUTIL_STATIC CMBool CMUTIL_SocketConnectByAddr(
+        CMUTIL_Socket_Internal *res,
+        const CMUTIL_SocketAddr *addr, long timeout, CMBool silent)
+{
+    uint8_t ip[4];
+    uint32_t laddr = ntohl(addr->sin_addr.s_addr);
+    memcpy(ip, &laddr, sizeof(uint32_t));
+    return CMUTIL_SocketConnectByIP(
+            ip, addr->sin_port, res, timeout, 0, silent);
+}
+
 CMBool CMUTIL_SocketConnectBase(
         CMUTIL_Socket_Internal *res, const char *host, int port, long timeout,
         CMBool silent)
 {
     uint8_t ip[4];
+#if 0
     uint32_t in[4];
     int rc, i;
 
@@ -912,6 +960,36 @@ CMBool CMUTIL_SocketConnectBase(
     }
 
     return CMTrue;
+#else
+    int rval;
+    struct addrinfo hints, *ainfo;
+    memset(&hints, 0x0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    rval = getaddrinfo(host, NULL, &hints, &ainfo);
+    if (rval) {
+        struct addrinfo *curr = ainfo;
+        while (curr) {
+            // error log enable if this is last entry.
+            CMBool issilent = !silent && !curr->ai_next? CMFalse:CMTrue;
+            struct sockaddr_in *sin = (struct sockaddr_in*)&(curr->ai_addr);
+            if (CMUTIL_SocketConnectByAddr(res, sin, timeout, issilent))
+                break;
+        }
+        if (ainfo)
+            freeaddrinfo(ainfo);
+        if (curr == NULL) {
+            if (!silent)
+                CMLogErrorS("connect failed. no available remote address");
+            return CMFalse;
+        }
+        return CMTrue;
+    } else {
+        if (!silent)
+            CMLogErrorS("getaddrinfo() failed: %s", gai_strerror(rval));
+        return CMFalse;
+    }
+#endif
 }
 
 CMUTIL_Socket *CMUTIL_SocketConnectInternal(
@@ -932,6 +1010,26 @@ CMUTIL_Socket *CMUTIL_SocketConnect(
 {
     return CMUTIL_SocketConnectInternal(
                 CMUTIL_GetMem(), host, port, timeout, CMFalse);
+}
+
+CMUTIL_Socket *CMUTIL_SocketConnectWithAddrInternal(
+        CMUTIL_Mem *memst, const CMUTIL_SocketAddr *saddr, long timeout,
+        CMBool silent)
+{
+    CMUTIL_Socket_Internal *res = CMUTIL_SocketCreate(memst, silent);
+    if (CMUTIL_SocketConnectByAddr(res, saddr, timeout, silent)) {
+        return (CMUTIL_Socket*)res;
+    } else {
+        CMCall((CMUTIL_Socket*)res, Close);
+        return NULL;
+    }
+}
+
+CMUTIL_Socket *CMUTIL_SocketConnectWithAddr(
+        const CMUTIL_SocketAddr *saddr, long timeout)
+{
+    return CMUTIL_SocketConnectWithAddrInternal(
+            CMUTIL_GetMem(), saddr, timeout, CMFalse);
 }
 
 typedef struct CMUTIL_ServerSocket_Internal {
@@ -1997,6 +2095,34 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnect(
                 host, port, timeout, CMFalse);
 }
 
+CMUTIL_Socket *CMUTIL_SSLSocketConnectWithAddrInternal(
+        CMUTIL_Mem *memst, const char *cert, const char *key, const char *ca,
+        const char *servername,
+        const CMUTIL_SocketAddr *saddr, long timeout, CMBool silent)
+{
+    char hostbuf[1024];
+    int port;
+    if (CMUTIL_SocketAddrGet(saddr, hostbuf, &port) == CMSocketOk) {
+        return CMUTIL_SSLSocketConnectInternal(
+                memst, cert, key, ca, servername,
+                hostbuf, port, timeout, silent);
+    } else {
+        if (!silent)
+            CMLogError("CMUTIL_SocketAddrGet() failed");
+    }
+    return NULL;
+}
+
+CMUTIL_Socket *CMUTIL_SSLSocketConnectWithAddr(
+        const char *cert, const char *key, const char *ca,
+        const char *servername,
+        const CMUTIL_SocketAddr *saddr, long timeout)
+{
+    return CMUTIL_SSLSocketConnectWithAddrInternal(
+            CMUTIL_GetMem(), cert, key, ca,
+            servername, saddr, timeout, CMFalse);
+}
+
 CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreate(
         const char *cert, const char *key, const char *ca,
         const char *host, int port, int qcnt)
@@ -2004,6 +2130,262 @@ CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreate(
     return CMUTIL_SSLServerSocketCreateInternal(
                 CMUTIL_GetMem(), host, port, qcnt,
                 cert, key, ca, CMFalse);
+}
+
+typedef struct CMUTIL_DGramSocket_Internal {
+    CMUTIL_DGramSocket  base;
+    CMUTIL_Mem          *memst;
+    CMUTIL_SocketAddr   laddr;
+    CMUTIL_SocketAddr   raddr;
+    SOCKET              sock;
+    CMBool              connected;
+    CMBool              silent;
+} CMUTIL_DGramSocket_Internal;
+
+CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketBind(
+        CMUTIL_DGramSocket *dsock,
+        CMUTIL_SocketAddr *saddr)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    socklen_t addrsz = 0;
+    if (saddr) {
+        int one = 1;
+        addrsz = sizeof(CMUTIL_SocketAddr);
+        setsockopt(idsock->sock, SOL_SOCKET, SO_REUSEADDR,
+                (char *) &one, sizeof(one));
+    }
+    if (bind(idsock->sock,
+             (struct sockaddr*)saddr,
+             addrsz) == -1) {
+        CMLogErrorS("bind() failed: %s", strerror(errno));
+        return CMSocketBindFailed;
+    }
+    getsockname(idsock->sock, (struct sockaddr*)&(idsock->laddr), &addrsz);
+    return CMSocketOk;
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketConnect(
+        CMUTIL_DGramSocket *dsock,
+        CMUTIL_SocketAddr *saddr)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    if (idsock->connected)
+        CMCall(dsock, Disconnect);
+    memcpy(&(idsock->raddr), saddr, sizeof(CMUTIL_SocketAddr));
+    idsock->connected = CMTrue;
+    return CMSocketOk;
+}
+
+CMUTIL_STATIC CMBool CMUTIL_DGramSocketIsConnected(
+        CMUTIL_DGramSocket *dsock)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    return idsock->connected;
+}
+
+CMUTIL_STATIC void CMUTIL_DGramSocketDisconnect(
+        CMUTIL_DGramSocket *dsock)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    if (idsock->connected)
+        idsock->connected = CMFalse;
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketGetRemoteAddr(
+        CMUTIL_DGramSocket *dsock,
+        CMUTIL_SocketAddr *saddr)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    if (idsock->connected) {
+        memcpy(&(idsock->raddr), saddr, sizeof(CMUTIL_SocketAddr));
+        return CMSocketOk;
+    } else {
+        CMLogErrorS("socket not connected");
+        return CMSocketNotConnected;
+    }
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketGetLocalAddr(
+        CMUTIL_DGramSocket *dsock,
+        CMUTIL_SocketAddr *saddr)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    if (idsock->connected) {
+        memcpy(&(idsock->laddr), saddr, sizeof(CMUTIL_SocketAddr));
+        return CMSocketOk;
+    } else {
+        CMLogErrorS("socket not connected");
+        return CMSocketNotConnected;
+    }
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketSend(
+        CMUTIL_DGramSocket *dsock,
+        CMUTIL_ByteBuffer *buf,
+        long timeout)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    if (idsock->connected) {
+        return CMCall(dsock, SendTo, buf, &idsock->raddr, timeout);
+    } else {
+        CMLogErrorS("socket not connected");
+        return CMSocketNotConnected;
+    }
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketSendTo(
+        CMUTIL_DGramSocket *dsock,
+        CMUTIL_ByteBuffer *buf,
+        CMUTIL_SocketAddr *saddr,
+        long timeout)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    ssize_t size = sendto(idsock->sock,
+            CMCall(buf, GetBytes), CMCall(buf, GetSize),
+            0, (struct sockaddr*)saddr,
+            sizeof(CMUTIL_SocketAddr));
+    if (size < (ssize_t)CMCall(buf, GetSize)) {
+        CMLogErrorS("sendto() failed: %s", strerror(errno));
+        return CMSocketSendFailed;
+    }
+    return CMSocketOk;
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketRecv(
+        CMUTIL_DGramSocket *dsock,
+        CMUTIL_ByteBuffer *buf,
+        long timeout)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    if (idsock->connected) {
+        CMUTIL_SocketAddr raddr;
+        socklen_t addrsize;
+        CMSocketResult sr;
+
+RETRY:
+        sr = CMCall(dsock, RecvFrom, buf, &raddr, timeout);
+        if (sr != CMSocketOk)
+            return sr;
+        if (raddr.sin_addr.s_addr != idsock->raddr.sin_addr.s_addr ||
+                raddr.sin_port != idsock->raddr.sin_port) {
+            // not interested remote. retry to receive.
+            goto RETRY;
+        } else {
+            return CMSocketOk;
+        }
+    } else {
+        CMLogErrorS("socket not connected");
+        return CMSocketNotConnected;
+    }
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketRecvFrom(
+        CMUTIL_DGramSocket *dsock,
+        CMUTIL_ByteBuffer *buf,
+        CMUTIL_SocketAddr *saddr,
+        long timeout)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    socklen_t addrsize = sizeof(CMUTIL_SocketAddr);
+    ssize_t size;
+    CMSocketResult sr;
+
+    sr = CMUTIL_SocketCheckBase(
+            idsock->sock, timeout, CMTrue, CMFalse);
+    if (sr != CMSocketOk)
+        return sr;
+    size = recvfrom(idsock->sock,
+            CMCall(buf, GetBytes), CMCall(buf, GetSize),
+            0, (struct sockaddr*)saddr, &addrsize);
+    if (size < 0) {
+        CMLogErrorS("recvfrom() failed: %s", strerror(errno));
+        return CMSocketReceiveFailed;
+    } else {
+        CMCall(buf, ShrinkTo, (size_t)size);
+        return CMSocketOk;
+    }
+}
+
+CMUTIL_STATIC void CMUTIL_DGramSocketClose(CMUTIL_DGramSocket *dsock)
+{
+    CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
+    if (idsock) {
+        if (idsock->sock != INVALID_SOCKET)
+            closesocket(idsock->sock);
+        idsock->memst->Free(idsock);
+    }
+}
+
+static CMUTIL_DGramSocket g_cmutil_dgramsocket = {
+    CMUTIL_DGramSocketBind,
+    CMUTIL_DGramSocketConnect,
+    CMUTIL_DGramSocketIsConnected,
+    CMUTIL_DGramSocketDisconnect,
+    CMUTIL_DGramSocketGetRemoteAddr,
+    CMUTIL_DGramSocketGetLocalAddr,
+    CMUTIL_DGramSocketSend,
+    CMUTIL_DGramSocketRecv,
+    CMUTIL_DGramSocketSendTo,
+    CMUTIL_DGramSocketRecvFrom,
+    CMUTIL_DGramSocketClose
+};
+
+CMUTIL_DGramSocket *CMUTIL_DGramSocketCreateInternal(
+        CMUTIL_Mem *memst, CMUTIL_SocketAddr *addr, CMBool silent)
+{
+    CMSocketResult sr;
+    CMUTIL_DGramSocket_Internal *res =
+            memst->Alloc(sizeof(CMUTIL_DGramSocket_Internal));
+    unsigned long arg;
+    int rc;
+    memset(res, 0x0, sizeof(CMUTIL_DGramSocket_Internal));
+    memcpy(res, &g_cmutil_dgramsocket, sizeof(CMUTIL_DGramSocket));
+    res->silent = silent;
+    res->sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (res->sock == INVALID_SOCKET) {
+        CMLogErrorS("cannot create socket");
+        goto FAILED;
+    }
+
+#if defined(SUNOS)
+    rc = fcntl(res->sock, F_SETFL, fcntl(res->sock, F_GETFL, 0) | O_NONBLOCK);
+    if (rc < 0) {
+        if (!res->silent)
+            CMLogErrorS("fnctl failed.(%d:%s)", errno, strerror(errno));
+        goto FAILED;
+    }
+#else
+    arg = 1;
+    rc = ioctlsocket(res->sock, FIONBIO, &arg);
+    if (rc < 0) {
+        if (!res->silent)
+            CMLogErrorS("ioctl failed.(%d:%s)", errno, strerror(errno));
+        goto FAILED;
+    }
+#endif
+
+    if (addr) {
+        sr = CMCall((CMUTIL_DGramSocket*)res, Bind, addr);
+        if (sr != CMSocketOk) {
+            CMLogError("socket bind address failed");
+            goto FAILED;
+        }
+    }
+    return (CMUTIL_DGramSocket*)res;
+FAILED:
+    CMCall((CMUTIL_DGramSocket*)res, Close);
+    return NULL;
+}
+
+CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreate()
+{
+    return CMUTIL_DGramSocketCreateBind(NULL);
+}
+
+CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreateBind(
+        CMUTIL_SocketAddr *addr)
+{
+    return CMUTIL_DGramSocketCreateInternal(CMUTIL_GetMem(), addr, CMFalse);
 }
 
 CMBool CMUTIL_SocketPairInternal(

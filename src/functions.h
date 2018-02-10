@@ -139,12 +139,19 @@ CMUTIL_XmlNode *CMUTIL_XmlParseFileInternal(
 CMUTIL_Socket *CMUTIL_SocketConnectInternal(
         CMUTIL_Mem *memst, const char *host, int port, long timeout,
         CMBool silent);
+CMUTIL_Socket *CMUTIL_SocketConnectWithAddrInternal(
+        CMUTIL_Mem *memst, const CMUTIL_SocketAddr *saddr, long timeout,
+        CMBool silent);
 CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
         CMUTIL_Mem *memst,
         const char *cert, const char *key, const char *ca,
         const char *servername,
         const char *host, int port, long timeout,
         CMBool silent);
+CMUTIL_Socket *CMUTIL_SSLSocketConnectWithAddrInternal(
+        CMUTIL_Mem *memst, const char *cert, const char *key, const char *ca,
+        const char *servername,
+        const CMUTIL_SocketAddr *saddr, long timeout, CMBool silent);
 CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
         CMUTIL_Mem *memst, const char *host, int port, int qcnt,
         CMBool silent);

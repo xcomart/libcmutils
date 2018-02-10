@@ -10,7 +10,7 @@ DEFINES += CMUTILS_LIBRARY
 
 CONFIG += SUPPORT_SSL
 
-BUILD_DIR = ../build
+BUILD_DIR = ~/.local
 COPY_CMD = cp
 LIB_DIR = lib
 win32 {
