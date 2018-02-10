@@ -1123,6 +1123,11 @@ struct CMUTIL_ByteBuffer {
             const CMUTIL_ByteBuffer *buffer);
     uint8_t *(*GetBytes)(
             CMUTIL_ByteBuffer *buffer);
+    CMBool (*ShrinkTo)(
+            CMUTIL_ByteBuffer *buffer,
+            size_t size);
+    size_t (*GetCapacity)(
+            const CMUTIL_ByteBuffer *buffer);
     void (*Destroy)(
             CMUTIL_ByteBuffer *buffer);
 };
@@ -1647,8 +1652,17 @@ typedef enum CMSocketResult {
     CMSocketReceiveFailed,
     CMSocketSendFailed,
     CMSocketUnsupported,
+    CMSocketNotConnected,
+    CMSocketConnectFailed,
+    CMSocketBindFailed,
     CMSocketUnknownError = 0x7FFFFFFF
 } CMSocketResult;
+
+typedef struct sockaddr_in CMUTIL_SocketAddr;
+CMSocketResult CMUTIL_SocketAddrGet(
+        const CMUTIL_SocketAddr *saddr, char *hostbuf, int *port);
+CMSocketResult CMUTIL_SocketAddrSet(
+        CMUTIL_SocketAddr *saddr, char *host, int port);
 
 typedef struct CMUTIL_Socket CMUTIL_Socket;
 struct CMUTIL_Socket {
@@ -1671,7 +1685,7 @@ struct CMUTIL_Socket {
             const CMUTIL_Socket *socket,
             CMUTIL_Socket *tobesent, pid_t pid, long timeout);
     void (*GetRemoteAddr)(
-            const CMUTIL_Socket *socket, char *hostbuf, int *port);
+            const CMUTIL_Socket *socket, CMUTIL_SocketAddr *addr);
     void (*Close)(
             CMUTIL_Socket *socket);
     SOCKET (*GetRawSocket)(
@@ -1684,11 +1698,17 @@ struct CMUTIL_Socket {
 
 CMUTIL_API CMUTIL_Socket *CMUTIL_SocketConnect(
         const char *host, int port, long timeout);
+CMUTIL_API CMUTIL_Socket *CMUTIL_SocketConnectWithAddr(
+        const CMUTIL_SocketAddr *saddr, long timeout);
 
 CMUTIL_API CMUTIL_Socket *CMUTIL_SSLSocketConnect(
         const char *cert, const char *key, const char *ca,
         const char *servername,
         const char *host, int port, long timeout);
+CMUTIL_API CMUTIL_Socket *CMUTIL_SSLSocketConnectWithAddr(
+        const char *cert, const char *key, const char *ca,
+        const char *servername,
+        const CMUTIL_SocketAddr *saddr, long timeout);
 
 typedef struct CMUTIL_ServerSocket CMUTIL_ServerSocket;
 struct CMUTIL_ServerSocket {
@@ -1708,11 +1728,49 @@ CMUTIL_API CMBool CMUTIL_SocketPair(
         CMUTIL_Socket **s1, CMUTIL_Socket **s2);
 
 
-typedef struct CMUTIL_DGramPacket CMUTIL_DGramPacket;
-struct CMUTIL_DGramPacket {
-
+typedef struct CMUTIL_DGramSocket CMUTIL_DGramSocket;
+struct CMUTIL_DGramSocket {
+    CMSocketResult (*Bind)(
+            CMUTIL_DGramSocket *dsock,
+            CMUTIL_SocketAddr *saddr);
+    CMSocketResult (*Connect)(
+            CMUTIL_DGramSocket *dsock,
+            CMUTIL_SocketAddr *saddr);
+    CMBool (*IsConnected)(
+            CMUTIL_DGramSocket *dsock);
+    void (*Disconnect)(
+            CMUTIL_DGramSocket *dsock);
+    CMSocketResult (*GetRemoteAddr)(
+            CMUTIL_DGramSocket *dsock,
+            CMUTIL_SocketAddr *saddr);
+    CMSocketResult (*GetLocalAddr)(
+            CMUTIL_DGramSocket *dsock,
+            CMUTIL_SocketAddr *saddr);
+    CMSocketResult (*Send)(
+            CMUTIL_DGramSocket *dsock,
+            CMUTIL_ByteBuffer *buf,
+            long timeout);
+    CMSocketResult (*Recv)(
+            CMUTIL_DGramSocket *dsock,
+            CMUTIL_ByteBuffer *buf,
+            long timeout);
+    CMSocketResult (*SendTo)(
+            CMUTIL_DGramSocket *dsock,
+            CMUTIL_ByteBuffer *buf,
+            CMUTIL_SocketAddr *saddr,
+            long timeout);
+    CMSocketResult (*RecvFrom)(
+            CMUTIL_DGramSocket *dsock,
+            CMUTIL_ByteBuffer *buf,
+            CMUTIL_SocketAddr *saddr,
+            long timeout);
+    void (*Close)(
+            CMUTIL_DGramSocket *dsock);
 };
 
+CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreate();
+CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreateBind(
+        CMUTIL_SocketAddr *addr);
 
 
 typedef enum CMJsonType {

@@ -1097,6 +1097,28 @@ CMUTIL_STATIC uint8_t *CMUTIL_ByteBufferGetBytes(
     return bbi->buffer;
 }
 
+CMUTIL_STATIC CMBool CMUTIL_ByteBufferShrinkTo(
+        CMUTIL_ByteBuffer *buffer,
+        size_t size)
+{
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    if (bbi->capacity < size) {
+        CMLogErrorS("out of bound(buffer size: %lu, index: %lu)",
+                bbi->capacity, size);
+        return CMFalse;
+    } else {
+        bbi->size = size;
+        return CMTrue;
+    }
+}
+
+CMUTIL_STATIC size_t CMUTIL_ByteBufferGetCapacity(
+        CMUTIL_ByteBuffer *buffer)
+{
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    return bbi->capacity;
+}
+
 CMUTIL_STATIC void CMUTIL_ByteBufferDestroy(
         CMUTIL_ByteBuffer *buffer)
 {
@@ -1117,6 +1139,7 @@ static CMUTIL_ByteBuffer g_cmutil_bytebuffer = {
     CMUTIL_ByteBufferGetAt,
     CMUTIL_ByteBufferGetSize,
     CMUTIL_ByteBufferGetBytes,
+    CMUTIL_ByteBufferShrinkTo,
     CMUTIL_ByteBufferDestroy
 };
 
