@@ -2171,6 +2171,11 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketConnect(
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
     if (idsock->connected)
         CMCall(dsock, Disconnect);
+    if (connect(idsock->sock, (struct sockaddr*)saddr,
+                sizeof(CMUTIL_SocketAddr)) < 0) {
+        CMLogErrorS("connect failed: %s", strerror(errno));
+        return CMSocketConnectFailed;
+    }
     memcpy(&(idsock->raddr), saddr, sizeof(CMUTIL_SocketAddr));
     idsock->connected = CMTrue;
     return CMSocketOk;
@@ -2187,8 +2192,11 @@ CMUTIL_STATIC void CMUTIL_DGramSocketDisconnect(
         CMUTIL_DGramSocket *dsock)
 {
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
-    if (idsock->connected)
+    if (idsock->connected) {
+        closesocket(idsock->sock);
+        idsock->sock = INVALID_SOCKET;
         idsock->connected = CMFalse;
+    }
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketGetRemoteAddr(
