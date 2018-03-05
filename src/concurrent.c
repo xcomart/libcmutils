@@ -69,7 +69,7 @@
 //CMUTIL_LogDefine("cmutil.concurrent")
 
 #if defined(_MSC_VER)
-const __int64 DELTA_EPOCH_IN_MICROSECS = 11644473600000000;
+const int64_t DELTA_EPOCH_IN_MICROSECS = 11644473600000000;
 
 /* IN UNIX the use of the timezone struct is obsolete;
 I don't know why you use it.
@@ -82,7 +82,7 @@ GMT(UTC) and a tz_dsttime is a flag indicates whether daylight is now in use
 int gettimeofday(struct timeval *tv/*in*/, struct timezone *tz/*in*/)
 {
     FILETIME ft;
-    __int64 tmpres = 0;
+    int64_t tmpres = 0;
     TIME_ZONE_INFORMATION tz_winapi;
     int rez = 0;
 
@@ -98,14 +98,15 @@ int gettimeofday(struct timeval *tv/*in*/, struct timezone *tz/*in*/)
     /*converting file time to unix epoch*/
     tmpres /= 10;  /*convert into microseconds*/
     tmpres -= DELTA_EPOCH_IN_MICROSECS;
-    tv->tv_sec = (__int32)(tmpres*0.000001);
+    tv->tv_sec = (int32_t)(tmpres*0.000001);
     tv->tv_usec = (tmpres % 1000000);
 
     CMUTIL_UNUSED(tz);
     //_tzset(),don't work properly, so we use GetTimeZoneInformation
     //rez = GetTimeZoneInformation(&tz_winapi);
     //tz->tz_dsttime = (rez == 2) ? true : false;
-    //tz->tz_minuteswest = tz_winapi.Bias + ((rez == 2) ? tz_winapi.DaylightBias : 0);
+    //tz->tz_minuteswest = tz_winapi.Bias +
+    //        ((rez == 2) ? tz_winapi.DaylightBias : 0);
 
     return 0;
 }
@@ -121,7 +122,7 @@ typedef struct CMUTIL_Cond_Internal {
     HANDLE              cond;       // event handle for windows
 #else
     int                 state;      // condition state
-    CMBool         manualrst;  // manual-reset indicator
+    CMBool              manualrst;  // manual-reset indicator
     MUTEX_T             mutex;      // condition mutex
     COND_T              cond;       // condition variable
 #endif
@@ -1044,30 +1045,30 @@ typedef enum CMUTIL_TimerTaskType {
 } CMUTIL_TimerTaskType;
 
 typedef struct CMUTIL_TimerTask_Internal {
-    CMUTIL_TimerTask		base;			// timer task API interface
-    CMUTIL_TimerTaskType	type;			// timer task type
-    CMBool				canceled;		// task canceled or not
-    struct timeval			nextrun;		// next run time for repeating tasks
-    long					period;			// repeating period
-    void					(*proc)(void*);	// task procedure
-    void					*param;			// procedure parameter
-    CMUTIL_Timer			*timer;			// timer reference
+    CMUTIL_TimerTask        base;       // timer task API interface
+    CMUTIL_TimerTaskType    type;       // timer task type
+    CMBool                  canceled;   // task canceled or not
+    struct timeval          nextrun;    // next run time for repeating tasks
+    long                    period;     // repeating period
+    CMProcCB                proc;       // task procedure
+    void                    *param;     // procedure parameter
+    CMUTIL_Timer            *timer;     // timer reference
 } CMUTIL_TimerTask_Internal;
 
 typedef struct CMUTIL_Timer_Internal {
-    CMUTIL_Timer			base;		// timer API interface
-    CMUTIL_Mutex			*mutex;		// timer task add/remove synchronization
-    CMUTIL_Array			*scheduled;	// tasks in scheduled to run
-    CMUTIL_List				*threads;	// worker thread pool
-    CMUTIL_Array			*finished;	// finished tasks
-    CMUTIL_Array			*alltasks;	// all tasks
-    CMUTIL_List				*jqueue;	// queue of jobs to run
-    CMUTIL_Semaphore		*jsemp;		// job queue semaphore
-    CMUTIL_Thread			*mainloop;	// timer scheduling main loop thread
-    long					precision;	// timer precision
-    CMBool				running;	// timer running indicator
-    int						numthrs;	// number of worker thread
-    CMUTIL_Mem              *memst;
+    CMUTIL_Timer            base;       // timer API interface
+    CMUTIL_Mutex            *mutex;     // timer task add/remove synchronization
+    CMUTIL_Array            *scheduled; // tasks in scheduled to run
+    CMUTIL_List             *threads;   // worker thread pool
+    CMUTIL_Array            *finished;  // finished tasks
+    CMUTIL_Array            *alltasks;  // all tasks
+    CMUTIL_List             *jqueue;    // queue of jobs to run
+    CMUTIL_Semaphore        *jsemp;     // job queue semaphore
+    CMUTIL_Thread           *mainloop;  // timer scheduling main loop thread
+    long                    precision;  // timer precision
+    CMBool                  running;    // timer running indicator
+    int                     numthrs;    // number of worker thread
+    CMUTIL_Mem              *memst;     // memory manger
 } CMUTIL_Timer_Internal;
 
 CMUTIL_STATIC CMBool CMUTIL_TimerTaskCancelPrivate(
@@ -1113,7 +1114,7 @@ CMUTIL_STATIC void CMUTIL_TimerGetDelayed(struct timeval *tv, long delay)
 CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerTaskCreate(
         CMUTIL_Timer *timer, CMUTIL_TimerTaskType type,
         struct timeval *first, long period, void *param,
-        void (*proc)(void*))
+        CMProcCB proc)
 {
     CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)timer;
     CMUTIL_TimerTask_Internal *res =
@@ -1138,7 +1139,7 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerTaskCreate(
 
 CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleAtTime(
         CMUTIL_Timer *timer, struct timeval *attime,
-        void (*proc)(void *param), void *param)
+        CMProcCB proc, void *param)
 {
     return CMUTIL_TimerTaskCreate(
             timer, TimerTask_OneTime, attime, 0, param, proc);
@@ -1146,7 +1147,7 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleAtTime(
 
 CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleDelay(
         CMUTIL_Timer *timer, long delay,
-        void (*proc)(void *param), void *param)
+        CMProcCB proc, void *param)
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -1157,7 +1158,7 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleDelay(
 
 CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleAtRepeat(
         CMUTIL_Timer *timer, struct timeval *first, long period,
-        void (*proc)(void *param), void *param)
+        CMProcCB proc, void *param)
 {
     return CMUTIL_TimerTaskCreate(
             timer, TimerTask_Repeat, first, period, param, proc);
@@ -1165,7 +1166,7 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleAtRepeat(
 
 CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleDelayRepeat(
         CMUTIL_Timer *timer, long delay, long period,
-        void (*proc)(void *param), void *param)
+        CMProcCB proc, void *param)
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);

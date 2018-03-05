@@ -1113,9 +1113,10 @@ CMUTIL_STATIC CMBool CMUTIL_ByteBufferShrinkTo(
 }
 
 CMUTIL_STATIC size_t CMUTIL_ByteBufferGetCapacity(
-        CMUTIL_ByteBuffer *buffer)
+        const CMUTIL_ByteBuffer *buffer)
 {
-    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    const CMUTIL_ByteBuffer_Internal *bbi =
+            (const CMUTIL_ByteBuffer_Internal*)buffer;
     return bbi->capacity;
 }
 
@@ -1140,6 +1141,7 @@ static CMUTIL_ByteBuffer g_cmutil_bytebuffer = {
     CMUTIL_ByteBufferGetSize,
     CMUTIL_ByteBufferGetBytes,
     CMUTIL_ByteBufferShrinkTo,
+    CMUTIL_ByteBufferGetCapacity,
     CMUTIL_ByteBufferDestroy
 };
 

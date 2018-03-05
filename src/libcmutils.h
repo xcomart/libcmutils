@@ -231,6 +231,7 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
 
 typedef int (*CMCompareCB)(const void*, const void*);
 typedef void (*CMFreeCB)(void*);
+typedef void (*CMProcCB)(void*);
 
 /**
  * @defgroup CMUTILS_Initialization Initialization and memory operations.
@@ -1262,16 +1263,16 @@ typedef struct CMUTIL_Timer CMUTIL_Timer;
 struct CMUTIL_Timer {
     CMUTIL_TimerTask *(*ScheduleAtTime)(
             CMUTIL_Timer *timer, struct timeval *attime,
-            void (*proc)(void *param), void *param);
+            CMProcCB proc, void *param);
     CMUTIL_TimerTask *(*ScheduleDelay)(
             CMUTIL_Timer *timer, long delay,
-            void (*proc)(void *param), void *param);
+            CMProcCB proc, void *param);
     CMUTIL_TimerTask *(*ScheduleAtRepeat)(
             CMUTIL_Timer *timer, struct timeval *first, long period,
-            void (*proc)(void *param), void *param);
+            CMProcCB proc, void *param);
     CMUTIL_TimerTask *(*ScheduleDelayRepeat)(
             CMUTIL_Timer *timer, long delay, long period,
-            void (*proc)(void *param), void *param);
+            CMProcCB proc, void *param);
     void (*Purge)(CMUTIL_Timer *timer);
     void (*Destroy)(CMUTIL_Timer *timer);
 };
