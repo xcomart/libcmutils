@@ -50,8 +50,15 @@ contains (CONFIG, SUPPORT_SSL) {
     DEFINES += CMUTIL_SUPPORT_SSL
     DEFINES += CMUTIL_SSL_USE_OPENSSL
     !win32-msvc* {
-#        PKGCONFIG += gnutls
-        PKGCONFIG += openssl
+        macx {
+            OPENSSL_DIR = /usr/local/opt/openssl
+            INCLUDEPATH += $$OPENSSL_DIR/include
+            LIBS += -L$$OPENSSL_DIR/lib -lssl -lcrypto
+        }
+        !macx {
+#            PKGCONFIG += gnutls
+            PKGCONFIG += openssl
+        }
     }
 }
 
@@ -72,7 +79,8 @@ SOURCES += \
     src/pool.c \
     src/strings.c \
     src/system.c \
-    src/nio.c
+    src/nio.c \
+    src/http.c
 
 HEADERS += \
     src/functions.h \

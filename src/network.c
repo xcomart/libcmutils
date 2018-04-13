@@ -78,7 +78,7 @@ int CMUTIL_NetworkGetHostByNameR(const char *name,
 
     // lock gethostbyname function to guarantee consistancy.
     CMCall(g_cmutil_hostbyname_mutex, Lock);
-    staticval = gethostbyname(name);
+    staticval = CMUTIL_NetworkGetHostByName(name);
     memcpy(ret, staticval, sizeof(struct hostent));
     clen = sizeof(char*) * staticval->h_length;
 
@@ -236,6 +236,8 @@ CMSocketResult CMUTIL_SocketAddrSet(
     if (rval) {
         if (ainfo) {
             memcpy(saddr, ainfo->ai_addr, ainfo->ai_addrlen);
+            saddr->sin_port = (unsigned short)port;
+            freeaddrinfo(ainfo);
             return CMSocketOk;
         } else {
             CMLogErrorS("no available address");
@@ -918,8 +920,8 @@ CMBool CMUTIL_SocketConnectBase(
         CMUTIL_Socket_Internal *res, const char *host, int port, long timeout,
         CMBool silent)
 {
-    uint8_t ip[4];
 #if 0
+    uint8_t ip[4];
     uint32_t in[4];
     int rc, i;
 
@@ -973,6 +975,7 @@ CMBool CMUTIL_SocketConnectBase(
             // error log enable if this is last entry.
             CMBool issilent = !silent && !curr->ai_next? CMFalse:CMTrue;
             struct sockaddr_in *sin = (struct sockaddr_in*)&(curr->ai_addr);
+            sin->sin_port = (unsigned short)port;
             if (CMUTIL_SocketConnectByAddr(res, sin, timeout, issilent))
                 break;
         }
@@ -2259,15 +2262,20 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketSendTo(
         long timeout)
 {
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
-    ssize_t size = sendto(idsock->sock,
-            CMCall(buf, GetBytes), CMCall(buf, GetSize),
-            0, (struct sockaddr*)saddr,
-            sizeof(CMUTIL_SocketAddr));
-    if (size < (ssize_t)CMCall(buf, GetSize)) {
-        CMLogErrorS("sendto() failed: %s", strerror(errno));
-        return CMSocketSendFailed;
+    ssize_t size;
+    CMSocketResult sr = CMUTIL_SocketCheckBase(
+                idsock->sock, timeout, CMFalse, CMFalse);
+    if (sr == CMSocketOk) {
+        size = sendto(idsock->sock,
+                CMCall(buf, GetBytes), CMCall(buf, GetSize),
+                0, (struct sockaddr*)saddr,
+                sizeof(CMUTIL_SocketAddr));
+        if (size < (ssize_t)CMCall(buf, GetSize)) {
+            CMLogErrorS("sendto() failed: %s", strerror(errno));
+            return CMSocketSendFailed;
+        }
     }
-    return CMSocketOk;
+    return sr;
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketRecv(
@@ -2278,7 +2286,6 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketRecv(
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
     if (idsock->connected) {
         CMUTIL_SocketAddr raddr;
-        socklen_t addrsize;
         CMSocketResult sr;
 
 RETRY:
@@ -2396,7 +2403,7 @@ FAILED:
     return NULL;
 }
 
-CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreate()
+CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreate(void)
 {
     return CMUTIL_DGramSocketCreateBind(NULL);
 }

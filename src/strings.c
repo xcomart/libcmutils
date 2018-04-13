@@ -1039,7 +1039,7 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytesPart(
 {
     CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
     CMUTIL_ByteBufferCheckSize(bbi, length);
-    memcpy(bbi->buffer + bbi->size, bytes, length);
+    memcpy(bbi->buffer + bbi->size, bytes + offset, length);
     bbi->size += length;
     return buffer;
 }
