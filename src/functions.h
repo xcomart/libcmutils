@@ -17,8 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef FUNCTIONS_H
-#define FUNCTIONS_H
+#ifndef FUNCTIONS_H__
+#define FUNCTIONS_H__
 
 #include "platforms.h"
 
@@ -195,5 +195,5 @@ CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path);
 CMUTIL_NIOBuffer *CMUTIL_NIOBufferCreateInternal(
         CMUTIL_Mem *mem, int capacity);
 
-#endif // FUNCTIONS_H
+#endif // FUNCTIONS_H__
 

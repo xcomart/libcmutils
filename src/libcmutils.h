@@ -180,8 +180,14 @@ typedef enum CMBool {
  * For Mac OS X.
  * Redefine gethostbyname for consistancy of gethostbyname_r implementation.
  */
-# define gethostbyname      CMUTIL_NetworkGetHostByName
 # define gethostbyname_r    CMUTIL_NetworkGetHostByNameR
+# if !defined(CMUTIL_EXPORT)
+#  define gethostbyname    CMUTIL_NetworkGetHostByName
+CMUTIL_API struct hostent *CMUTIL_NetworkGetHostByName(const char *name);
+# endif
+CMUTIL_API int CMUTIL_NetworkGetHostByNameR(
+        const char *name, struct hostent *ret, char *buf, size_t buflen,
+         struct hostent **result, int *h_errnop);
 #endif
 
 /**
@@ -229,8 +235,25 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
 // for backward compatibility
 #define CMUTIL_CALL CMUTIL_CALL__
 
+/**
+ * @brief Get version string of this library.
+ * @return Version string of this library.
+ */
+CMUTIL_API const char *CMUTIL_GetLibVersion(void);
+
+/**
+ * @typedef CMCompareCB Object comparison callback type.
+ */
 typedef int (*CMCompareCB)(const void*, const void*);
+
+/**
+ * @typedef CMFreeCB Callback type for memory deallocation.
+ */
 typedef void (*CMFreeCB)(void*);
+
+/**
+ * @typedef CMProcCB Callback type for execution of some procedure.
+ */
 typedef void (*CMProcCB)(void*);
 
 /**
@@ -255,7 +278,7 @@ typedef void (*CMProcCB)(void*);
  */
 
 /**
- * @typedef CMUTIL_MemOper Memory operation types.
+ * @typedef CMMemOper Memory operation types.
  * Refer CMUTIL_Init function for details.
  */
 typedef enum CMMemOper {
@@ -272,8 +295,6 @@ typedef enum CMMemOper {
      */
     CMMemDebug
 } CMMemOper;
-
-CMUTIL_API const char *CMUTIL_GetLibVersion(void);
 
 /**
  * @brief Initialize this library. This function must be called before calling
@@ -378,7 +399,8 @@ CMUTIL_API CMUTIL_Mem *CMUTIL_GetMem(void);
  */
 
 /**
- * @brief Platform independent condition definition for concurrency control.
+ * @typedef CMUTIL_Cond Platform independent condition definition for
+ * concurrency control.
  *
  * Condition(or Event)
  */
@@ -475,7 +497,7 @@ struct CMUTIL_Cond {
 CMUTIL_API CMUTIL_Cond *CMUTIL_CondCreate(CMBool manual_reset);
 
 /**
- * @brief Platform independent mutex implementation.
+ * @typedef CMUTIL_Mutex Platform independent mutex implementation.
  */
 typedef struct CMUTIL_Mutex CMUTIL_Mutex;
 struct CMUTIL_Mutex {
@@ -535,7 +557,7 @@ CMUTIL_API CMUTIL_Mutex *CMUTIL_MutexCreate(void);
 
 
 /**
- * @brief Platform independent thread object.
+ * @typedef CMUTIL_Thread Platform independent thread object.
  */
 typedef struct CMUTIL_Thread CMUTIL_Thread;
 struct CMUTIL_Thread {
@@ -622,7 +644,7 @@ CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadSelf(void);
 CMUTIL_API uint64_t CMUTIL_ThreadSystemSelfId(void);
 
 /**
- * @brief Platform independent semaphore object.
+ * @typedef CMUTIL_Semaphore Platform independent semaphore object.
  */
 typedef struct CMUTIL_Semaphore CMUTIL_Semaphore;
 struct CMUTIL_Semaphore {
@@ -671,7 +693,7 @@ CMUTIL_API CMUTIL_Semaphore *CMUTIL_SemaphoreCreate(int initcnt);
 
 
 /**
- * @brief Platform independent read/write lock object.
+ * @typedef CMUTIL_RWLock Platform independent read/write lock object.
  */
 typedef struct CMUTIL_RWLock CMUTIL_RWLock;
 struct CMUTIL_RWLock {
@@ -732,7 +754,7 @@ struct CMUTIL_RWLock {
 CMUTIL_API CMUTIL_RWLock *CMUTIL_RWLockCreate(void);
 
 /**
- * @brief Iterator of collection members.
+ * @typedef CMUTIL_Iterator Iterator of collection members.
  */
 typedef struct CMUTIL_Iterator CMUTIL_Iterator;
 struct CMUTIL_Iterator {
@@ -766,7 +788,7 @@ struct CMUTIL_Iterator {
 
 
 /**
- * @brief Dynamic array of any type element.
+ * @typedef CMUTIL_Array Dynamic array of any type element.
  */
 typedef struct CMUTIL_Array CMUTIL_Array;
 struct CMUTIL_Array {
@@ -985,7 +1007,9 @@ CMUTIL_API CMUTIL_Array *CMUTIL_ArrayCreateEx(
         CMCompareCB comparator,
         CMFreeCB freecb);
 
-
+/**
+ * @typedef CMUTIL_String Multifunctional string type.
+ */
 typedef struct CMUTIL_String CMUTIL_String;
 struct CMUTIL_String {
     size_t (*AddString)(
@@ -1769,7 +1793,7 @@ struct CMUTIL_DGramSocket {
             CMUTIL_DGramSocket *dsock);
 };
 
-CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreate();
+CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreate(void);
 CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreateBind(
         CMUTIL_SocketAddr *addr);
 
@@ -1907,6 +1931,39 @@ CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
 
 CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
+
+
+//////////////////////////////////////////////////////////////////////////////
+// HTTP client Implementations
+//////////////////////////////////////////////////////////////////////////////
+
+typedef enum CMHttpMethodType {
+    CMHttpGet,
+    CMHttpPost
+} CMHttpMethodType;
+
+typedef struct CMUTIL_HttpMethod CMUTIL_HttpMethod;
+struct CMUTIL_HttpMethod {
+    CMUTIL_HttpMethod *(*AddFormData)(
+            CMUTIL_HttpMethod *method,
+            const char *name,
+            CMUTIL_String *data);
+    CMUTIL_HttpMethod *(*SetRawData)(
+            CMUTIL_HttpMethod *method,
+            CMUTIL_ByteBuffer *data);
+    CMUTIL_HttpMethod *(*SetRequestHeader)(
+            CMUTIL_HttpMethod *method,
+            const char *name,
+            CMUTIL_String *data);
+};
+
+CMUTIL_API CMUTIL_HttpMethod *CMUTIL_HttpMethodCreate(CMHttpMethodType type);
+
+typedef struct CMUTIL_HttpClient CMUTIL_HttpClient;
+struct CMUTIL_HttpClient {
+    CMUTIL_JsonArray *(*GetCookies)(
+            CMUTIL_HttpClient *client);
+};
 
 //////////////////////////////////////////////////////////////////////////////
 // NIO Implementations
