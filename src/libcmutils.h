@@ -1939,7 +1939,13 @@ CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
 typedef enum CMHttpMethodType {
     CMHttpGet,
-    CMHttpPost
+    CMHttpPost,
+    CMHttpPut,
+    CMHttpHead,
+    CMHttpOptions,
+    CMHttpDelete,
+    CMHttpPatch,
+    CMHttpTrace
 } CMHttpMethodType;
 
 typedef struct CMUTIL_HttpMethod CMUTIL_HttpMethod;
@@ -1958,6 +1964,8 @@ struct CMUTIL_HttpMethod {
 };
 
 CMUTIL_API CMUTIL_HttpMethod *CMUTIL_HttpMethodCreate(CMHttpMethodType type);
+
+typedef CMBool (*CMHttpResponseHandler)(CMUTIL_String *data, void *udata);
 
 typedef struct CMUTIL_HttpClient CMUTIL_HttpClient;
 struct CMUTIL_HttpClient {

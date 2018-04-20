@@ -16,6 +16,7 @@ SET ( LIB_SRCS
     src/callstack.c
     src/concurrent.c
     src/config.c
+    src/http.c
     src/lists.c
     src/logger.c
     src/maps.c
