@@ -136,6 +136,8 @@ CMUTIL_XmlNode *CMUTIL_XmlParseInternal(
 CMUTIL_XmlNode *CMUTIL_XmlParseFileInternal(
         CMUTIL_Mem *memst, const char *fpath);
 
+CMSocketResult CMUTIL_SocketCheckBase(
+        SOCKET sock, long timeout, CMBool isread, CMBool silent);
 CMUTIL_Socket *CMUTIL_SocketConnectInternal(
         CMUTIL_Mem *memst, const char *host, int port, long timeout,
         CMBool silent);
