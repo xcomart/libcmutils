@@ -68,6 +68,7 @@ SOURCES += \
     src/callstack.c \
     src/concurrent.c \
     src/config.c \
+    src/datagram.c \
     src/lists.c \
     src/logger.c \
     src/maps.c \
