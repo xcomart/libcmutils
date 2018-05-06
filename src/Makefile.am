@@ -14,8 +14,10 @@ lib_LIBRARIES = libcmutils.so \
 	libcmutils.a
 libcmutils_so_SOURCES = \
 arrays.c base.c callstack.c concurrent.c config.c lists.c logger.c maps.c \
-memdebug.c nanojson.c nanoxml.c network.c pattern.c pool.c strings.c
+memdebug.c nanojson.c nanoxml.c network.c pattern.c pool.c strings.c nio.c \
+http.c datagram.c
 libcmutils_a_SOURCES = \
 arrays.c base.c callstack.c concurrent.c config.c lists.c logger.c maps.c \
-memdebug.c nanojson.c nanoxml.c network.c pattern.c pool.c strings.c
+memdebug.c nanojson.c nanoxml.c network.c pattern.c pool.c strings.c nio.c \
+http.c datagram.c
 

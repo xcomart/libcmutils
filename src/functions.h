@@ -17,8 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef FUNCTIONS_H
-#define FUNCTIONS_H
+#ifndef FUNCTIONS_H__
+#define FUNCTIONS_H__
 
 #include "platforms.h"
 
@@ -136,6 +136,8 @@ CMUTIL_XmlNode *CMUTIL_XmlParseInternal(
 CMUTIL_XmlNode *CMUTIL_XmlParseFileInternal(
         CMUTIL_Mem *memst, const char *fpath);
 
+CMSocketResult CMUTIL_SocketCheckBase(
+        SOCKET sock, long timeout, CMBool isread, CMBool silent);
 CMUTIL_Socket *CMUTIL_SocketConnectInternal(
         CMUTIL_Mem *memst, const char *host, int port, long timeout,
         CMBool silent);
@@ -195,5 +197,5 @@ CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path);
 CMUTIL_NIOBuffer *CMUTIL_NIOBufferCreateInternal(
         CMUTIL_Mem *mem, int capacity);
 
-#endif // FUNCTIONS_H
+#endif // FUNCTIONS_H__
 
