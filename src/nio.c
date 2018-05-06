@@ -358,6 +358,11 @@ CMUTIL_STATIC int CMUTIL_NIOSelectorSelectTimeout(
     int res = 0;
     int ntout;
 
+    if (is->closing) {
+        CMLogDebug("selector closed");
+        return -1;
+    }
+
     CMCall(is->selected, Clear);
     cnt++;
     pfds = is->memst->Alloc(sizeof(struct pollfd) * cnt);
@@ -410,7 +415,12 @@ CMUTIL_STATIC int CMUTIL_NIOSelectorSelectTimeout(
         }
         if (pfds[cnt-1].revents) {
             CMCall(is->receiver, ReadByte);
-            res = -1;
+            is->closing = CMTrue;
+            res--;
+            if (res == 0) {
+                res = -1;
+                CMLogDebug("selector closed.");
+            }
         }
     } else if (res < 0) {
         CMLogError("poll failed.");
