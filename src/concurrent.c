@@ -24,7 +24,7 @@
 #if defined(MSWIN)
 # include <process.h>
 // usleep implementation for windows
-# define usleep(x)	Sleep(x/1000)
+# define usleep(x)	Sleep((x)/1000)
 #else
 # include <sys/time.h>
 # include <unistd.h>
@@ -299,7 +299,7 @@ CMUTIL_Cond *CMUTIL_CondCreateInternal(
     cnd_init(&(res->cond));
 # else
     pthread_mutexattr_init(&mta);
-    pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE_NP);
     pthread_mutex_init(&(res->mutex), &mta);
     pthread_cond_init(&(res->cond), NULL);
 # endif
@@ -441,7 +441,7 @@ CMUTIL_Mutex *CMUTIL_MutexCreateInternal(CMUTIL_Mem *memst)
 # else
     /* setting up recursive mutex */
     pthread_mutexattr_init(&mta);
-    pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE_NP);
     pthread_mutex_init(&(res->mutex), &mta);
 # endif
 #endif
