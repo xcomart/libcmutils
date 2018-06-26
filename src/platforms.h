@@ -118,10 +118,11 @@
 # if !defined(SHUT_RDWR)
 #  define SHUT_RDWR SD_BOTH
 # endif
-# define socklen_t	int
+typedef int socklen_t;
 // gethostbyname is thread safe in windows
 # define gethostbyname_r(n,p,b,s,l,e)	\
 	memcpy(p,gethostbyname(n),sizeof(struct hostent))
+# define poll               WSAPoll
 # define localtime_r(a,b)	memcpy(b, localtime(a), sizeof(struct tm))
 # define GETPID				(pid_t)GetCurrentProcessId
 # define S_CRLF				"\r\n"

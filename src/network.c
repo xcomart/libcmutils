@@ -23,6 +23,7 @@
 
 #if defined(MSWIN)
 #include <winsock2.h>
+#include <ws2tcpip.h>
 static WSADATA wsa_data;
 #else
 # include <signal.h>
@@ -43,7 +44,6 @@ static WSADATA wsa_data;
 CMUTIL_LogDefine("cmutils.network")
 
 #if defined(MSWIN)
-# define poll WSAPoll
 #elif defined(APPLE)
 static CMUTIL_Mutex *g_cmutil_hostbyname_mutex = NULL;
 struct hostent *CMUTIL_NetworkGetHostByName(const char *name)
@@ -233,7 +233,7 @@ CMSocketResult CMUTIL_SocketAddrSet(
     memset(&hint, 0x0, sizeof(hint));
     hint.ai_family = AF_INET;
     rval = getaddrinfo(host, NULL, &hint, &ainfo);
-    if (rval) {
+    if (rval == 0) {
         if (ainfo) {
             memcpy(saddr, ainfo->ai_addr, ainfo->ai_addrlen);
             saddr->sin_port = (unsigned short)port;
@@ -243,11 +243,15 @@ CMSocketResult CMUTIL_SocketAddrSet(
             CMLogErrorS("no available address");
         }
     } else {
+#if defined(MSWIN)
+        CMLogErrorS("getaddrinfo() failed: %s", gai_strerror(rval));
+#else
         if (rval == EAI_SYSTEM) {
             CMLogErrorS("getaddrinfo() failed: %s", strerror(errno));
         } else {
             CMLogErrorS("getaddrinfo() failed: %s", gai_strerror(rval));
         }
+#endif
     }
     return CMSocketUnsupported;
 }
@@ -337,7 +341,7 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SocketReadSocket(
     CMUTIL_String *rcvbuf = CMUTIL_StringCreateInternal(
                 isock->memst, sizeof(pi), NULL);
     *rval = CMCall(sock, Read, rcvbuf, sizeof(pi), timeout);
-    if (*rval != CMUTIL_SocketOk) {
+    if (*rval != CMSocketOk) {
         // error code has been set already.
         CMCall(rcvbuf, Destroy);
         return NULL;
@@ -346,7 +350,7 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SocketReadSocket(
     CMCall(rcvbuf, Destroy);
     rsock = WSASocket(AF_INET, SOCK_STREAM, 0, &pi, 0, WSA_FLAG_OVERLAPPED);
     if (rsock == INVALID_SOCKET)
-        *rval = CMUTIL_SocketUnknownError;
+        *rval = CMSocketUnknownError;
 #else
     char buf[5];
     size_t bufsiz = 5;
@@ -509,7 +513,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteSocket(
 
     ir = WSADuplicateSocket(isent->sock, (DWORD)pid, &pi);
     if (ir != 0)
-        return CMUTIL_SocketUnknownError;
+        return CMSocketUnknownError;
     sendbuf = CMUTIL_StringCreateInternal(isock->memst, sizeof(pi), NULL);
     CMCall(sendbuf, AddNString, (char*)&pi, sizeof(pi));
 
