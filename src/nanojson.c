@@ -25,6 +25,9 @@
 
 CMUTIL_LogDefine("cmutils.nanojson")
 
+static const char* JSN_SPACES = " \t\r\n";
+static const char* JSN_DELIMS = ":,[]{}";
+
 CMUTIL_STATIC void CMUTIL_JsonToStringInternal(
         const CMUTIL_Json *json, CMUTIL_String *buf,
         CMBool pretty, int depth);
@@ -40,8 +43,31 @@ CMUTIL_STATIC void CMUTIL_JsonValueNumberToStr(
 CMUTIL_STATIC void CMUTIL_JsonValueStringToStr(
         CMUTIL_String *data, CMUTIL_String *buf)
 {
-    const char *sdata = CMCall(data, GetCString);
-    CMCall(buf, AddPrint, "\"%s\"", sdata);
+    const char *p, *sdata = CMCall(data, GetCString);
+    int i, len = CMCall(data, GetSize);
+    p = sdata;
+    if (p) {
+        CMCall(buf, AddChar, "\"");
+        while (*p) {
+            switch (*p) {
+            case '\r':
+                CMCall(buf, AddNString, "\\r", 2);
+                break;
+            case '\n':
+                CMCall(buf, AddNString, "\\n", 2);
+                break;
+            case '\t':
+                CMCall(buf, AddNString, "\\t", 2);
+                break;
+            default:
+                if (strchr(JSN_DELIMS, *p))
+                    CMCall(buf, AddChar, '\\');
+                CMCall(buf, AddChar, *p);
+            }
+            p++;
+        }
+        CMCall(buf, AddChar, "\"");
+    }
 }
 
 static CMUTIL_JsonValToStrFunc g_cmutil_jsonvaltostrf[]=
@@ -741,9 +767,6 @@ CMUTIL_JsonArray *CMUTIL_JsonArrayCreate()
     return CMUTIL_JsonArrayCreateInternal(CMUTIL_GetMem());
 }
 
-
-static const char* JSN_SPACES = " \t\r\n";
-static const char* JSN_DELIMS = ":,[]{}";
 
 typedef struct CMUTIL_JsonParser {
     const char *orig, *curr;
