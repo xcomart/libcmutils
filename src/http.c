@@ -23,8 +23,10 @@ typedef struct CMUTIL_HttpMethod_Internal {
 CMUTIL_HttpMethod *CMUTIL_HttpMethodAddFormData(
         CMUTIL_HttpMethod *method, const char *name, CMUTIL_String *data)
 {
+    const char *v = NULL;
     CMUTIL_HttpMethod_Internal *mi = (CMUTIL_HttpMethod_Internal*)method;
-    CMCall(mi->params, PutString, name, CMCall(data, GetCString));
+    v = CMCall(data, GetCString);
+    CMCall(mi->params, PutString, name, v);
     return method;
 }
 
@@ -39,7 +41,9 @@ CMUTIL_HttpMethod *CMUTIL_HttpMethodSetRawData(
 CMUTIL_HttpMethod *CMUTIL_HttpMethodSetRequestHeader(
         CMUTIL_HttpMethod *method, const char *name, CMUTIL_String *data)
 {
+    const char *v = NULL;
     CMUTIL_HttpMethod_Internal *mi = (CMUTIL_HttpMethod_Internal*)method;
-    CMCall(mi->headers, PutString, name, CMCall(data, GetCString));
+    v = CMCall(data, GetCString);
+    CMCall(mi->headers, PutString, name, v);
     return method;
 }

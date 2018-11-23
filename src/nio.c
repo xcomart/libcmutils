@@ -391,7 +391,7 @@ CMUTIL_STATIC int CMUTIL_NIOSelectorSelectTimeout(
             ntout = (int)timeout;
         }
         timeout -= ntout;
-        res = poll(pfds, cnt, ntout);
+        res = poll(pfds, (unsigned int)cnt, ntout);
     }
 
     if (res > 0) {
@@ -445,7 +445,8 @@ CMUTIL_STATIC void CMUTIL_NIOSelectorClose(
     uint8_t c = '0';
     if (is) {
         CMUTIL_StringArray *karr = NULL;
-        size_t i, size;
+        size_t size;
+        uint32_t i;
         is->closing = CMTrue;
         CMCall(is->sender, WriteByte, c);
         karr = CMCall(is->keys, GetKeys);
