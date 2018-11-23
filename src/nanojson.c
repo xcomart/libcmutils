@@ -44,10 +44,9 @@ CMUTIL_STATIC void CMUTIL_JsonValueStringToStr(
         CMUTIL_String *data, CMUTIL_String *buf)
 {
     const char *p, *sdata = CMCall(data, GetCString);
-    int i, len = CMCall(data, GetSize);
     p = sdata;
     if (p) {
-        CMCall(buf, AddChar, "\"");
+        CMCall(buf, AddChar, '\"');
         while (*p) {
             switch (*p) {
             case '\r':
@@ -66,7 +65,7 @@ CMUTIL_STATIC void CMUTIL_JsonValueStringToStr(
             }
             p++;
         }
-        CMCall(buf, AddChar, "\"");
+        CMCall(buf, AddChar, '\"');
     }
 }
 

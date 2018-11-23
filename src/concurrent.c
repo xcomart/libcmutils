@@ -299,7 +299,11 @@ CMUTIL_Cond *CMUTIL_CondCreateInternal(
     cnd_init(&(res->cond));
 # else
     pthread_mutexattr_init(&mta);
+#  if defined(APPLE)
+    pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);
+#  else
     pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE_NP);
+#  endif
     pthread_mutex_init(&(res->mutex), &mta);
     pthread_cond_init(&(res->cond), NULL);
 # endif
@@ -441,7 +445,11 @@ CMUTIL_Mutex *CMUTIL_MutexCreateInternal(CMUTIL_Mem *memst)
 # else
     /* setting up recursive mutex */
     pthread_mutexattr_init(&mta);
+#  if defined(APPLE)
+    pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE);
+#  else
     pthread_mutexattr_settype(&mta, PTHREAD_MUTEX_RECURSIVE_NP);
+#  endif
     pthread_mutex_init(&(res->mutex), &mta);
 # endif
 #endif
