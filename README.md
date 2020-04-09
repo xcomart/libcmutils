@@ -20,7 +20,7 @@ by Dennis Soungjin Park <xcomart@gmail.com>.
 
 ## 2. License
 
-The source code freely to use under **GPL v3** - see [LICENSE file](LICENSE)
+The source code freely to use under **MIT License** - see [LICENSE file](LICENSE)
 
 ## 3. Features
 
