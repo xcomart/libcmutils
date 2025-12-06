@@ -30,9 +30,9 @@ CMUTIL_LogDefine("cmutil.array")
 // CMUTIL_Array implementation
 //*****************************************************************************
 
-/**
- * @brief Implementation structure of CMUTIL_Array.
- */
+///
+/// \brief Implementation structure of CMUTIL_Array.
+///
 typedef struct CMUTIL_Array_Internal {
     CMUTIL_Array    base;           // CMUTIL_Array interface
     void            **data;
@@ -44,6 +44,7 @@ typedef struct CMUTIL_Array_Internal {
     CMBool          issorted;       // sorted array or not
     int             dummy_padder;
 } CMUTIL_Array_Internal;
+
 
 CMUTIL_STATIC void CMUTIL_ArrayCheckSize(
         CMUTIL_Array_Internal *array, size_t insize)
@@ -63,15 +64,15 @@ CMUTIL_STATIC int CMUTIL_ArraySearchPrivate(
         const void *obj, CMCompareCB cb_cmp, uint32_t* pidx)
 {
     int found = 0;
-    size_t stpos, edpos, idx = 0;
+    size_t idx = 0;
 
     /* find appropriate position using binary search */
-    stpos = 0;
-    edpos = arr->size;
-    if (edpos > 0) {
+    if (arr->size > 0) {
+        size_t stpos = 0;
+        size_t edpos = arr->size;
         while (found == 0) {
-            size_t mid = (edpos+stpos) / 2;
-            int cmp = cb_cmp(obj, *(arr->data+mid));
+            const size_t mid = (edpos+stpos) / 2;
+            const int cmp = cb_cmp(obj, *(arr->data+mid));
             if (cmp == 0) {
                 found = 1;
                 idx = mid;
@@ -82,7 +83,7 @@ CMUTIL_STATIC int CMUTIL_ArraySearchPrivate(
                 } else {
                     edpos = mid;
                 }
-            } else if (cmp > 0) {
+            } else {    // cmp > 0
                 if (mid == (edpos-1)) {
                     found = 2;
                     idx = edpos;
@@ -157,7 +158,7 @@ CMUTIL_STATIC void *CMUTIL_ArrayAdd(CMUTIL_Array *array, void *item)
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
     if (iarray->issorted) {
         uint32_t index;
-        int found = CMUTIL_ArraySearchPrivate(iarray, item,
+        const int found = CMUTIL_ArraySearchPrivate(iarray, item,
                 iarray->comparator, &index);
         if (found == 1) {
             // found same data and duplication
@@ -173,7 +174,8 @@ CMUTIL_STATIC void *CMUTIL_ArrayAdd(CMUTIL_Array *array, void *item)
     return res;
 }
 
-CMUTIL_STATIC void *CMUTIL_ArrayRemoveAt(CMUTIL_Array *array, uint32_t index)
+CMUTIL_STATIC void *CMUTIL_ArrayRemoveAt(
+    CMUTIL_Array *array, const uint32_t index)
 {
     void *res = NULL;
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
@@ -195,26 +197,9 @@ CMUTIL_STATIC void *CMUTIL_ArrayGetAt(const CMUTIL_Array *array, uint32_t index)
     const CMUTIL_Array_Internal *iarray = (const CMUTIL_Array_Internal*)array;
     if (index < iarray->size)
         res = iarray->data[index];
-    CMLogError("Index out of range: %d (array size is %d).",
-               index, iarray->size);
-    return res;
-}
-
-CMUTIL_STATIC void *CMUTIL_ArrayRemove(
-        CMUTIL_Array *array, const void *compval)
-{
-    void *res = NULL;
-    CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
-    if (iarray->issorted) {
-        uint32_t index;
-        int found = CMUTIL_ArraySearchPrivate(iarray, compval,
-                iarray->comparator, &index);
-        if (found == 1)
-            // found data and remove it
-            res = CMCall(array, RemoveAt, index);
-    } else {
-        CMLogError("Remove method only applicable to sorted array.");
-    }
+    else
+        CMLogError("Index out of range: %d (array size is %d).",
+                   index, iarray->size);
     return res;
 }
 
@@ -222,19 +207,20 @@ CMUTIL_STATIC void *CMUTIL_ArrayFind(
         const CMUTIL_Array *array, const void *compval, uint32_t *index)
 {
     void *res = NULL;
-    uint32_t idx = 0;
+    uint32_t idx = -1;
     const CMUTIL_Array_Internal *iarray = (const CMUTIL_Array_Internal*)array;
     if (iarray->issorted) {
-        int found = CMUTIL_ArraySearchPrivate(iarray, compval,
+        const int found = CMUTIL_ArraySearchPrivate(iarray, compval,
                 iarray->comparator, &idx);
-        if (found == 1)
+        if (found == 1) {
             // found data
             res = iarray->data[idx];
-        if (index)
-            *index = idx;
+            if (index)
+                *index = idx;
+        }
     } else {
         uint32_t i;
-        for (i=0; i<iarray->size; i++) {
+        for (i = 0; i<iarray->size; i++) {
             CMBool found = CMFalse;
             if (iarray->comparator) {
                 if (iarray->comparator(compval, iarray->data[i]) == 0)
@@ -250,6 +236,17 @@ CMUTIL_STATIC void *CMUTIL_ArrayFind(
                 break;
             }
         }
+    }
+    return res;
+}
+
+CMUTIL_STATIC void *CMUTIL_ArrayRemove(
+        CMUTIL_Array *array, const void *compval)
+{
+    uint32_t index = -1;
+    void *res = CMUTIL_ArrayFind(array, compval, &index);
+    if (res) {
+        res = CMCall(array, RemoveAt, index);
     }
     return res;
 }
@@ -273,7 +270,7 @@ CMUTIL_STATIC CMBool CMUTIL_ArrayPush(CMUTIL_Array *array, void *item)
 
 CMUTIL_STATIC void *CMUTIL_ArrayPop(CMUTIL_Array *array)
 {
-    size_t size = CMCall(array, GetSize);
+    const size_t size = CMCall(array, GetSize);
     if (size > 0)
         return CMCall(array, RemoveAt, (uint32_t)(size-1));
     return NULL;
@@ -281,7 +278,7 @@ CMUTIL_STATIC void *CMUTIL_ArrayPop(CMUTIL_Array *array)
 
 CMUTIL_STATIC void *CMUTIL_ArrayTop(const CMUTIL_Array *array)
 {
-    size_t size = CMCall(array, GetSize);
+    const size_t size = CMCall(array, GetSize);
     if (size > 0)
         return CMCall(array, GetAt, (uint32_t)(size-1));
     return NULL;
@@ -298,7 +295,8 @@ CMUTIL_STATIC void *CMUTIL_ArrayBottom(const CMUTIL_Array *array)
 typedef struct CMUTIL_ArrayIterator_st {
     CMUTIL_Iterator             base;
     const CMUTIL_Array_Internal	*iarray;
-    uint32_t                        index;
+    const CMUTIL_Mem            *memst;
+    uint32_t                    index;
     int                         dummy_padder;
 } CMUTIL_ArrayIterator_st;
 
@@ -324,7 +322,7 @@ CMUTIL_STATIC void CMUTIL_ArrayIterDestroy(CMUTIL_Iterator *iter)
 {
     CMUTIL_ArrayIterator_st *iiter = (CMUTIL_ArrayIterator_st*)iter;
     if (iiter)
-        iiter->iarray->memst->Free(iiter);
+        iiter->memst->Free(iiter);
 }
 
 static CMUTIL_Iterator g_cmutil_array_iterator = {
@@ -341,13 +339,24 @@ CMUTIL_STATIC CMUTIL_Iterator *CMUTIL_ArrayIterator(const CMUTIL_Array *array)
     memset(res, 0x0, sizeof(CMUTIL_ArrayIterator_st));
     memcpy(res, &g_cmutil_array_iterator, sizeof(CMUTIL_Iterator));
     res->iarray = iarray;
+    res->memst = iarray->memst;
     return (CMUTIL_Iterator*)res;
 }
 
 CMUTIL_STATIC void CMUTIL_ArrayClear(CMUTIL_Array *array)
 {
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
-    iarray->size = 0;
+    if (iarray) {
+        if (iarray->data) {
+            if (iarray->freecb) {
+                for (uint32_t i = 0; i<iarray->size; i++)
+                    iarray->freecb(iarray->data[i]);
+            }
+        }
+        memset(iarray->data, 0x0,
+               (uint32_t)iarray->capacity * sizeof(void*));
+        iarray->size = 0;
+    }
 }
 
 CMUTIL_STATIC void CMUTIL_ArrayDestroy(CMUTIL_Array *array)
@@ -356,8 +365,7 @@ CMUTIL_STATIC void CMUTIL_ArrayDestroy(CMUTIL_Array *array)
     if (iarray) {
         if (iarray->data) {
             if (iarray->freecb) {
-                uint32_t i;
-                for (i=0; i<iarray->size; i++)
+                for (uint32_t i = 0; i<iarray->size; i++)
                     iarray->freecb(iarray->data[i]);
             }
             iarray->memst->Free(iarray->data);

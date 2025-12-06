@@ -426,6 +426,9 @@ void CMUTIL_LogInit()
     PATTERN_APPENDF(Stack);
 
     g_cmutil_logsystem_mutex = CMUTIL_MutexCreate();
+
+    // initialize default log system
+    (void)CMUTIL_LogSystemGet();
 }
 
 void CMUTIL_LogClear()
@@ -1593,10 +1596,10 @@ CMUTIL_STATIC CMUTIL_Logger *CMUTIL_LogSystemGetLogger(
 {
     const CMUTIL_LogSystem_Internal *ilsys =
             (const CMUTIL_LogSystem_Internal*)lsys;
-    CMUTIL_Logger_Internal *res;
     CMUTIL_Logger_Internal q;
     q.fullname = CMUTIL_StringCreateInternal(ilsys->memst, 20, name);
-    res = (CMUTIL_Logger_Internal*)CMCall(ilsys->loggers, Find, &q, NULL);
+    CMUTIL_Logger_Internal* res =
+        (CMUTIL_Logger_Internal*)CMCall(ilsys->loggers, Find, &q, NULL);
     if (res == NULL) {
         uint32_t i;
         // create logger
@@ -1747,7 +1750,7 @@ CMUTIL_STATIC void CMUTIL_LogConfigClean(CMUTIL_Json *json)
     }
 }
 
-#define CMUITL_LOG_PATTERN_DEFAULT	"%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n"
+#define CMUITL_LOG_PATTERN_DEFAULT	"%d %P-[%10t] (%15F:%-4L) [%-5p] %c - %m%ex%n"
 
 static const char *g_cmutil_log_term_format[] = {
     "%s.%%Y",
@@ -1761,17 +1764,17 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureDefault(CMUTIL_Mem *memst)
 {
     CMCall(g_cmutil_logsystem_mutex, Lock);
     // create default logsystem
+    CMUTIL_LogSystem *res = CMUTIL_LogSystemCreateInternal(memst);
+    const CMUTIL_ConfLogger* root_logger =
+        CMCall(res, CreateLogger, NULL, CMLogLevel_Debug, CMTrue);
     CMUTIL_LogAppender *conapndr = CMUTIL_LogConsoleAppenderCreateInternal(
                 memst, "__CONSOL", CMUITL_LOG_PATTERN_DEFAULT);
-    CMUTIL_ConfLogger *rootlogger;
-    CMUTIL_LogSystem *res = CMUTIL_LogSystemCreateInternal(memst);
-    rootlogger = CMCall(res, CreateLogger, NULL, CMLogLevel_Info, CMTrue);
-    CMCall(rootlogger, AddAppender, conapndr, CMLogLevel_Info);
+    CMCall(root_logger, AddAppender, conapndr, CMLogLevel_Debug);
     __cmutil_logsystem = (CMUTIL_LogSystem*)res;
     CMCall(g_cmutil_logsystem_mutex, Unlock);
 
-    CMLogWarn("logging system not initialized or invalid configuration. "
-              "using default configuraiton.");
+    printf("logging system not initialized or invalid configuration. "
+              "using default configuraiton.\n");
     return res;
 }
 
@@ -2103,16 +2106,32 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureInternal(
     return lsys;
 }
 
+static int g_initialized = 0;
+
 CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJsonInternal(
         CMUTIL_Mem *memst, const char *jsonfile)
 {
-    CMUTIL_File *f = CMUTIL_FileCreateInternal(memst, jsonfile);
-    CMUTIL_String *jsonstr = CMCall(f, GetContents);
-    CMUTIL_Json *json = CMUTIL_JsonParseInternal(memst, jsonstr, CMTrue);
-    CMUTIL_LogSystem *res = CMUTIL_LogSystemConfigureInternal(memst, json);
-    CMCall(json, Destroy);
-    CMCall(jsonstr, Destroy);
-    CMCall(f, Destroy);
+    CMUTIL_LogSystem *res = NULL;
+    if (g_initialized == 0) {
+        g_initialized = 1;
+        CMUTIL_File *f = CMUTIL_FileCreateInternal(memst, jsonfile);
+        CMUTIL_String *jsonstr = CMCall(f, GetContents);
+        if (jsonstr) {
+            CMUTIL_Json *json = CMUTIL_JsonParseInternal(memst, jsonstr, CMTrue);
+            if (json) {
+                res = CMUTIL_LogSystemConfigureInternal(memst, json);
+                CMCall(json, Destroy);
+            }
+            CMCall(jsonstr, Destroy);
+        }
+
+        if (res == NULL) {
+            res = CMUTIL_LogSystemConfigureDefault(memst);
+        }
+
+        if (f)
+            CMCall(f, Destroy);
+    }
     return res;
 }
 
