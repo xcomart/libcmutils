@@ -835,9 +835,9 @@ RETRYPOINT:
 }
 
 #define CMUTIL_JSON_PARSE_ERROR(a, msg) do {                                \
-    char buf[30] = {0,}; strncat(buf, a->curr, 25); strcat(buf, "...");     \
+    char _buf[30] = {0,}; strncat(_buf, a->curr, 25); strcat(_buf, "...");  \
     if (!a->silent) CMLogError("parse error in line %d before '%s': %s",    \
-                a->linecnt, buf, msg); } while(0)
+                a->linecnt, _buf, msg); } while(0)
 
 CMUTIL_STATIC CMBool CMUTIL_JsonParseEscape(
         CMUTIL_JsonParser *pctx, CMUTIL_String *sbuf)

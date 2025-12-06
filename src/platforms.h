@@ -163,7 +163,7 @@ typedef int socklen_t;
 #  define ARCH32
 # endif
 #else
-# if __x86_64__ || __ppc64__
+# if __x86_64__ || __ppc64__ || __LP64__
 #  define ARCH64
 # else
 #  define ARCH32

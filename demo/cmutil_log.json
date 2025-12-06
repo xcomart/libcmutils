@@ -22,7 +22,7 @@
                 "asyncBufferSize": 512,
                 "type": "RollingFile",  // can be one of (console, file, rollingfile, socket)
                 "fileName": "log/sample_rolling_file_log.log",
-                "rollterm": "date"  // can be one of (year, month, day, hour, minute)
+                "rollterm": "day"  // can be one of (year, month, day, hour, minute)
             },{
                 "name": "SampleSocketAppender",
                 "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",
