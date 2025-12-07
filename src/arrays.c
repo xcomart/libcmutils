@@ -294,7 +294,7 @@ CMUTIL_STATIC void *CMUTIL_ArrayBottom(const CMUTIL_Array *array)
 
 typedef struct CMUTIL_ArrayIterator_st {
     CMUTIL_Iterator             base;
-    const CMUTIL_Array_Internal	*iarray;
+    const CMUTIL_Array_Internal *iarray;
     const CMUTIL_Mem            *memst;
     uint32_t                    index;
     int                         dummy_padder;

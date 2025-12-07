@@ -29,7 +29,7 @@ SOFTWARE.
 #if defined(MSWIN)
 # include <process.h>
 // usleep implementation for windows
-# define usleep(x)	Sleep((x)/1000)
+# define usleep(x)  Sleep((x)/1000)
 #else
 # include <sys/time.h>
 # include <unistd.h>
@@ -43,31 +43,31 @@ SOFTWARE.
 # endif
 # if defined(APPLE) || __STDC_VERSION__ < 201112L || defined(__STDC_NO_THREADS__)
 #  include <pthread.h>
-#  define MUTEX_T			pthread_mutex_t
-#  define MUTEX_LOCK		pthread_mutex_lock
-#  define MUTEX_TRYLOCK		pthread_mutex_trylock
-#  define MUTEX_UNLOCK		pthread_mutex_unlock
-#  define MUTEX_DESTROY		pthread_mutex_destroy
-#  define COND_T			pthread_cond_t
-#  define COND_WAIT			pthread_cond_wait
-#  define COND_TIMEDWAIT	pthread_cond_timedwait
-#  define COND_SIGNAL		pthread_cond_signal
-#  define COND_DESTROY		pthread_cond_destroy
-#  define THREAD_T			pthread_t
+#  define MUTEX_T           pthread_mutex_t
+#  define MUTEX_LOCK        pthread_mutex_lock
+#  define MUTEX_TRYLOCK     pthread_mutex_trylock
+#  define MUTEX_UNLOCK      pthread_mutex_unlock
+#  define MUTEX_DESTROY     pthread_mutex_destroy
+#  define COND_T            pthread_cond_t
+#  define COND_WAIT         pthread_cond_wait
+#  define COND_TIMEDWAIT    pthread_cond_timedwait
+#  define COND_SIGNAL       pthread_cond_signal
+#  define COND_DESTROY      pthread_cond_destroy
+#  define THREAD_T          pthread_t
 # else
-#  define USE_THREADS_H_	1
+#  define USE_THREADS_H_    1
 #  include <threads.h>
-#  define MUTEX_T			mtx_t
-#  define MUTEX_LOCK		mtx_lock
-#  define MUTEX_TRYLOCK		mtx_trylock
-#  define MUTEX_UNLOCK		mtx_unlock
-#  define MUTEX_DESTROY		mtx_destroy
-#  define COND_T			cnd_t
-#  define COND_WAIT			cnd_wait
-#  define COND_TIMEDWAIT	cnd_timedwait
-#  define COND_SIGNAL		cnd_signal
-#  define COND_DESTROY		cnd_destroy
-#  define THREAD_T			thrd_t
+#  define MUTEX_T           mtx_t
+#  define MUTEX_LOCK        mtx_lock
+#  define MUTEX_TRYLOCK     mtx_trylock
+#  define MUTEX_UNLOCK      mtx_unlock
+#  define MUTEX_DESTROY     mtx_destroy
+#  define COND_T            cnd_t
+#  define COND_WAIT         cnd_wait
+#  define COND_TIMEDWAIT    cnd_timedwait
+#  define COND_SIGNAL       cnd_signal
+#  define COND_DESTROY      cnd_destroy
+#  define THREAD_T          thrd_t
 # endif
 #endif
 
@@ -155,20 +155,20 @@ CMUTIL_STATIC void CMUTIL_CondWait(CMUTIL_Cond *cond)
 #endif
 }
 
-#define ESDBC_ONE_SEC	(1000*1000*1000)
+#define ESDBC_ONE_SEC   (1000*1000*1000)
 
 /// \brief Waits with timeout.
 ///
 /// Waits until this condition is set or the time-out interval elapses.
 /// \param cond this condition object.
 /// \param millisec
-///		The time-out interval, in milliseconds. If a nonzero value is
-///		specified, this method waits until the condition is set or the
-///		interval elapses. If millisec is zero, the function does not
-///		enter a wait state if this condition is not set; it always
-///		returns immediately.
+///     The time-out interval, in milliseconds. If a nonzero value is
+///     specified, this method waits until the condition is set or the
+///     interval elapses. If millisec is zero, the function does not
+///     enter a wait state if this condition is not set; it always
+///     returns immediately.
 /// \return CMTrue if this condition is set in given interval,
-///		CMFalse otherwise.
+///     CMFalse otherwise.
 CMUTIL_STATIC CMBool CMUTIL_CondTimedWait(
         CMUTIL_Cond *cond, long millisec)
 {
@@ -324,12 +324,12 @@ CMUTIL_Cond *CMUTIL_CondCreateInternal(
 /// Creates a manual or auto resetting condition object.
 ///
 /// \param manual_reset
-///			If this parameter is CMTrue, the function creates a
-///			manual-reset condition object, which requires the use of the Reset
-///			method to set the event state to nonsignaled. If this parameter is
-///			CMFalse, the function creates an auto-reset condition
-///			object, and system automatically resets the event state to
-///			nonsignaled after a single waiting thread has been released.
+///         If this parameter is CMTrue, the function creates a
+///         manual-reset condition object, which requires the use of the Reset
+///         method to set the event state to nonsignaled. If this parameter is
+///         CMFalse, the function creates an auto-reset condition
+///         object, and system automatically resets the event state to
+///         nonsignaled after a single waiting thread has been released.
 CMUTIL_Cond *CMUTIL_CondCreate(CMBool manual_reset)
 {
     return CMUTIL_CondCreateInternal(CMUTIL_GetMem(), manual_reset);
@@ -392,9 +392,9 @@ CMUTIL_STATIC void CMUTIL_MutexUnlock(CMUTIL_Mutex *mutex)
 }
 
 /// \brief Try to lock given mutex object.
-/// \param	mutex	a mutex object to be tested.
-/// \return	CMTrue if mutex locked successfully,
-///			CMFalse if lock failed.
+/// \param  mutex   a mutex object to be tested.
+/// \return CMTrue if mutex locked successfully,
+///         CMFalse if lock failed.
 CMUTIL_STATIC CMBool CMUTIL_MutexTryLock(CMUTIL_Mutex *mutex)
 {
     CMUTIL_Mutex_Internal *imutex =
@@ -481,26 +481,26 @@ CMUTIL_Mutex *CMUTIL_MutexCreate()
 //*****************************************************************************
 
 typedef struct CMUTIL_Thread_Internal {
-    CMUTIL_Thread       base;
-    void                *udata;
-    void                *retval;
-    void                *(*proc)(void*);
+    CMUTIL_Thread   base;
+    void            *udata;
+    void            *retval;
+    void            *(*proc)(void*);
 #if defined(MSWIN)
-    HANDLE              thread;
+    HANDLE          thread;
 #else
-    THREAD_T            thread;
+    THREAD_T        thread;
 #endif
-    CMBool         isrunning;
-    uint32_t                id;
-    char                *name;
-    uint64_t             sysid;
-    CMUTIL_Mem          *memst;
+    CMBool          isrunning;
+    uint32_t        id;
+    char            *name;
+    uint64_t        sysid;
+    CMUTIL_Mem      *memst;
 } CMUTIL_Thread_Internal;
 
 typedef struct CMUTIL_Thread_Global_Context {
-    CMUTIL_Mutex	*mutex;
-    CMUTIL_Array	*threads;
-    unsigned int	threadIndex;
+    CMUTIL_Mutex    *mutex;
+    CMUTIL_Array    *threads;
+    unsigned int    threadIndex;
 } CMUTIL_Thread_Global_Context;
 
 static CMUTIL_Thread_Global_Context *g_cmutil_thread_context = NULL;
@@ -875,25 +875,25 @@ CMUTIL_Semaphore *CMUTIL_SemaphoreCreate(int initcnt)
 //*****************************************************************************
 
 // use internal read/write lock implementation to support recursive lock
-#define RWLOCK_USE_INTERNAL		1
+#define RWLOCK_USE_INTERNAL     1
 
 typedef struct CMUTIL_RWLock_Internal {
-    CMUTIL_RWLock		base;
+    CMUTIL_RWLock       base;
 #if defined(RWLOCK_USE_INTERNAL)
-    CMUTIL_Mutex		*rdcntmtx;
-    CMUTIL_Mutex		*wrmtx;
-    CMUTIL_Cond			*nordrs;
-    int					rdcnt;
+    CMUTIL_Mutex        *rdcntmtx;
+    CMUTIL_Mutex        *wrmtx;
+    CMUTIL_Cond         *nordrs;
+    int                 rdcnt;
     int                 dummy_padder;
 #else
 #if defined(MSWIN)
-    CRITICAL_SECTION	rdcntlock;
-    CRITICAL_SECTION	wrlock;
-    HANDLE				nordrs;
-    int					rdcnt;
+    CRITICAL_SECTION    rdcntlock;
+    CRITICAL_SECTION    wrlock;
+    HANDLE              nordrs;
+    int                 rdcnt;
     int                 dummy_padder;
 #else
-    pthread_rwlock_t	rwlock;
+    pthread_rwlock_t    rwlock;
 #endif
 #endif
     CMUTIL_Mem          *memst;

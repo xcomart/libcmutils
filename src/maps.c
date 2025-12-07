@@ -247,7 +247,7 @@ CMUTIL_STATIC size_t CMUTIL_MapGetSize(const CMUTIL_Map *map)
 
 typedef struct CMUTIL_MapIter_st {
     CMUTIL_Iterator             base;
-    const CMUTIL_Map_Internal	*imap;
+    const CMUTIL_Map_Internal   *imap;
     CMUTIL_StringArray          *keys;
     CMUTIL_Iterator             *keyiter;
 } CMUTIL_MapIter_st;

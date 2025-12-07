@@ -87,19 +87,19 @@ extern "C" {
 
 #if !defined(MSWIN)
 # if !defined(SOCKET)
-#  define SOCKET			int
+#  define SOCKET            int
 # endif
 # if !defined(closesocket)
-#  define closesocket		close
+#  define closesocket       close
 # endif
 # if !defined(ioctlsocket)
-#  define ioctlsocket		ioctl
+#  define ioctlsocket       ioctl
 # endif
 # if !defined(SOCKET_ERROR)
-#  define SOCKET_ERROR		-1
+#  define SOCKET_ERROR      -1
 # endif
 # if !defined(INVALID_SOCKET)
-#  define INVALID_SOCKET	-1
+#  define INVALID_SOCKET    -1
 # endif
 #endif
 
@@ -658,7 +658,7 @@ struct CMUTIL_Semaphore {
      * @brief Acquire an ownership from semaphore.
      *
      * Acquire an ownership in given time or fail with timed out. This method
-     * will blocked until an ownership acquired successfully in time,
+     * will be blocked until an ownership acquired successfully in time,
      * or the waiting time expired.
      *
      * @param semaphore This semaphore object.
@@ -804,7 +804,7 @@ struct CMUTIL_Array {
      * If this array is a sorted array(created including <code>comparator</code>
      * callback function), this method will add new item to appropriate
      * location.
-     * Otherwise this method will add new item to the end of this array.
+     * Otherwise, this method will add new item to the end of this array.
      *
      * @param array This dynamic array object.
      * @param item Item to be added.
@@ -1105,8 +1105,8 @@ struct CMUTIL_StringArray {
             CMUTIL_StringArray *array);
 };
 
-#define CMUTIL_STRINGARRAY_DEFAULT	32
-#define CMUTIL_StringArrayCreate()	\
+#define CMUTIL_STRINGARRAY_DEFAULT  32
+#define CMUTIL_StringArrayCreate()  \
         CMUTIL_StringArrayCreateEx(CMUTIL_STRINGARRAY_DEFAULT)
 CMUTIL_API CMUTIL_StringArray *CMUTIL_StringArrayCreateEx(
         size_t initcapacity);
@@ -1162,8 +1162,8 @@ struct CMUTIL_ByteBuffer {
             CMUTIL_ByteBuffer *buffer);
 };
 
-#define CMUTIL_BYTEBUFFER_DEFAULT	32
-#define CMUTIL_ByteBufferCreate()	\
+#define CMUTIL_BYTEBUFFER_DEFAULT   32
+#define CMUTIL_ByteBufferCreate()   \
         CMUTIL_ByteBufferCreateEx(CMUTIL_BYTEBUFFER_DEFAULT)
 CMUTIL_API CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateEx(
         size_t initcapacity);
@@ -1199,8 +1199,8 @@ struct CMUTIL_Map {
             CMUTIL_Map *map, uint32_t index);
 };
 
-#define CMUTIL_MAP_DEFAULT	256
-#define CMUTIL_MapCreate()	CMUTIL_MapCreateEx(\
+#define CMUTIL_MAP_DEFAULT  256
+#define CMUTIL_MapCreate()  CMUTIL_MapCreateEx(\
         CMUTIL_MAP_DEFAULT, CMFalse, NULL)
 CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
         uint32_t bucketsize, CMBool isucase, CMFreeCB freecb);
@@ -1233,7 +1233,7 @@ typedef enum CMXmlNodeKind {
     CMXmlNodeText,
     CMXmlNodeTag
 } CMXmlNodeKind;
-#define CMXmlNodeKind		CMXmlNodeKind
+#define CMXmlNodeKind       CMXmlNodeKind
 
 typedef struct CMUTIL_XmlNode CMUTIL_XmlNode;
 struct CMUTIL_XmlNode {
@@ -1598,6 +1598,9 @@ CMUTIL_API CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreate(
     int listen_port,
     const char *pattern);
 
+CMUTIL_API void CMUTIL_LogFallback(CMLogLevel level,
+        const char *file, int line, const char *fmt, ...);
+
 #define CMUTIL_LogDefine(name)                                          \
     static CMUTIL_Logger *___logger = NULL;                             \
     static CMUTIL_Logger *__CMUTIL_GetLogger() {                        \
@@ -1614,12 +1617,18 @@ CMUTIL_API CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreate(
     if (logger)                                                         \
         logger->LogEx(logger, CMLogLevel_##level,__FILE__,__LINE__,     \
                       CM##stack,f,##__VA_ARGS__);                       \
+    else                                                                \
+        CMUTIL_LogFallback(CMLogLevel_##level, __FILE__, __LINE__,      \
+                           f, ##__VA_ARGS__);                           \
     } while(0)
-#define CMUTIL_Log2__(level,stack,f,...)	do {                        \
+#define CMUTIL_Log2__(level,stack,f,...)    do {                        \
     CMUTIL_Logger *logger = __CMUTIL_GetLogger();                       \
     if (logger)                                                         \
         logger->LogEx(logger, level,__FILE__,__LINE__,                  \
                       CM##stack,f,##__VA_ARGS__);                       \
+    else                                                                \
+        CMUTIL_LogFallback(CMLogLevel_##level, __FILE__, __LINE__,      \
+                           f, ##__VA_ARGS__);                           \
     } while(0)
 
 #define CMLogTrace(f,...)   CMUTIL_Log__(Trace,False,f,##__VA_ARGS__)
@@ -1830,7 +1839,7 @@ typedef enum CMJsonValueType {
 
 typedef struct CMUTIL_JsonValue CMUTIL_JsonValue;
 struct CMUTIL_JsonValue {
-    CMUTIL_Json	parent;
+    CMUTIL_Json parent;
     CMJsonValueType (*GetValueType)(
             const CMUTIL_JsonValue *jval);
     int64_t (*GetLong)(

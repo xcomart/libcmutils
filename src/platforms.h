@@ -38,15 +38,15 @@ SOFTWARE.
 
 #if (defined(_WIN32) || defined(_WIN64)) && !defined(MSWIN)
 # define MSWIN
-# define CMUTIL_SO_EXT		"dll"
-# define CMUTIL_LIB_ENV		"PATH"
-# define CMUTIL_LIB_DFLT	""
-# define CMUTIL_PATH_SEPS	";"
+# define CMUTIL_SO_EXT      "dll"
+# define CMUTIL_LIB_ENV     "PATH"
+# define CMUTIL_LIB_DFLT    ""
+# define CMUTIL_PATH_SEPS   ";"
 #endif
 
 /* dynamic library of cygwin is DLL */
 #if defined(__CYGWIN__)
-# define CMUTIL_SO_EXT		"dll"
+# define CMUTIL_SO_EXT      "dll"
 #endif
 
 /* Defined if OS is Linux and compiler is gcc. */
@@ -103,7 +103,7 @@ SOFTWARE.
 #endif
 
 #if !defined(_MSC_VER)
-# define DeleteFile		unlink
+# define DeleteFile unlink
 #endif
 
 
@@ -125,13 +125,13 @@ SOFTWARE.
 # endif
 typedef int socklen_t;
 // gethostbyname is thread safe in windows
-# define gethostbyname_r(n,p,b,s,l,e)	\
-	memcpy(p,gethostbyname(n),sizeof(struct hostent))
+# define gethostbyname_r(n,p,b,s,l,e)   \
+    memcpy(p,gethostbyname(n),sizeof(struct hostent))
 # define poll               WSAPoll
-# define localtime_r(a,b)	memcpy(b, localtime(a), sizeof(struct tm))
-# define GETPID				(pid_t)GetCurrentProcessId
-# define S_CRLF				"\r\n"
-# define USLEEP(x)			Sleep((x) / 1000)
+# define localtime_r(a,b)   memcpy(b, localtime(a), sizeof(struct tm))
+# define GETPID             (pid_t)GetCurrentProcessId
+# define S_CRLF             "\r\n"
+# define USLEEP(x)          Sleep((x) / 1000)
 #else
 # include <unistd.h>
 # include <sys/types.h>
@@ -146,9 +146,9 @@ typedef int socklen_t;
 #  include <sys/ioctl.h>
 # endif
 
-# define GETPID				(pid_t)getpid
-# define S_CRLF				"\n"
-# define USLEEP				usleep
+# define GETPID             (pid_t)getpid
+# define S_CRLF             "\n"
+# define USLEEP             usleep
 #endif
 
 #include <stdlib.h>

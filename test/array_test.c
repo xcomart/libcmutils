@@ -8,7 +8,7 @@ CMUTIL_LogDefine("test.array_test")
 
 int main()
 {
-    CMUTIL_Init(CMMemSystem);
+    CMUTIL_Init(CMMemDebug);
 
     int a[] = {1, 2, 3};
 

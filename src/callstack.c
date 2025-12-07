@@ -35,7 +35,7 @@ SOFTWARE.
 // (better would be 'CONTEXT_ALL')
 #define USED_CONTEXT_FLAGS CONTEXT_FULL
 
-#define STACKWALK_MAX_NAMELEN	1024
+#define STACKWALK_MAX_NAMELEN   1024
 
 #if defined(_M_IX86) && defined(_MSC_VER)
 #ifdef CURRENT_THREAD_VIA_EXCEPTION
@@ -260,7 +260,7 @@ void CMUTIL_CallStackClear()
 }
 
 // **************************************** ToolHelp32 ************************
-#define MAX_MODULE_NAME32	255
+#define MAX_MODULE_NAME32   255
 #define TH32CS_SNAPMODULE   0x00000008
 #pragma pack( push, 8 )
 typedef struct tagMODULEENTRY32
@@ -292,7 +292,7 @@ typedef struct _MODULEINFO {
 
 typedef struct CMUTIL_StackWalker_Internal CMUTIL_StackWalker_Internal;
 struct CMUTIL_StackWalker_Internal {
-    CMUTIL_StackWalker	base;
+    CMUTIL_StackWalker  base;
     DWORD (*LoadModule)(
         const CMUTIL_StackWalker_Internal *walker,
         LPCSTR img, LPCSTR mod, DWORD64 baseAddr, DWORD size);
@@ -959,9 +959,9 @@ CMUTIL_STATIC void CMUTIL_StackWalkerPrintStack(
     }
 }
 
-#else	/* not SUNOS */
+#else   /* not SUNOS */
 
-#define CMUTIL_STACK_MAX	1024
+#define CMUTIL_STACK_MAX    1024
 
 CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_StackWalkerGetStack(
     const CMUTIL_StackWalker *walker, int skipdepth)

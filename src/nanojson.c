@@ -25,7 +25,7 @@ SOFTWARE.
 #include "functions.h"
 
 #if defined(MSWIN)
-# define atoll	_atoi64
+# define atoll  _atoi64
 #endif
 
 CMUTIL_LogDefine("cmutils.nanojson")
@@ -84,23 +84,23 @@ static CMUTIL_JsonValToStrFunc g_cmutil_jsonvaltostrf[]=
 };
 
 typedef struct CMUTIL_JsonValue_Internal {
-    CMUTIL_JsonValue		base;
-    CMUTIL_String			*data;
-    CMUTIL_Mem              *memst;
-    CMJsonValueType	type;
-    int                     dummy_padder;
+    CMUTIL_JsonValue    base;
+    CMUTIL_String       *data;
+    CMUTIL_Mem          *memst;
+    CMJsonValueType     type;
+    int                 dummy_padder;
 } CMUTIL_JsonValue_Internal;
 
 typedef struct CMUTIL_JsonObject_Internal {
-    CMUTIL_JsonObject	base;
-    CMUTIL_Map			*map;
+    CMUTIL_JsonObject   base;
+    CMUTIL_Map          *map;
     CMUTIL_Array        *keys;
     CMUTIL_Mem          *memst;
 } CMUTIL_JsonObject_Internal;
 
 typedef struct CMUTIL_JsonArray_Internal {
-    CMUTIL_JsonArray	base;
-    CMUTIL_Array		*arr;
+    CMUTIL_JsonArray    base;
+    CMUTIL_Array        *arr;
     CMUTIL_Mem          *memst;
 } CMUTIL_JsonArray_Internal;
 
@@ -816,12 +816,12 @@ RETRYPOINT:
         // check comments
         if (*pctx->curr == '/') {
             switch (*(pctx->curr+1)) {
-            case '/':	// line comment
+            case '/':   // line comment
                 CMUTIL_JsonParseConsume(pctx, 2);
                 while (!strchr("\r\n", *pctx->curr) && pctx->remain > 0)
                     CMUTIL_JsonParseConsume(pctx, 1);
                 goto RETRYPOINT;
-            case '*':	// block comment
+            case '*':   // block comment
                 CMUTIL_JsonParseConsume(pctx, 2);
                 while (!CMUTIL_JsonStartsWith(pctx, "*/") && pctx->remain > 0)
                     CMUTIL_JsonParseConsume(pctx, 1);

@@ -262,9 +262,9 @@ CMSocketResult CMUTIL_SocketAddrSet(
 }
 
 typedef struct CMUTIL_Socket_Internal {
-    CMUTIL_Socket		base;
-    SOCKET				sock;
-    struct sockaddr_in	peer;
+    CMUTIL_Socket       base;
+    SOCKET              sock;
+    struct sockaddr_in  peer;
     CMBool              silent;
     CMUTIL_Mem          *memst;
 } CMUTIL_Socket_Internal;
@@ -394,7 +394,7 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SocketReadSocket(
 
     if (*rval == CMSocketOk) {
         rc = (int)recvmsg(isock->sock, &msg, 0);
-        if (rc <= 0) {	// guess zero return is error
+        if (rc <= 0) {  // guess zero return is error
 # if !defined(SUNOS)
             if (cmsg) isock->memst->Free(cmsg);
 # endif
@@ -404,7 +404,7 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SocketReadSocket(
             return NULL;
         }
 
-        *(buf+4) = 0x00;	// null terminate
+        *(buf+4) = 0x00;    // null terminate
 # if !defined(SUNOS)
         // receive open file descriptor from parent
         memcpy(&rsock, CMSG_DATA(cmsg), sizeof(SOCKET));
@@ -578,7 +578,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteSocket(
 #if !defined(SUNOS)
     isock->memst->Free(cmsg);
 #endif
-    if (rc <= 0) {	// guess zero return is error
+    if (rc <= 0) {  // guess zero return is error
         if (!isock->silent)
             CMLogError("sendmsg error.(%d:%s)", errno, strerror(errno));
         return CMSocketSendFailed;
@@ -743,7 +743,7 @@ CONNECT_RETRY:
 
             rc = poll(&pfd, 1, tout);
 
-            if (rc > 0) {		// OK, connected to server
+            if (rc > 0) {   // OK, connected to server
                 is->sock = s;
                 return CMTrue;
             } else if (rc == 0) {
@@ -1045,9 +1045,9 @@ CMUTIL_Socket *CMUTIL_SocketConnectWithAddr(
 }
 
 typedef struct CMUTIL_ServerSocket_Internal {
-    CMUTIL_ServerSocket	base;
-    SOCKET				ssock;
-    CMBool			silent;
+    CMUTIL_ServerSocket base;
+    SOCKET              ssock;
+    CMBool              silent;
     CMUTIL_Mem          *memst;
 } CMUTIL_ServerSocket_Internal;
 
