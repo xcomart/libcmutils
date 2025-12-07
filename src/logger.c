@@ -1435,6 +1435,8 @@ CMUTIL_STATIC void CMUTIL_LogSystemAddAppender(
     const CMUTIL_LogSystem_Internal *ilsys =
             (const CMUTIL_LogSystem_Internal*)lsys;
     const char *name = CMCall(appender, GetName);
+    if (CMCall(ilsys->appenders, Get, name))
+        return;
     CMCall(ilsys->appenders, Put, name, appender);
 }
 
@@ -1493,6 +1495,7 @@ CMUTIL_STATIC void CMUTIL_ConfLoggerAddAppender(
 {
     const CMUTIL_ConfLogger_Internal *cli =
             (const CMUTIL_ConfLogger_Internal*)clogger;
+    CMCall((CMUTIL_LogSystem*)cli->lsys, AddAppender, appender);
     for ( ;level <= CMLogLevel_Fatal; level++) {
         CMUTIL_Array *lapndrs = (CMUTIL_Array*)CMCall(
                     cli->lvlapndrs, GetAt, level);
