@@ -105,16 +105,16 @@ static struct CMUTIL_EscapePair {
 };
 
 typedef struct CMUTIL_XmlNode_Internal {
-    CMUTIL_XmlNode		base;
-    CMUTIL_String		*tagname;
-    CMUTIL_Map			*attributes;
-    CMUTIL_Array		*children;
-    CMUTIL_XmlNode		*parent;
-    CMUTIL_Mem          *memst;
-    void				*udata;
-    void				(*freef)(void*);
-    CMXmlNodeKind	type;
-    int                 dummy_padder;
+    CMUTIL_XmlNode  base;
+    CMUTIL_String   *tagname;
+    CMUTIL_Map      *attributes;
+    CMUTIL_Array    *children;
+    CMUTIL_XmlNode  *parent;
+    CMUTIL_Mem      *memst;
+    void            *udata;
+    void            (*freef)(void*);
+    CMXmlNodeKind   type;
+    int             dummy_padder;
 } CMUTIL_XmlNode_Internal;
 
 static CMUTIL_Map *g_cmutil_xml_escape_map = NULL;
@@ -261,7 +261,7 @@ CMUTIL_STATIC void CMUTIL_XmlBuildAttribute(
     }
 }
 
-#define CMUTIL_XML_LINE_END		"\r\n"
+#define CMUTIL_XML_LINE_END "\r\n"
 
 CMUTIL_STATIC void CMUTIL_XmlToDocumentPrivate(
         CMUTIL_String *buffer,
@@ -426,15 +426,15 @@ typedef struct CMUTIL_XmlParseCtx {
     int             dummy_padder;
 } CMUTIL_XmlParseCtx;
 
-#define DO_BOOL(...) do { if (!(__VA_ARGS__)) {	\
-    char buf[50] = {0,};\
-    strncat(buf, ctx->pos, 40); strcat(buf, "...");	\
-    CMLogError("xml parse failed near '%s'", buf);	\
+#define DO_BOOL(...) do { if (!(__VA_ARGS__)) { \
+    char buf[50] = {0,};    \
+    strncat(buf, ctx->pos, 40); strcat(buf, "..."); \
+    CMLogError("xml parse failed near '%s'", buf);  \
     return CMFalse; } } while(0)
 #define DO_OBJ(...) do { if (!(__VA_ARGS__)) { \
     char buf[50] = {0,};\
-    strncat(buf, ctx->pos, 40); strcat(buf, "...");	\
-    CMLogError("xml parse failed near '%s'", buf);	\
+    strncat(buf, ctx->pos, 40); strcat(buf, "..."); \
+    CMLogError("xml parse failed near '%s'", buf);  \
     return NULL; } } while(0)
 
 CMUTIL_STATIC CMBool CMUTIL_XmlUnescape(
@@ -594,7 +594,7 @@ CMUTIL_STATIC CMBool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
         DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
 
         // may current ctx->pos indicates '='
-        if ('=' == *(ctx->pos))	{
+        if ('=' == *(ctx->pos)) {
             DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, 1));
             DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
             DO_BOOL(CMUTIL_XmlNextChar(ctx, &openc));

@@ -33,7 +33,7 @@ SOFTWARE.
 #if defined(DEBUG)
 # define CMUTIL_STATIC
 #else
-# define CMUTIL_STATIC	static
+# define CMUTIL_STATIC  static
 #endif
 
 #define SPACES      " \r\n\t"

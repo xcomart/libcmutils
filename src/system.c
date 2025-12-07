@@ -34,17 +34,17 @@ SOFTWARE.
 #endif
 
 #if defined(LINUX)
-# define CMUTIL_MODTIME(a)	a.st_mtim.tv_sec
+# define CMUTIL_MODTIME(a)  a.st_mtim.tv_sec
 #else
-# define CMUTIL_MODTIME(a)	a.st_mtime
+# define CMUTIL_MODTIME(a)  a.st_mtime
 #endif
 
 
 typedef struct CMUTIL_Library_Internal {
-    CMUTIL_Library		base;
-    void				*library;
-    CMUTIL_Mutex		*mutex;
-    CMUTIL_Map			*procs;
+    CMUTIL_Library      base;
+    void                *library;
+    CMUTIL_Mutex        *mutex;
+    CMUTIL_Map          *procs;
     CMUTIL_Mem          *memst;
 } CMUTIL_Library_Internal;
 
@@ -125,17 +125,17 @@ CMUTIL_Library *CMUTIL_LibraryCreate(const char *path)
 
 
 typedef struct CMUTIL_FileList_Internal {
-    CMUTIL_FileList		base;
-    CMUTIL_Array		*files;
-    CMUTIL_Mem		*memst;
+    CMUTIL_FileList     base;
+    CMUTIL_Array        *files;
+    CMUTIL_Mem          *memst;
 } CMUTIL_FileList_Internal;
 
 typedef struct CMUTIL_File_Internal {
-    CMUTIL_File			base;
-    char				*path;
-    char				*name;
+    CMUTIL_File         base;
+    char                *path;
+    char                *name;
     CMUTIL_Mem          *memst;
-    CMBool			isref;
+    CMBool              isref;
     int                 dummy_padder;
 } CMUTIL_File_Internal;
 
@@ -459,9 +459,9 @@ CMUTIL_File *CMUTIL_FileCreate(const char *path)
 }
 
 #if defined(MSWIN)
-# define MKDIR(a, b)	_mkdir(a)
+# define MKDIR(a, b)    _mkdir(a)
 #else
-# define MKDIR			mkdir
+# define MKDIR          mkdir
 #endif
 
 CMBool CMUTIL_PathCreate(const char *path, uint32_t mode)

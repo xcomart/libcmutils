@@ -73,3 +73,6 @@ Thumbs.db
 
 # CMake build directory
 build
+
+# CLion
+.idea

@@ -211,10 +211,10 @@ void CMUTIL_StringBaseClear()
 
 typedef struct CMUTIL_String_Internal CMUTIL_String_Internal;
 struct CMUTIL_String_Internal {
-    CMUTIL_String	base;
-    char			*data;
-    size_t			capacity;
-    size_t			size;
+    CMUTIL_String   base;
+    char            *data;
+    size_t          capacity;
+    size_t          size;
     CMUTIL_Mem      *memst;
 };
 
@@ -576,8 +576,8 @@ CMUTIL_String *CMUTIL_StringCreateEx(
 //*****************************************************************************
 
 typedef struct CMUTIL_StringArray_Internal {
-    CMUTIL_StringArray	base;
-    CMUTIL_Array		*array;
+    CMUTIL_StringArray  base;
+    CMUTIL_Array        *array;
     CMUTIL_Mem          *memst;
 } CMUTIL_StringArray_Internal;
 
@@ -987,7 +987,7 @@ int CMUTIL_StringHexToBytes(char *dest, const char *src, int len)
             /* lower 4 bits */
             *p |= (CMUTIL_StringHexChar(*hexstr++) & 0xF);
         } else {
-            *p = (char)0xFF;	// padding with 0xFF
+            *p = (char)0xFF;    // padding with 0xFF
         }
         len -= 2; p++;
     }

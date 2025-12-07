@@ -28,7 +28,7 @@ SOFTWARE.
 #include <time.h>
 
 #if defined(_MSC_VER)
-# define STRDUP	_strdup
+# define STRDUP _strdup
 #else
 # define STRDUP strdup
 #endif
@@ -61,12 +61,21 @@ CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
     if (g_cmutil_memlog_mutex) CMCall(g_cmutil_memlog_mutex, Lock);
     if (!havepath) {
         ssize_t sz;
+        struct tm currtm;
+        struct timeval tv;
+        char dtbuf[32];
+
+        gettimeofday(&tv, NULL);
+        localtime_r((time_t*)&(tv.tv_sec), &currtm);
 #if defined(LINUX)
         sz = readlink("/proc/self/exe", buf, sizeof(buf));
 #elif defined(SUNOS)
         sz = readlink("/proc/self/path/a.out", buf, sizeof(buf));
 #elif defined(BSD) || defined(APPLE)
-        sz = readlink("/proc/curproc/file", buf, sizeof(buf));
+        const char * appname = getprogname();
+        buf[0] = 0x0;
+        strcat(buf, appname);
+        sz = (ssize_t)strlen(buf);
 #elif defined(MSWIN)
         sz = (size_t)GetModuleFileName(NULL, buf, sizeof(buf));
 #else
@@ -74,7 +83,10 @@ CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
         sz = 0;
 #endif
         buf[sz] = 0x0;
-        strcat(buf, "_mem_log.txt");
+        strftime(dtbuf, sizeof(dtbuf), "%Y%m%d_%H%M%S", &currtm);
+        strcat(buf, "_mem_log_");
+        strcat(buf, dtbuf);
+        strcat(buf, ".txt");
 
         printf("memory log will be stored at '%s'.\n", buf);
 
@@ -88,15 +100,14 @@ RETRY:
             sprintf(buf, "mem_log.txt");
             rcnt++;
             goto RETRY;
-        } else {
-            res = stdout;
         }
+        res = stdout;
     }
     if (g_cmutil_memlog_mutex) CMCall(g_cmutil_memlog_mutex, Unlock);
     return res;
 }
 
-#define CMUTIL_MEMLOG_BUFSZ	4096
+#define CMUTIL_MEMLOG_BUFSZ 4096
 
 CMUTIL_STATIC void CMUTIL_MemLogInternal(
         FILE *fp, const char *format, va_list args)
@@ -148,11 +159,11 @@ CMUTIL_STATIC void CMUTIL_MemLogWithStack(const char *fmt, ...)
 }
 
 typedef struct CMUTIL_MemNode {
-    size_t					size;
+    size_t                  size;
     struct CMUTIL_MemNode   *next;
-    CMUTIL_String			*stack;
-    int						index;
-    unsigned char			flag;
+    CMUTIL_String           *stack;
+    int                     index;
+    unsigned char           flag;
     char                    dummy_padder[3];
 } CMUTIL_MemNode;
 
@@ -177,12 +188,12 @@ CMUTIL_STATIC int CMUTIL_MemRcyComparator(const void *a, const void *b)
 
 typedef struct CMUTIL_MemRcyList CMUTIL_MemRcyList;
 static struct CMUTIL_MemRcyList {
-    CMUTIL_Mutex	*mutex;
-    int				cnt;
-    int				avlcnt;
-    CMUTIL_MemNode	*head;
-    CMUTIL_Array	*used;
-    size_t			usedsize;
+    CMUTIL_Mutex    *mutex;
+    int             cnt;
+    int             avlcnt;
+    CMUTIL_MemNode  *head;
+    CMUTIL_Array    *used;
+    size_t          usedsize;
 } g_cmutil_memrcyblocks[MEM_BLOCK_SZ];
 
 CMUTIL_STATIC int CMUTIL_MemRcyIndex(size_t size)
@@ -220,8 +231,8 @@ CMUTIL_STATIC void *CMUTIL_MemRcyAlloc(size_t size)
     CMCall(list->mutex, Unlock);
     node->size = size;
     node->next = NULL;
-    node->flag = 0xFF;	// underflow writing checker
-    *((uint8_t*)res + sizeof(CMUTIL_MemNode) + size) = 0xFF;	// overflow writing checker
+    node->flag = 0xFF;  // underflow writing checker
+    *((uint8_t*)res + sizeof(CMUTIL_MemNode) + size) = 0xFF;    // overflow writing checker
     if (g_cmutil_memoper == CMMemDebug) {
         node->stack = CMUTIL_StringCreateInternal(
                     &g_cmutil_memdebug_system, 256, NULL);

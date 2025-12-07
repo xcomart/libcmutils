@@ -59,15 +59,15 @@ CMUTIL_STATIC char *CMUTIL_NextTermBefore(
 
 //CMUTIL_STATIC char *TrimRightEx(char *in, const char *spaces, char *lastchr)
 //{
-//	char *p = in, *last = NULL;
-//	while (*p) {
-//		if (!strchr(spaces, *p))
-//			last = p + 1;
-//	}
-//	*last = 0x0;
-//	if (lastchr)
-//		*lastchr = *(last - 1);
-//	return in;
+//  char *p = in, *last = NULL;
+//  while (*p) {
+//      if (!strchr(spaces, *p))
+//          last = p + 1;
+//  }
+//  *last = 0x0;
+//  if (lastchr)
+//      *lastchr = *(last - 1);
+//  return in;
 //}
 
 CMUTIL_STATIC int CMUTIL_AppendTrimmedLine(
@@ -119,7 +119,7 @@ CMUTIL_STATIC void CMUTIL_ConfigDestroy(CMUTIL_Config *conf)
     }
 }
 
-#define DOFAILED	if (!*p) do { \
+#define DOFAILED    if (!*p) do { \
         failed = 1; CMUTIL_ConfItemDestroy(item); goto FAILED; } while(0)
 
 void CMUTIL_ConfigSave(const CMUTIL_Config *conf, const char *confpath)
@@ -259,7 +259,7 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
     int failed = 0;
 
     if (f) {
-//		int cont = 0;
+//        int cont = 0;
         char line[4096];
         CMUTIL_String *str = CMUTIL_StringCreate();
         res = (CMUTIL_Config_Internal*)CMUTIL_ConfigCreateInternal(memst);

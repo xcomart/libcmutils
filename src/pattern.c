@@ -1,48 +1,48 @@
 ﻿
 /******************************************************************************
 * fpattern.c
-*	Functions for matching filename patterns to filenames.
+*   Functions for matching filename patterns to filenames.
 *
 * Usage
-*	(See "fpattern.h".)
+*   (See "fpattern.h".)
 *
 * Notes
-*	These pattern matching capabilities are modeled after those found in
-*	the UNIX command shells.
+*   These pattern matching capabilities are modeled after those found in
+*   the UNIX command shells.
 *
-*	`DELIM' must be defined to 1 if pathname separators are to be handled
-*	explicitly.
+*   `DELIM' must be defined to 1 if pathname separators are to be handled
+*   explicitly.
 *
 * History
-*	1.00 1997-01-03 David Tribble.
-*		First cut.
-*	1.01 1997-01-03 David Tribble.
-*		Added SUB pattern character.
-*		Added fpattern_matchn().
-*	1.02 1997-01-12 David Tribble.
-*		Fixed missing lowercase matching cases.
-*	1.03 1997-01-13 David Tribble.
-*		Pathname separator code is now controlled by DELIM macro.
-*	1.04 1997-01-14 David Tribble.
-*		Added QUOTE macro.
-*	1.05 1997-01-15 David Tribble.
-*		Handles special case of empty pattern and empty filename.
-*	1.06 1997-01-26 David Tribble.
-*		Changed range negation character from '^' to '!', ala Unix.
-*	1.07 1997-08-02 David Tribble.
-*		Uses the 'FPAT_XXX' constants.
-*	1.08 1998-06-28 David Tribble.
-*		Minor fixed for MS-VC++ (5.0).
+*   1.00 1997-01-03 David Tribble.
+*       First cut.
+*   1.01 1997-01-03 David Tribble.
+*       Added SUB pattern character.
+*       Added fpattern_matchn().
+*   1.02 1997-01-12 David Tribble.
+*       Fixed missing lowercase matching cases.
+*   1.03 1997-01-13 David Tribble.
+*       Pathname separator code is now controlled by DELIM macro.
+*   1.04 1997-01-14 David Tribble.
+*       Added QUOTE macro.
+*   1.05 1997-01-15 David Tribble.
+*       Handles special case of empty pattern and empty filename.
+*   1.06 1997-01-26 David Tribble.
+*       Changed range negation character from '^' to '!', ala Unix.
+*   1.07 1997-08-02 David Tribble.
+*       Uses the 'FPAT_XXX' constants.
+*   1.08 1998-06-28 David Tribble.
+*       Minor fixed for MS-VC++ (5.0).
 *
 * Limitations
-*	This code is copyrighted by the author, but permission is hereby
-*	granted for its unlimited use provided that the original copyright
-*	and authorship notices are retained intact.
+*   This code is copyrighted by the author, but permission is hereby
+*   granted for its unlimited use provided that the original copyright
+*   and authorship notices are retained intact.
 *
-*	Other queries can be sent to:
-*	    dtribble@technologist.com
-*	    david.tribble@beasys.com
-*	    dtribble@flash.net
+*   Other queries can be sent to:
+*       dtribble@technologist.com
+*       david.tribble@beasys.com
+*       dtribble@flash.net
 *
 * Copyright 1997-1998 by David R. Tribble, all rights reserved.
 */
@@ -50,9 +50,9 @@
 
 /* Identification */
 
-//static const char	id[] = "@(#)lib/fpattern.c 1.08";
+//static const char id[] = "@(#)lib/fpattern.c 1.08";
 
-//static const char	copyright[] = "Copyright 1997-1998 David R. Tribble\n";
+//static const char copyright[] = "Copyright 1997-1998 David R. Tribble\n";
 
 
 /* System includes */
@@ -68,11 +68,11 @@
 #endif
 
 #if defined(MSWIN)
-#define UNIX	0
-#define DOS	1
+#define UNIX    0
+#define DOS     1
 #else
-#define UNIX	1
-#define DOS	0
+#define UNIX    1
+#define DOS     0
 #endif
 
 
@@ -86,7 +86,7 @@
 #define FPAT_NOT        '!'     /* Exclusion                    */
 #define FPAT_ANY        '?'     /* Any one char                 */
 #define FPAT_CLOS       '*'     /* Zero or more chars           */
-#define FPAT_CLOSP      '\x1A'  /* Zero or more nondelimiters	*/
+#define FPAT_CLOSP      '\x1A'  /* Zero or more nondelimiters   */
 #define FPAT_SET_L      '['     /* Set/range open bracket       */
 #define FPAT_SET_R      ']'     /* Set/range close bracket      */
 #define FPAT_SET_NOT    '!'     /* Set exclusion                */
@@ -123,30 +123,30 @@
 /* Local function macros */
 
 #if UNIX
-#define lowercase(c)	(c)
+#define lowercase(c)    (c)
 #else /*DOS*/
-#define lowercase(c)	tolower(c)
+#define lowercase(c)    tolower(c)
 #endif
 
 
 /*-----------------------------------------------------------------------------
 * fpattern_isvalid()
-*	Checks that filename pattern 'pat' is a well-formed pattern.
+*   Checks that filename pattern 'pat' is a well-formed pattern.
 *
 * Returns
-*	1 CMTrue if 'pat' is a valid filename pattern, otherwise 0 CMFalse.
+*   1 CMTrue if 'pat' is a valid filename pattern, otherwise 0 CMFalse.
 *
 * Caveats
-*	If 'pat' is null, 0 (false) is returned.
+*   If 'pat' is null, 0 (false) is returned.
 *
-*	If 'pat' is empty (""), 1 (true) is returned, and it is considered a
-*	valid (but degenerate) pattern (the only filename it matches is the
-*	empty ("") string).
+*   If 'pat' is empty (""), 1 (true) is returned, and it is considered a
+*   valid (but degenerate) pattern (the only filename it matches is the
+*   empty ("") string).
 */
 
 CMBool CMUTIL_PatternIsValid(const char *pat)
 {
-    int	 len;
+    int len;
 
     /* Check args */
     if (pat == NULL)
@@ -198,7 +198,7 @@ CMBool CMUTIL_PatternIsValid(const char *pat)
             /* Negated pattern */
             len++;
             if (pat[len] == '\0')
-                return CMFalse;		/* Missing subpattern */
+                return CMFalse;     /* Missing subpattern */
             break;
 
         default:
@@ -230,11 +230,11 @@ CMBool CMUTIL_PatternIsValid(const char *pat)
 CMUTIL_STATIC CMBool CMUTIL_PatternSubmatch(
         const char *pat, const char *fname)
 {
-    int		fch;
-    int		pch;
-    int		i;
-    int		yes, match;
-    int		lo, hi;
+    int fch;
+    int pch;
+    int i;
+    int yes, match;
+    int lo, hi;
 
     /* Attempt to match subpattern against subfilename */
     while (*pat != '\0')
@@ -316,7 +316,7 @@ CMUTIL_STATIC CMBool CMUTIL_PatternSubmatch(
             while (*pat != FPAT_SET_R  &&  *pat != '\0')
             {
                 if (*pat == QUOTE)
-                    pat++;	/* Quoted char */
+                    pat++;  /* Quoted char */
 
                 if (*pat == '\0')
                     break;
@@ -329,7 +329,7 @@ CMUTIL_STATIC CMBool CMUTIL_PatternSubmatch(
                     pat++;
 
                     if (*pat == QUOTE)
-                        pat++;	/* Quoted char */
+                        pat++;  /* Quoted char */
 
                     if (*pat == '\0')
                         break;
@@ -349,7 +349,7 @@ CMUTIL_STATIC CMBool CMUTIL_PatternSubmatch(
                 return CMFalse;
 
             if (*pat == '\0')
-                return CMFalse;		/* Missing closing bracket */
+                return CMFalse; /* Missing closing bracket */
 
             fname++;
             pat++;
@@ -358,7 +358,7 @@ CMUTIL_STATIC CMBool CMUTIL_PatternSubmatch(
         case FPAT_NOT:
             /* Match only if rest of pattern does not match */
             if (*pat == '\0')
-                return CMFalse;		/* Missing subpattern */
+                return CMFalse; /* Missing subpattern */
             return CMUTIL_PatternSubmatch(pat, fname)? CMFalse:CMTrue;
 
 #if DELIM
@@ -393,27 +393,27 @@ CMUTIL_STATIC CMBool CMUTIL_PatternSubmatch(
 
 /*-----------------------------------------------------------------------------
 * fpattern_match()
-*	Attempts to match pattern 'pat' to filename 'fname'.
+*   Attempts to match pattern 'pat' to filename 'fname'.
 *
 * Returns
-*	1 CMTrue if the filename matches, otherwise 0 CMFalse.
+*   1 CMTrue if the filename matches, otherwise 0 CMFalse.
 *
 * Caveats
-*	If 'fname' is null, zero CMFalse is returned.
+*   If 'fname' is null, zero CMFalse is returned.
 *
-*	If 'pat' is null, zero CMFalse is returned.
+*   If 'pat' is null, zero CMFalse is returned.
 *
-*	If 'pat' is empty (""), the only filename it matches is the empty
-*	string ("").
+*   If 'pat' is empty (""), the only filename it matches is the empty
+*   string ("").
 *
-*	If 'fname' is empty, the only pattern that will match it is the empty
-*	string ("").
+*   If 'fname' is empty, the only pattern that will match it is the empty
+*   string ("").
 *
-*	If 'pat' is not a well-formed pattern, zero CMFalse is returned.
+*   If 'pat' is not a well-formed pattern, zero CMFalse is returned.
 *
-*	Upper and lower case letters are treated the same; alphabetic
-*	characters are converted to lower case before matching occurs.
-*	Conversion to lower case is dependent upon the current locale setting.
+*   Upper and lower case letters are treated the same; alphabetic
+*   characters are converted to lower case before matching occurs.
+*   Conversion to lower case is dependent upon the current locale setting.
 */
 
 CMBool CMUTIL_PatternMatch(const char *pat, const char *fname)
@@ -431,37 +431,37 @@ CMBool CMUTIL_PatternMatch(const char *pat, const char *fname)
 
     /* Attempt to match pattern against filename */
     if (fname[0] == '\0')
-        return (pat[0] == '\0')? CMTrue:CMFalse;	/* Special case */
+        return (pat[0] == '\0')? CMTrue:CMFalse;    /* Special case */
     return CMUTIL_PatternSubmatch(pat, fname);
 }
 
 
 /*-----------------------------------------------------------------------------
 * fpattern_matchn()
-*	Attempts to match pattern 'pat' to filename 'fname'.
-*	This operates like fpattern_match() except that it does not verify that
-*	pattern 'pat' is well-formed, assuming that it has been checked by a
-*	prior call to fpattern_isvalid().
+*   Attempts to match pattern 'pat' to filename 'fname'.
+*   This operates like fpattern_match() except that it does not verify that
+*   pattern 'pat' is well-formed, assuming that it has been checked by a
+*   prior call to fpattern_isvalid().
 *
 * Returns
-*	1 CMTrue if the filename matches, otherwise 0 CMFalse.
+*   1 CMTrue if the filename matches, otherwise 0 CMFalse.
 *
 * Caveats
-*	If 'fname' is null, zero CMFalse is returned.
+*   If 'fname' is null, zero CMFalse is returned.
 *
-*	If 'pat' is null, zero CMFalse is returned.
+*   If 'pat' is null, zero CMFalse is returned.
 *
-*	If 'pat' is empty (""), the only filename it matches is the empty ("")
-*	string.
+*   If 'pat' is empty (""), the only filename it matches is the empty ("")
+*   string.
 *
-*	If 'pat' is not a well-formed pattern, unpredictable results may occur.
+*   If 'pat' is not a well-formed pattern, unpredictable results may occur.
 *
-*	Upper and lower case letters are treated the same; alphabetic
-*	characters are converted to lower case before matching occurs.
-*	Conversion to lower case is dependent upon the current locale setting.
+*   Upper and lower case letters are treated the same; alphabetic
+*   characters are converted to lower case before matching occurs.
+*   Conversion to lower case is dependent upon the current locale setting.
 *
 * See also
-*	fpattern_match().
+*   fpattern_match().
 */
 
 CMBool CMUTIL_PatternMatchN(const char *pat, const char *fname)

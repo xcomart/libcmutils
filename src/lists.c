@@ -29,17 +29,17 @@ SOFTWARE.
 //*****************************************************************************
 
 typedef struct CMUTIL_ListItem {
-    struct CMUTIL_ListItem	*prev;
-    struct CMUTIL_ListItem	*next;
-    void					*data;
+    struct CMUTIL_ListItem  *prev;
+    struct CMUTIL_ListItem  *next;
+    void                    *data;
 } CMUTIL_ListItem;
 
 typedef struct CMUTIL_List_Internal {
-    CMUTIL_List			base;
-    CMUTIL_ListItem		*head;
-    CMUTIL_ListItem		*tail;
-    size_t				size;
-    void				(*freecb)(void*);
+    CMUTIL_List         base;
+    CMUTIL_ListItem     *head;
+    CMUTIL_ListItem     *tail;
+    size_t              size;
+    void                (*freecb)(void*);
     CMUTIL_Mem          *memst;
 } CMUTIL_List_Internal;
 
@@ -160,7 +160,7 @@ CMUTIL_STATIC size_t CMUTIL_ListGetSize(const CMUTIL_List *list)
 typedef struct CMUTIL_ListIter_st {
     CMUTIL_Iterator             base;
     CMUTIL_ListItem             *curr;
-    const CMUTIL_List_Internal	*list;
+    const CMUTIL_List_Internal  *list;
 } CMUTIL_ListIter_st;
 
 CMUTIL_STATIC CMBool CMUTIL_ListIterHasNext(const CMUTIL_Iterator *iter)
@@ -205,10 +205,9 @@ CMUTIL_STATIC CMUTIL_Iterator *CMUTIL_ListIterator(const CMUTIL_List *list)
 CMUTIL_STATIC void CMUTIL_ListDestroy(CMUTIL_List *list)
 {
     CMUTIL_List_Internal *ilist = (CMUTIL_List_Internal*)list;
-    CMUTIL_ListItem *curr, *next;
-    curr = ilist->head;
+    CMUTIL_ListItem* curr = ilist->head;
     while (curr) {
-        next = curr->next;
+        CMUTIL_ListItem* next = curr->next;
         if (ilist->freecb)
             ilist->freecb(curr->data);
         ilist->memst->Free(curr);
