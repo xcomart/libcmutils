@@ -980,7 +980,7 @@ struct CMUTIL_Array {
     /**
      * @brief Destroy this array object.
      *
-     * Destory this object and it's internal allocations.
+     * Destroy this object and it's internal allocations.
      * If <code>freecb</code> parameter is supplied, this callback will be
      * called to all items in this array.
      *
@@ -1003,9 +1003,14 @@ struct CMUTIL_Array {
         CMUTIL_ArrayCreateEx(CMUTIL_ARRAY_DEFAULT, NULL, NULL)
 
 /**
- * @brief CMUTIL_ArrayCreateEx
- * @param initcapacity
- * @return
+ * @brief Creates a dynamic array with capacity and optional comparator
+ *  and free callback.
+ *
+ * @param initcapacity Initial capacity of this array.
+ * @param comparator Comparator callback for sorted array. You must provide
+ *        this callback if you want to create a sorted array.
+ * @param freecb Free callback for each item in this array.
+ * @return A new dynamic array.
  */
 CMUTIL_API CMUTIL_Array *CMUTIL_ArrayCreateEx(
         size_t initcapacity,
@@ -1017,66 +1022,300 @@ CMUTIL_API CMUTIL_Array *CMUTIL_ArrayCreateEx(
  */
 typedef struct CMUTIL_String CMUTIL_String;
 struct CMUTIL_String {
+    /**
+     * @brief Add string to this string object.
+     *
+     * Append given string to the end of this string object.
+     *
+     * @param string This string object.
+     * @param tobeadded C style null terminated string to be appended.
+     * @return New size of this string object.
+     */
     size_t (*AddString)(
             CMUTIL_String *string, const char *tobeadded);
+
+    /**
+     * @brief Add n bytes string to this string object.
+     *
+     * Append given string to the end of this string object.
+     * Given string is not need to be null terminated.
+     *
+     * @param string This string object.
+     * @param tobeadded C style string to be appended.
+     * @param size Number of bytes to be appended from given string.
+     * @return New size of this string object.
+     */
     size_t (*AddNString)(
             CMUTIL_String *string, const char *tobeadded, size_t size);
+
+    /**
+     * @brief Add a character to this string object.
+     *
+     * Append given character to the end of this string object.
+     *
+     * @param string This string object.
+     * @param tobeadded Character to be appended.
+     * @return New size of this string object.
+     */
     size_t (*AddChar)(
             CMUTIL_String *string, char tobeadded);
+
+    /**
+     * @brief Add formatted string to this string object.
+     *
+     * Append formatted string to the end of this string object.
+     *
+     * @param string This string object.
+     * @param fmt Format string like printf function.
+     * @param ... Arguments for format string.
+     * @return New size of this string object.
+     */
     size_t (*AddPrint)(
             CMUTIL_String *string, const char *fmt, ...);
+
+    /**
+     * @brief Add formatted string to this string object.
+     *
+     * Append formatted string to the end of this string object.
+     *
+     * @param string This string object.
+     * @param fmt Format string like printf function.
+     * @param args Arguments list for format string.
+     * @return New size of this string object.
+     */
     size_t (*AddVPrint)(
             CMUTIL_String *string, const char *fmt, va_list args);
+
+    /**
+     * @brief Add another string object to this string object.
+     *
+     * Append given string object to the end of this string object.
+     *
+     * @param string This string object.
+     * @param tobeadded Another string object to be appended.
+     * @return New size of this string object.
+     */
     size_t (*AddAnother)(
             CMUTIL_String *string, CMUTIL_String *tobeadded);
+
+    /**
+     * @brief Insert string to this string object.
+     *
+     * Insert given string to this string object at given index.
+     *
+     * @param string This string object.
+     * @param tobeadded C style null terminated string to be inserted.
+     * @param at Index where given string will be inserted.
+     * @return New size of this string object.
+     */
     size_t (*InsertString)(
             CMUTIL_String *string, const char *tobeadded, uint32_t at);
+
+    /**
+     * @brief Insert n bytes string to this string object.
+     *
+     * Insert given string to this string object at given index.
+     * Given string is not need to be null terminated.
+     *
+     * @param string This string object.
+     * @param tobeadded C style string to be inserted.
+     * @param at Index where given string will be inserted.
+     * @param size Number of bytes to be inserted from given string.
+     * @return New size of this string object.
+     */
     size_t (*InsertNString)(
             CMUTIL_String *string,
             const char *tobeadded, uint32_t at, size_t size);
+
+    /**
+     * Insert formatted string to this string object.
+     *
+     * Insert formatted string to this string object at given index.
+     *
+     * @param string This string object.
+     * @param idx Index where formatted string will be inserted.
+     * @param fmt Format string like printf function.
+     * @param ... Arguments for format string.
+     * @return New size of this string object.
+     */
     size_t (*InsertPrint)(
             CMUTIL_String *string, uint32_t idx, const char *fmt, ...);
+
+    /**
+     * Insert formatted string to this string object.
+     *
+     * Insert formatted string to this string object at given index.
+     *
+     * @param string This string object.
+     * @param idx Index where formatted string will be inserted.
+     * @param fmt Format string like printf function.
+     * @param args Arguments list for format string.
+     * @return New size of this string object.
+     */
     size_t (*InsertVPrint)(
             CMUTIL_String *string, uint32_t idx,
             const char *fmt, va_list args);
+
+    /**
+     * @brief Insert another string object to this string object.
+     *
+     * Insert given string object to this string object at given index.
+     *
+     * @param string This string object.
+     * @param idx Index where another string object will be inserted.
+     * @param tobeadded Another string object to be inserted.
+     * @return New size of this string object.
+     */
     size_t (*InsertAnother)(
             CMUTIL_String *string, uint32_t idx, CMUTIL_String *tobeadded);
+
+    /**
+     * @brief Cut off given number of characters from tail of this string.
+     *
+     * @param string This string object.
+     * @param length Number of characters to be cut off from tail.
+     */
     void (*CutTailOff)(
             CMUTIL_String *string, size_t length);
+
+    /**
+     * @brief Get substring from this string object.
+     *
+     * @param string This string object.
+     * @param offset Starting offset of substring.
+     * @param length Length of substring.
+     * @return New string object which is the substring of this string. Must be
+     *         destroyed after use.
+     */
     CMUTIL_String *(*Substring)(
             const CMUTIL_String *string, uint32_t offset, size_t length);
+
+    /**
+     * @brief Creates lower case version of this string.
+     *
+     * @param string This string object.
+     * @return New string object which is the lower case version of this
+     *         string. Must be destroyed after use.
+     */
     CMUTIL_String *(*ToLower)(
             const CMUTIL_String *string);
+
+    /**
+     * @brief Converts this string to lower case.
+     *
+     * @param string This string object.
+     */
     void (*SelfToLower)(
             CMUTIL_String *string);
+
+    /**
+     * @brief Creates upper case version of this string.
+     *
+     * @param string This string object.
+     * @return New string object which is the upper case version of this
+     *         string. Must be destroyed after use.
+     */
     CMUTIL_String *(*ToUpper)(
             const CMUTIL_String *string);
+
+    /**
+     * @brief Converts this string to upper case.
+     *
+     * @param string This string object.
+     */
     void (*SelfToUpper)(
             CMUTIL_String *string);
+
+    /**
+     * @brief Replace all occurrences of given substring with another string.
+     *
+     * @param string This string object.
+     * @param needle Substring to be replaced.
+     * @param alter Replacement string.
+     * @return New string object which is the result of replacement.
+     *         Must be destroyed after use.
+     */
     CMUTIL_String *(*Replace)(
             const CMUTIL_String *string,
             const char *needle, const char *alter);
+
+    /**
+     * @brief Get size of this string object.
+     *
+     * @param string This string object.
+     * @return Size of this string object.
+     */
     size_t (*GetSize)(
             const CMUTIL_String *string);
+
+    /**
+     * @brief Get C style null terminated string from this string object.
+     *
+     * @param string This string object.
+     * @return C style null terminated string.
+     */
     const char *(*GetCString)(
             const CMUTIL_String *string);
+
+    /**
+     * @brief Clear content of this string object.
+     *
+     * @param string This string object.
+     */
     void (*Clear)(
             CMUTIL_String *string);
+
+    /**
+     * @brief Clone this string object.
+     *
+     * @param string This string object.
+     * @return New string object which is the clone of this string.
+     *         Must be destroyed after use.
+     */
     CMUTIL_String *(*Clone)(
             const CMUTIL_String *string);
+
+    /**
+     * @brief Destroy this string object.
+     *
+     * @param string This string object.
+     */
     void (*Destroy)(
             CMUTIL_String *string);
+
+    /**
+     * @brief Trim spaces from both ends of this string object.
+     *
+     * @param string This string object.
+     */
     void (*SelfTrim)(CMUTIL_String *string);
 };
 
 #define CMUTIL_STRING_DEFAULT   32
+
+/**
+ * @brief Creates a string object.
+ *
+ * @return A new string object.
+ */
 #define CMUTIL_StringCreate()   \
         CMUTIL_StringCreateEx(CMUTIL_STRING_DEFAULT, NULL)
+
+/**
+ * @brief Creates a string object with initial capacity and content.
+ *
+ * @param initcapacity Initial capacity of this string object.
+ * @param initcontent Initial content of this string object.
+ * @return A new string object.
+ */
 CMUTIL_API CMUTIL_String *CMUTIL_StringCreateEx(
         size_t initcapacity,
         const char *initcontent);
 
 
+/**
+ * @typedef CMUTIL_StringArray Dynamic array of string objects.
+ */
 typedef struct CMUTIL_StringArray CMUTIL_StringArray;
 struct CMUTIL_StringArray {
     void (*Add)(
@@ -1139,12 +1378,12 @@ struct CMUTIL_ByteBuffer {
             uint32_t length);
     CMUTIL_ByteBuffer *(*InsertByteAt)(
             CMUTIL_ByteBuffer *buffer,
-            uint8_t b,
-            uint32_t index);
+            uint32_t index,
+            uint8_t b);
     CMUTIL_ByteBuffer *(*InsertBytesAt)(
             CMUTIL_ByteBuffer *buffer,
-            const uint8_t *bytes,
             uint32_t index,
+            const uint8_t *bytes,
             uint32_t length);
     uint8_t (*GetAt)(
             const CMUTIL_ByteBuffer *buffer,
