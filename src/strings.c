@@ -937,8 +937,9 @@ CMUTIL_StringArray *CMUTIL_StringSplit(const char *haystack, const char *needle)
 const char *CMUTIL_StrNextToken(
     char *dest, size_t buflen, const char *src, const char *delim)
 {
-    register const char *p = src;
-    register char *q = dest, *l = dest + buflen;
+    const register char *p = src;
+    register char *q = dest;
+    const register char *l = dest + buflen;
     while (*p && !strchr(delim, *p) && q < l) *q++ = *p++;
     *q = 0x0;
     return p;
@@ -951,23 +952,21 @@ char *CMUTIL_StrSkipSpaces(char *line, const char *spaces)
     return p;
 }
 
-CMUTIL_STATIC int CMUTIL_StringHexChar(int inp)
+CMUTIL_STATIC int CMUTIL_StringHexChar(const int inp)
 {
-    int ic = toupper(inp);
+    const int ic = toupper(inp);
     if (ic >= 'A' && ic <= 'F')
         return 10 + (ic - 'A');
-    else if (ic >= '0' && ic <= '9')
+    if (ic >= '0' && ic <= '9')
         return ic - '0';
-    else
-        return -1;
+    return -1;
 }
 
 int CMUTIL_StringHexToBytes(char *dest, const char *src, int len)
 {
-    register char *p;
     register const char* hexstr = src;
     int isodd = len % 2;
-    p = dest;
+    register char* p = dest;
 
     if (isodd) {
         // pad first byte to zero when given source has odd number.
@@ -1051,16 +1050,16 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytesPart(
 
 CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferInsertByteAt(
         CMUTIL_ByteBuffer *buffer,
-        uint8_t b,
-        uint32_t index)
+        uint32_t index,
+        uint8_t b)
 {
-    return CMCall(buffer, InsertBytesAt, &b, index, 1);
+    return CMCall(buffer, InsertBytesAt, index, &b, 1);
 }
 
 CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferInsertBytesAt(
         CMUTIL_ByteBuffer *buffer,
+        const uint32_t index,
         const uint8_t *bytes,
-        uint32_t index,
         uint32_t length)
 {
     CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
