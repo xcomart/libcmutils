@@ -747,6 +747,152 @@ uint64_t CMUTIL_ThreadSystemSelfId()
 }
 
 
+//*****************************************************************************
+// CMUTIL_ThreadPool implements
+//*****************************************************************************
+
+static int g_cmutil_thread_pool_id = 0;
+
+typedef struct CMUTIL_ThreadPool_Internal {
+    CMUTIL_ThreadPool       base;
+    CMUTIL_Mem              *memst;
+    int                     pool_id;
+    CMUTIL_List             *threads;
+    CMBool                  auto_increment;
+    int                     pool_size;
+    int                     idle_count;
+    CMUTIL_Mutex            *tmtx;
+    CMUTIL_List             *jobq;
+    CMUTIL_Mutex            *qmtx;
+    CMUTIL_Semaphore        *feed_sem;
+    CMBool                  is_running;
+} CMUTIL_ThreadPool_Internal;
+
+typedef struct CMUTIL_ThreadPoolJob {
+    CMProcCB                    callback;
+    void                        *udata;
+} CMUTIL_ThreadPoolJob;
+
+CMUTIL_STATIC void *CMUTIL_ThreadPoolProc(void *vp) {
+    CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)vp;
+    while (pool->is_running) {
+        // wait for new jobs
+        if (!CMCall(pool->feed_sem, Acquire, 1000))
+            continue;
+
+        if (!pool->is_running)
+            break;
+
+        // acquire job
+        CMUTIL_ThreadPoolJob *job = NULL;
+        CMSync(pool->qmtx, {
+            job = (CMUTIL_ThreadPoolJob*)CMCall(pool->jobq, RemoveFront);
+        });
+
+        if (job == NULL) continue;
+
+        // do job
+        job->callback(job->udata);
+
+        pool->memst->Free(job);
+
+        // now this thread will be idle
+        CMSync(pool->tmtx, {
+            pool->idle_count++;
+        });
+    }
+    return NULL;
+}
+
+CMUTIL_STATIC void CMUTIL_ThreadPoolExecute(
+    CMUTIL_ThreadPool *tp, CMProcCB runnable, void *udata) {
+    CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)tp;
+    CMUTIL_ThreadPoolJob *job =
+        pool->memst->Alloc(sizeof(CMUTIL_ThreadPoolJob));
+    job->callback = runnable;
+    job->udata = udata;
+    CMSync(pool->qmtx, {
+        CMCall(pool->jobq, AddTail, job);
+    });
+    // now this thread will work
+    CMSync(pool->tmtx, {
+        pool->idle_count--;
+    });
+    CMCall(pool->feed_sem, Release);
+    if (pool->idle_count == 0 && pool->auto_increment) {
+        // create new thread if no more idle thread
+        CMSync(pool->tmtx, {
+            char namebuf[256];
+            CMUTIL_Thread *new_thread = NULL;
+            pool->pool_size++;
+            sprintf(namebuf, "pool%d-t%d", pool->pool_id, pool->pool_size);
+            new_thread = CMUTIL_ThreadCreateInternal(
+                pool->memst, CMUTIL_ThreadPoolProc, pool, namebuf);
+            CMCall(pool->threads, AddTail, new_thread);
+            CMCall(new_thread, Start);
+        });
+    }
+}
+
+CMUTIL_STATIC void CMUTIL_ThreadPoolDestroy(CMUTIL_ThreadPool *tp) {
+    CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)tp;
+    pool->is_running = false;
+    for (int i = 0; i < pool->pool_size; i++)
+        CMCall(pool->feed_sem, Release);
+    while (CMCall(pool->threads, GetSize) > 0) {
+        CMUTIL_Thread *t = CMCall(pool->threads, RemoveFront);
+        CMCall(t, Join);
+    }
+    while (CMCall(pool->jobq, GetSize) > 0)
+        pool->memst->Free(CMCall(pool->jobq, RemoveFront));
+
+    CMCall(pool->threads, Destroy);
+    CMCall(pool->jobq, Destroy);
+    CMCall(pool->tmtx, Destroy);
+    CMCall(pool->qmtx, Destroy);
+    CMCall(pool->feed_sem, Destroy);
+
+    pool->memst->Free(pool);
+}
+
+static CMUTIL_ThreadPool g_cmutil_threadpool = {
+    CMUTIL_ThreadPoolExecute,
+    CMUTIL_ThreadPoolDestroy
+};
+
+CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreateInternal(CMUTIL_Mem *memst, int pool_size) {
+    CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)
+            memst->Alloc(sizeof(CMUTIL_ThreadPool_Internal));
+    memset(pool, 0, sizeof(CMUTIL_ThreadPool_Internal));
+    pool->memst = memst;
+    pool->feed_sem = CMUTIL_SemaphoreCreateInternal(memst, 0);
+    pool->threads = CMUTIL_ListCreateInternal(memst, NULL);
+    pool->jobq = CMUTIL_ListCreateInternal(memst, NULL);
+    pool->tmtx = CMUTIL_MutexCreateInternal(memst);
+    pool->qmtx = CMUTIL_MutexCreateInternal(memst);
+    pool->pool_id = ++g_cmutil_thread_pool_id;
+    pool->auto_increment = pool_size <= 0 ? CMTrue: CMFalse;
+    pool->pool_size = pool_size <= 0 ? 1 : pool_size;
+    pool->idle_count = pool->pool_size;
+
+    for (int i = 0; i < pool->pool_size; i++) {
+        char namebuf[256];
+        CMUTIL_Thread *new_thread = NULL;
+        sprintf(namebuf, "pool%d-t%d", pool->pool_id, i+1);
+        new_thread = CMUTIL_ThreadCreateInternal(
+            memst, CMUTIL_ThreadPoolProc, pool, namebuf);
+        CMCall(pool->threads, AddTail, new_thread);
+        CMCall(new_thread, Start);
+    }
+    memcpy(pool, &g_cmutil_threadpool, sizeof(CMUTIL_ThreadPool));
+    return (CMUTIL_ThreadPool*) pool;
+}
+
+CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(int pool_size) {
+    return CMUTIL_ThreadPoolCreateInternal(CMUTIL_GetMem(), pool_size);
+}
+
+
 
 //*****************************************************************************
 // CMUTIL_Semaphore implements
@@ -1142,10 +1288,10 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerTaskCreate(
     res->type = type;
     res->base.Cancel = CMUTIL_TimerTaskCancel;
 
-    CMCall(itimer->mutex, Lock);
-    CMCall(itimer->scheduled, Add, res);
-    CMCall(itimer->alltasks, Add, res);
-    CMCall(itimer->mutex, Unlock);
+    CMSync(itimer->mutex, {
+        CMCall(itimer->scheduled, Add, res);
+        CMCall(itimer->alltasks, Add, res);
+    });
 
     return (CMUTIL_TimerTask*)res;
 }
@@ -1194,17 +1340,17 @@ CMUTIL_STATIC void CMUTIL_TimerPurge(CMUTIL_Timer *timer)
     uint32_t i;
     size_t len;
 
-    CMCall(itimer->mutex, Lock);
-    len = CMCall(itimer->alltasks, GetSize);
-    for (i=0; i<len; i++) {
-        CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)
-                CMCall(itimer->alltasks, GetAt, i);
-        if (CMUTIL_TimerTaskCancelPrivate((CMUTIL_TimerTask*)itask)) {
-            len--;
-            i--;
+    CMSync(itimer->mutex, {
+        len = CMCall(itimer->alltasks, GetSize);
+        for (i=0; i<len; i++) {
+            CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)
+                    CMCall(itimer->alltasks, GetAt, i);
+            if (CMUTIL_TimerTaskCancelPrivate((CMUTIL_TimerTask*)itask)) {
+                len--;
+                i--;
+            }
         }
-    }
-    CMCall(itimer->mutex, Unlock);
+    });
 }
 
 CMUTIL_STATIC void CMUTIL_TimerDestroy(CMUTIL_Timer *timer)
@@ -1289,15 +1435,15 @@ CMUTIL_STATIC void *CMUTIL_TimerMainLoop(void *param)
     while (itimer->running) {
         CMUTIL_TimerTask *task = NULL;
 
-        CMCall(itimer->mutex, Lock);
-        while (CMUTIL_TimerIsElapsed(
-                CMCall(itimer->scheduled, Bottom), &curr)) {
-            task = (CMUTIL_TimerTask*)
-                    CMCall(itimer->scheduled, RemoveAt, 0);
-            CMCall(itimer->jqueue, AddTail, task);
-            CMCall(itimer->jsemp, Release);
-        }
-        CMCall(itimer->mutex, Unlock);
+        CMSync(itimer->mutex, {
+            while (CMUTIL_TimerIsElapsed(
+                    CMCall(itimer->scheduled, Bottom), &curr)) {
+                task = (CMUTIL_TimerTask*)
+                        CMCall(itimer->scheduled, RemoveAt, 0);
+                CMCall(itimer->jqueue, AddTail, task);
+                CMCall(itimer->jsemp, Release);
+            }
+        });
 
         USLEEP((uint32_t)itimer->precision);
         gettimeofday(&curr, NULL);
