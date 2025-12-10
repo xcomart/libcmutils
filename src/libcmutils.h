@@ -662,6 +662,8 @@ struct CMUTIL_ThreadPool {
      */
     void (*Execute)(CMUTIL_ThreadPool *tp, CMProcCB runnable, void *udata);
 
+    void (*Wait)(CMUTIL_ThreadPool *tp);
+
     /**
      * @brief Destroy all resources related with this object
      * @param tp This threadpool object
