@@ -85,6 +85,9 @@ CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
         void*(*proc)(void*),
         void *udata,
         const char *name);
+CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreateInternal(
+        CMUTIL_Mem *memst,
+        int pool_size);
 CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
         CMUTIL_Mem *memst,
         int initcnt);

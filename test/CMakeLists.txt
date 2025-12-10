@@ -3,6 +3,10 @@
 include_directories(../src)
 link_libraries(cmutils)
 
-add_executable(array_test array_test.c)
+function(add_test_target)
+    add_executable(${ARGV} ${ARGV}.c)
+    add_test(NAME ${ARGV} COMMAND ${ARGV})
+endfunction()
 
-add_test(NAME array_test COMMAND array_test)
+add_test_target(array_test)
+add_test_target(concurrent_test)

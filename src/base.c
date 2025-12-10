@@ -24,6 +24,17 @@ SOFTWARE.
 
 #include "functions.h"
 
+#define LIBCMUTIL_VER_MAJOR     0
+#define LIBCMUTIL_VER_MINOR     1
+#define LIBCMUTIL_VER_PATCH     0
+
+#define CMUTIL_TOSTR(x)         #x
+
+#define LIBCMUTIL_VER \
+CMUTIL_TOSTR(LIBCMUTIL_VER_MAJOR)"."\
+CMUTIL_TOSTR(LIBCMUTIL_VER_MINOR)"."\
+CMUTIL_TOSTR(LIBCMUTIL_VER_PATCH)
+
 //static CMUTIL_Mutex *g_cmutil_init_mutex = NULL;
 static int g_cmutil_init_cnt = 0;
 

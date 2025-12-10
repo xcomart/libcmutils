@@ -119,16 +119,6 @@ extern "C" {
 # define pid_t      DWORD
 #endif
 
-#define LIBCMUTIL_VER_MAJOR     0
-#define LIBCMUTIL_VER_MINOR     1
-#define LIBCMUTIL_VER_PATCH     0
-
-#define CMUTIL_TOSTR(x)         #x
-
-#define LIBCMUTIL_VER \
-    CMUTIL_TOSTR(LIBCMUTIL_VER_MAJOR)"."\
-    CMUTIL_TOSTR(LIBCMUTIL_VER_MINOR)"."\
-    CMUTIL_TOSTR(LIBCMUTIL_VER_PATCH)
 
 /**
  * @defgroup CMUTIL Types.
@@ -139,7 +129,7 @@ extern "C" {
  */
 
 /**
- * 64 bit signed / unsigned integer max values.
+ * 64-bit signed / unsigned integer max values.
  */
 #if !defined(INT64_MAX)
 # define INT64_MAX  i64(0x7FFFFFFFFFFFFFFF)
@@ -210,7 +200,7 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
  * @brief Method caller for this library.
  *
  * This library built on C language, but some of the usage of this library
- * simillar to object oriented languages like C++ or Java.
+ * simillar to object-oriented languages like C++ or Java.
  *
  * Create instance of type CMUTIL_XX with CMUTIL_XXCreate function,
  * and call method with member callbacks.
@@ -560,6 +550,11 @@ struct CMUTIL_Mutex {
  */
 CMUTIL_API CMUTIL_Mutex *CMUTIL_MutexCreate(void);
 
+#define CMSync(a, ...) do {     \
+    CMCall((a), Lock);          \
+    __VA_ARGS__                 \
+    CMCall((a), Unlock);        \
+} while(0)
 
 /**
  * @typedef CMUTIL_Thread Platform independent thread object.
@@ -581,8 +576,8 @@ struct CMUTIL_Thread {
      * @brief Join this thread.
      *
      * This function joins this thread and clean up it's resources including
-     * this thread object, so this references are must not be used after
-     * calling this method. Every threads which been created by this library
+     * this thread object, so these references are must not be used after
+     * calling this method. Every thread which been created by this library
      * must be joined by calling this method.
      * @param thread This thread object.
      * @return Thread return value.
@@ -647,6 +642,45 @@ CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadSelf(void);
  * @return System dependent thread id.
  */
 CMUTIL_API uint64_t CMUTIL_ThreadSystemSelfId(void);
+
+/**
+ * @typedef CMUTIL_ThreadPool A threadpool object.
+ */
+typedef struct CMUTIL_ThreadPool CMUTIL_ThreadPool;
+struct CMUTIL_ThreadPool {
+
+    /**
+     * @brief Execute a job in this threadpool.
+     *
+     * This method will return immediately. Job will be queued and executed
+     * when any idle thread is available in this pool.
+     *
+     * @param tp This threadpool object.
+     * @param runnable A callback function to be executed.
+     * @param udata User data object which would be passed to
+     *          <code>runnable</code> callback function.
+     */
+    void (*Execute)(CMUTIL_ThreadPool *tp, CMProcCB runnable, void *udata);
+
+    /**
+     * @brief Destroy all resources related with this object
+     * @param tp This threadpool object
+     */
+    void (*Destroy)(CMUTIL_ThreadPool *tp);
+};
+
+/**
+ * @brief Creates a new threadpool object.
+ *
+ * This function will create a new threadpool object with initial size.
+ * If <code>pool_size</code> is zero or negative value, this threadpool object's
+ * pool size will not be fixed, will be increased one by one if needed.
+ *
+ * @param pool_size Thread count of this threadpool if positive, otherwise
+ *              this object will increase pool size automatically.
+ * @return A new threadpool object.
+ */
+CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(int pool_size);
 
 /**
  * @typedef CMUTIL_Semaphore Platform independent semaphore object.
