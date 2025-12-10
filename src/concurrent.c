@@ -71,7 +71,7 @@ SOFTWARE.
 # endif
 #endif
 
-//CMUTIL_LogDefine("cmutil.concurrent")
+CMUTIL_LogDefine("cmutil.concurrent")
 
 #if defined(_MSC_VER)
 const int64_t DELTA_EPOCH_IN_MICROSECS = 11644473600000000;
@@ -766,6 +766,7 @@ typedef struct CMUTIL_ThreadPool_Internal {
     CMUTIL_Mutex            *qmtx;
     CMUTIL_Semaphore        *feed_sem;
     CMBool                  is_running;
+    CMUTIL_Cond             *idle_cond;
 } CMUTIL_ThreadPool_Internal;
 
 typedef struct CMUTIL_ThreadPoolJob {
@@ -791,6 +792,7 @@ CMUTIL_STATIC void *CMUTIL_ThreadPoolProc(void *vp) {
 
         if (job == NULL) continue;
 
+
         // do job
         job->callback(job->udata);
 
@@ -799,6 +801,8 @@ CMUTIL_STATIC void *CMUTIL_ThreadPoolProc(void *vp) {
         // now this thread will be idle
         CMSync(pool->tmtx, {
             pool->idle_count++;
+            if (pool->idle_count == pool->pool_size)
+                CMCall(pool->idle_cond, Set);
         });
     }
     return NULL;
@@ -809,15 +813,18 @@ CMUTIL_STATIC void CMUTIL_ThreadPoolExecute(
     CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)tp;
     CMUTIL_ThreadPoolJob *job =
         pool->memst->Alloc(sizeof(CMUTIL_ThreadPoolJob));
+    // idle condition reset
+    CMCall(pool->idle_cond, Reset);
+
+    // add job to queue
     job->callback = runnable;
     job->udata = udata;
-    CMSync(pool->qmtx, {
-        CMCall(pool->jobq, AddTail, job);
-    });
+    CMSync(pool->qmtx, CMCall(pool->jobq, AddTail, job););
+
     // now this thread will work
-    CMSync(pool->tmtx, {
-        pool->idle_count--;
-    });
+    CMSync(pool->tmtx, pool->idle_count--;);
+
+    // release semaphore
     CMCall(pool->feed_sem, Release);
     if (pool->idle_count == 0 && pool->auto_increment) {
         // create new thread if no more idle thread
@@ -825,13 +832,19 @@ CMUTIL_STATIC void CMUTIL_ThreadPoolExecute(
             char namebuf[256];
             CMUTIL_Thread *new_thread = NULL;
             pool->pool_size++;
-            sprintf(namebuf, "pool%d-t%d", pool->pool_id, pool->pool_size);
+            pool->idle_count++;
+            sprintf(namebuf, "p%d-t%d", pool->pool_id, pool->pool_size);
             new_thread = CMUTIL_ThreadCreateInternal(
                 pool->memst, CMUTIL_ThreadPoolProc, pool, namebuf);
             CMCall(pool->threads, AddTail, new_thread);
             CMCall(new_thread, Start);
         });
     }
+}
+
+CMUTIL_STATIC void CMUTIL_ThreadPoolWait(CMUTIL_ThreadPool *tp) {
+    const CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)tp;
+    CMCall(pool->idle_cond, Wait);
 }
 
 CMUTIL_STATIC void CMUTIL_ThreadPoolDestroy(CMUTIL_ThreadPool *tp) {
@@ -843,20 +856,26 @@ CMUTIL_STATIC void CMUTIL_ThreadPoolDestroy(CMUTIL_ThreadPool *tp) {
         CMUTIL_Thread *t = CMCall(pool->threads, RemoveFront);
         CMCall(t, Join);
     }
-    while (CMCall(pool->jobq, GetSize) > 0)
-        pool->memst->Free(CMCall(pool->jobq, RemoveFront));
+    if (CMCall(pool->jobq, GetSize) > 0) {
+        CMLogWarn("thread pool(%d) destroying with remaining jobs(%d)",
+            pool->pool_id, CMCall(pool->jobq, GetSize));
+        while (CMCall(pool->jobq, GetSize) > 0)
+            pool->memst->Free(CMCall(pool->jobq, RemoveFront));
+    }
 
     CMCall(pool->threads, Destroy);
     CMCall(pool->jobq, Destroy);
     CMCall(pool->tmtx, Destroy);
     CMCall(pool->qmtx, Destroy);
     CMCall(pool->feed_sem, Destroy);
+    CMCall(pool->idle_cond, Destroy);
 
     pool->memst->Free(pool);
 }
 
 static CMUTIL_ThreadPool g_cmutil_threadpool = {
     CMUTIL_ThreadPoolExecute,
+    CMUTIL_ThreadPoolWait,
     CMUTIL_ThreadPoolDestroy
 };
 
@@ -870,15 +889,17 @@ CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreateInternal(CMUTIL_Mem *memst, int pool_s
     pool->jobq = CMUTIL_ListCreateInternal(memst, NULL);
     pool->tmtx = CMUTIL_MutexCreateInternal(memst);
     pool->qmtx = CMUTIL_MutexCreateInternal(memst);
+    pool->idle_cond = CMUTIL_CondCreateInternal(memst, CMTrue);
     pool->pool_id = ++g_cmutil_thread_pool_id;
     pool->auto_increment = pool_size <= 0 ? CMTrue: CMFalse;
     pool->pool_size = pool_size <= 0 ? 1 : pool_size;
     pool->idle_count = pool->pool_size;
+    pool->is_running = true;
 
     for (int i = 0; i < pool->pool_size; i++) {
         char namebuf[256];
         CMUTIL_Thread *new_thread = NULL;
-        sprintf(namebuf, "pool%d-t%d", pool->pool_id, i+1);
+        sprintf(namebuf, "p%d-t%d", pool->pool_id, i+1);
         new_thread = CMUTIL_ThreadCreateInternal(
             memst, CMUTIL_ThreadPoolProc, pool, namebuf);
         CMCall(pool->threads, AddTail, new_thread);

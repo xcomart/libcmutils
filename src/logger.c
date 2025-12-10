@@ -176,7 +176,7 @@ static char g_cmutil_spaces[] = "                                             "
         "                                                                     ";
 
 CMUTIL_STATIC void CMUTIL_LogPatternAppendPadding(
-    CMUTIL_LogAppenderFormatItem *item,
+    const CMUTIL_LogAppenderFormatItem *item,
     CMUTIL_String *dest,
     const char *data, size_t length)
 {
@@ -247,7 +247,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendLoggerName(
         break;
     }
     case 2: {
-        uint32_t i, size = params->item->precision[0];
+        const uint32_t size = params->item->precision[0];
         for (i = 0; i < (tsize - 1); i++) {
             if (size) {
                 size_t minsz = size;
@@ -1408,6 +1408,7 @@ typedef struct CMUTIL_LogSystem_Internal
     CMUTIL_Array        *loggers;
     CMUTIL_Array        *levelloggers;
     CMUTIL_Mem          *memst;
+    CMUTIL_Mutex        *mutex;
 } CMUTIL_LogSystem_Internal;
 
 typedef struct CMUTIL_ConfLogger_Internal CMUTIL_ConfLogger_Internal;
@@ -1435,9 +1436,10 @@ CMUTIL_STATIC void CMUTIL_LogSystemAddAppender(
     const CMUTIL_LogSystem_Internal *ilsys =
             (const CMUTIL_LogSystem_Internal*)lsys;
     const char *name = CMCall(appender, GetName);
-    if (CMCall(ilsys->appenders, Get, name))
-        return;
-    CMCall(ilsys->appenders, Put, name, appender);
+    CMSync(ilsys->mutex, {
+        if (CMCall(ilsys->appenders, Get, name) == NULL)
+            CMCall(ilsys->appenders, Put, name, appender);
+    });
 }
 
 CMUTIL_STATIC void CMUTIL_DoubleArrayDestroyer(void *data)
@@ -1603,37 +1605,40 @@ CMUTIL_STATIC CMUTIL_Logger *CMUTIL_LogSystemGetLogger(
     const CMUTIL_LogSystem_Internal *ilsys =
             (const CMUTIL_LogSystem_Internal*)lsys;
     CMUTIL_Logger_Internal q;
+    CMUTIL_Logger_Internal* res = NULL;
     q.fullname = CMUTIL_StringCreateInternal(ilsys->memst, 20, name);
-    CMUTIL_Logger_Internal* res =
-        (CMUTIL_Logger_Internal*)CMCall(ilsys->loggers, Find, &q, NULL);
-    if (res == NULL) {
-        uint32_t i;
-        // create logger
-        res = ilsys->memst->Alloc(sizeof(CMUTIL_Logger_Internal));
-        memset(res, 0x0, sizeof(CMUTIL_Logger_Internal));
-        res->memst = ilsys->memst;
-        res->fullname = q.fullname;
-        res->namepath = CMUTIL_StringSplitInternal(ilsys->memst, name, ".");
-        res->logrefs = CMUTIL_ArrayCreateInternal(
-                    ilsys->memst, 3, CMUTIL_LoggerRefComparator, NULL, CMTrue);
-        res->minlevel = CMLogLevel_Fatal;
-        for (i=0; i<CMCall(ilsys->cloggers, GetSize); i++) {
-            CMUTIL_ConfLogger_Internal *cl = (CMUTIL_ConfLogger_Internal*)
-                    CMCall(ilsys->cloggers, GetAt, i);
-            // adding root logger and parent loggers
-            if (strlen(cl->name) == 0 || strstr(name, cl->name) == 0) {
-                CMCall(res->logrefs, Add, cl);
-                if (res->minlevel > cl->level)
-                    res->minlevel = cl->level;
+
+    CMSync(ilsys->mutex, {
+        res = (CMUTIL_Logger_Internal*)CMCall(ilsys->loggers, Find, &q, NULL);
+        if (res == NULL) {
+            uint32_t i;
+            // create logger
+            res = ilsys->memst->Alloc(sizeof(CMUTIL_Logger_Internal));
+            memset(res, 0x0, sizeof(CMUTIL_Logger_Internal));
+            res->memst = ilsys->memst;
+            res->fullname = q.fullname;
+            res->namepath = CMUTIL_StringSplitInternal(ilsys->memst, name, ".");
+            res->logrefs = CMUTIL_ArrayCreateInternal(
+                        ilsys->memst, 3, CMUTIL_LoggerRefComparator, NULL, CMTrue);
+            res->minlevel = CMLogLevel_Fatal;
+            for (i=0; i<CMCall(ilsys->cloggers, GetSize); i++) {
+                CMUTIL_ConfLogger_Internal *cl = (CMUTIL_ConfLogger_Internal*)
+                        CMCall(ilsys->cloggers, GetAt, i);
+                // adding root logger and parent loggers
+                if (strlen(cl->name) == 0 || strstr(name, cl->name) == 0) {
+                    CMCall(res->logrefs, Add, cl);
+                    if (res->minlevel > cl->level)
+                        res->minlevel = cl->level;
+                }
             }
+            // logex and destroyer
+            res->base.LogEx = CMUTIL_LoggerLogEx;
+            res->Destroy = CMUTIL_LoggerDestroy;
+            CMCall(ilsys->loggers, Add, res);
+        } else {
+            CMCall(q.fullname, Destroy);
         }
-        // logex and destroyer
-        res->base.LogEx = CMUTIL_LoggerLogEx;
-        res->Destroy = CMUTIL_LoggerDestroy;
-        CMCall(ilsys->loggers, Add, res);
-    } else {
-        CMCall(q.fullname, Destroy);
-    }
+    });
     return (CMUTIL_Logger*)res;
 }
 
@@ -1679,6 +1684,7 @@ CMUTIL_STATIC void CMUTIL_LogSystemDestroy(CMUTIL_LogSystem *lsys)
         if (ilsys->cloggers) CMCall(ilsys->cloggers, Destroy);
         if (ilsys->levelloggers) CMCall(ilsys->levelloggers, Destroy);
         if (ilsys->loggers) CMCall(ilsys->loggers, Destroy);
+        if (ilsys->mutex) CMCall(ilsys->mutex, Destroy);
         ilsys->memst->Free(ilsys);
     }
 }
@@ -1694,6 +1700,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem *memst)
     res->base.GetLogger = CMUTIL_LogSystemGetLogger;
     res->base.Destroy = CMUTIL_LogSystemDestroy;
     res->memst = memst;
+    res->mutex = CMUTIL_MutexCreateInternal(memst);
     res->appenders = CMUTIL_MapCreateInternal(
                 memst, 256, CMFalse, CMUTIL_LogAppenderDestroyer);
     res->cloggers = CMUTIL_ArrayCreateInternal(
@@ -2085,7 +2092,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureInternal(
     CMUTIL_Json *appenders, *loggers;
     CMBool succeeded = CMFalse;
 
-    // all keys to lowercase for case insensitive.
+    // all keys to lowercase for case-insensitive.
     CMUTIL_LogConfigClean(json);
     if (CMCall(config, Get, "configuration"))
         config = (CMUTIL_JsonObject*)CMCall(config, Get, "configuration");
@@ -2175,7 +2182,6 @@ CMUTIL_LogSystem *CMUTIL_LogSystemGet()
 void CMUTIL_LogFallback(const CMLogLevel level,
         const char *file, const int line, const char *fmt, ...)
 {
-    uint32_t i;
     char fmtbuf[1024] = {0,};
     va_list args;
     const char *levelstr = NULL;

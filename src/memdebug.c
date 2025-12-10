@@ -180,10 +180,9 @@ CMUTIL_STATIC int CMUTIL_MemRcyComparator(const void *a, const void *b)
     // memory address comparison
     if (a > b)
         return 1;
-    else if (a < b)
+    if (a < b)
         return -1;
-    else
-        return 0;
+    return 0;
 }
 
 typedef struct CMUTIL_MemRcyList CMUTIL_MemRcyList;

@@ -13,11 +13,9 @@ typedef struct {
 
 void *thread_func(void *param) {
     ThreadParam *tp = (ThreadParam *)param;
-    const CMUTIL_Thread *s = CMUTIL_ThreadSelf();
-    CMLogInfo("log in thread - id: %u, systemId: "PRINT64U", name: %s",
+    CMLogInfo("log in thread - id: %u, systemId: "PRINT64U,
         CMUTIL_ThreadSelfId(),
-        CMUTIL_ThreadSystemSelfId(),
-        CMCall(s, GetName));
+        CMUTIL_ThreadSystemSelfId());
     // wait 1 second
     usleep(1000 * 1000);
     CMCall(tp->mutex, Lock);
@@ -32,7 +30,6 @@ void thread_func2(void *param) {
 
 int main() {
     int ir = -1;
-    int i;
     CMUTIL_Init(CMMemRecycle);
 
     CMUTIL_ThreadPool *tpool = NULL;
@@ -53,16 +50,19 @@ int main() {
     }
     CMLogInfo("thread test - passed");
 
-    tpool = CMUTIL_ThreadPoolCreate(-1);
-    for (i=0; i<10; i++)
+    tpool = CMUTIL_ThreadPoolCreate(10);
+    for (int i=0; i<10; i++)
         CMCall(tpool, Execute, thread_func2, &tp);
 
+    CMCall(tpool, Wait);
+
+    CMLogInfo("threadpool test end");
 
     ir = 0;
 END_POINT:
+    if (tpool) CMCall(tpool, Destroy);
     if (mtx) CMCall(mtx, Destroy);
     if (t) CMCall(t, Join);
-    if (tpool) CMCall(tpool, Destroy);
     CMUTIL_Clear();
     return ir;
 }
