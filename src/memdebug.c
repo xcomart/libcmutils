@@ -289,14 +289,18 @@ CMUTIL_STATIC void CMUTIL_MemRcyFree(void *ptr)
             (CMUTIL_MemNode*)(((CMUTIL_MemNode*)ptr) - 1);
     CMUTIL_MemRcyList *list = &g_cmutil_memrcyblocks[node->index];
 
+    CMCall(list->mutex, Lock);
     if (CMCall(list->used, Remove, node) == NULL) {
+        CMCall(list->mutex, Unlock);
         CMUTIL_MemLogWithStack(
                     "*** FATAL - not allocated memory to be freed.");
         return;
     }
 
-    if (!CMUTIL_MemCheckFlow(node))
+    if (!CMUTIL_MemCheckFlow(node)) {
+        CMCall(list->mutex, Unlock);
         return;
+    }
 
     // clear stack
     if (node->stack) {
@@ -304,7 +308,6 @@ CMUTIL_STATIC void CMUTIL_MemRcyFree(void *ptr)
         node->stack = NULL;
     }
 
-    CMCall(list->mutex, Lock);
 
     node->next = list->head;
     list->head = node;
@@ -327,7 +330,7 @@ CMUTIL_STATIC void *CMUTIL_MemRcyRealloc(void *ptr, size_t size)
         return NULL;
     if (nidx >= MEM_BLOCK_SZ) {
         CMUTIL_MemLogWithStack("*** FATAL - memory index out of bound. "
-                               "requested memory too big("PRINT64U
+                               "requested memory too big(%"PRIu64
                                ") to allocate.", (uint64_t)size);
         return NULL;
     }
