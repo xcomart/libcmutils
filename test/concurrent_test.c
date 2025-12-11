@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 
-#include "../src/libcmutils.h"
+#include "libcmutils.h"
 
 CMUTIL_LogDefine("test.concurrent")
 

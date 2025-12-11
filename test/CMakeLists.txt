@@ -10,3 +10,5 @@ endfunction()
 
 add_test_target(array_test)
 add_test_target(concurrent_test)
+add_test_target(config_test)
+add_test_target(dgram_test)

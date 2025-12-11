@@ -4,7 +4,7 @@
 
 #include <string.h>
 
-#include "../src/libcmutils.h"
+#include "libcmutils.h"
 
 CMUTIL_LogDefine("test.array")
 

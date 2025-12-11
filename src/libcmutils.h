@@ -662,6 +662,11 @@ struct CMUTIL_ThreadPool {
      */
     void (*Execute)(CMUTIL_ThreadPool *tp, CMProcCB runnable, void *udata);
 
+    /**
+     * @brief Wait until all jobs are finished.
+     *
+     * @param tp This threadpool object
+     */
     void (*Wait)(CMUTIL_ThreadPool *tp);
 
     /**
@@ -859,7 +864,7 @@ struct CMUTIL_Array {
      * @param array This dynamic array object.
      * @param compval Search key of item to be removed.
      * @return Removed element if given item found in this array.
-     *         NULL if given key does not exists in this array or
+     *         NULL if given key does not exist in this array or
      *         this array is not a sorted array.
      */
     void *(*Remove)(CMUTIL_Array *array, const void *compval);
@@ -2417,9 +2422,9 @@ struct CMUTIL_NIOSelectionKey {
     CMBool (*IsWritable)(
             const CMUTIL_NIOSelectionKey *selkey);
     /**
-     * @brief Tells whether or not this key is valid.
+     * @brief Tells whether this key is valid.
      *
-     * A key is valid upon creation and remains so until it is cancelled,
+     * A key is valid upon creation and remains so until it is canceled,
      * its channel is closed, or its selector is closed.
      *
      * @return CMTrue if, and only if, this key is valid
@@ -2446,18 +2451,18 @@ struct CMUTIL_NIOSelectionKey {
             CMUTIL_NIOSelectionKey *selkey);
     /**
      * @brief Requests that the registration of this key's channel with
-     * its selector be cancelled.
+     * its selector be canceled.
      *
      * Upon return the key will be invalid and will have been added to its
-     * selector's cancelled-key set.
-     * The key will be removed from all of the selector's key sets during
+     * selector's canceled-key set.
+     * The key will be removed from all the selector's key sets during
      * the next selection operation.
      *
-     * If this key has already been cancelled then
+     * If this key has already been canceled then
      * invoking this method unpredictable.
      *
      * This method may be invoked at any time.
-     * It synchronizes on the selector's cancelled-key set,
+     * It synchronizes on the selector's canceled-key set,
      * and therefore may block briefly if invoked concurrently
      * with a cancellation or selection operation involving the same selector.
      */
