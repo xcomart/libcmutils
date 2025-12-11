@@ -49,7 +49,7 @@ typedef struct CMUTIL_DGramSocket_Internal {
 
 CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketBind(
         CMUTIL_DGramSocket *dsock,
-        CMUTIL_SocketAddr *saddr)
+        const CMUTIL_SocketAddr *saddr)
 {
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
     socklen_t addrsz = sizeof(CMUTIL_SocketAddr);
@@ -58,16 +58,16 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketBind(
         int one = 1;
         setsockopt(idsock->sock, SOL_SOCKET, SO_REUSEADDR,
                 (char *) &one, sizeof(one));
+        addr = *saddr;
     } else {
         memset(&addr, 0x0, addrsz);
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_ANY);
         // to get random port
         addr.sin_port = 0;
-        saddr = &addr;
     }
     if (bind(idsock->sock,
-             (struct sockaddr*)saddr,
+             (struct sockaddr*)&addr,
              addrsz) == -1) {
         CMLogErrorS("bind() failed: %s", strerror(errno));
         return CMSocketBindFailed;
@@ -75,8 +75,8 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketBind(
     getsockname(idsock->sock, (struct sockaddr*)&(idsock->laddr), &addrsz);
     // win32 getsockname may only set the port number, p=0.0005.
     // ( http://msdn.microsoft.com/library/ms738543.aspx ):
-    idsock->laddr.sin_addr.s_addr = saddr->sin_addr.s_addr;
-    idsock->laddr.sin_family = saddr->sin_family;
+    idsock->laddr.sin_addr.s_addr = addr.sin_addr.s_addr;
+    idsock->laddr.sin_family = addr.sin_family;
     return CMSocketOk;
 }
 
