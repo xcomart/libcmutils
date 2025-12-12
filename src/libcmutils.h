@@ -286,7 +286,7 @@ typedef enum CMMemOper {
      */
     CMMemRecycle,
     /**
-     * Use memory operation with debugging informations.
+     * Use memory operation with debugging information.
      */
     CMMemDebug
 } CMMemOper;
@@ -337,7 +337,7 @@ typedef struct CMUTIL_Mem {
      * @param size  Count of bytes to be allocated.
      * @return A pointer to the allocated memory, which is suitably aligned for
      *  any built-in type. On error this function returns NULL. NULL may also
-     *  be returned by a successfull call to this function with a
+     *  be returned by a successful call to this function with a
      *  <code>size</code> of zero.
      */
     void *(*Alloc)(
@@ -618,7 +618,7 @@ struct CMUTIL_Thread {
  * @param proc Start routine of the created thread.
  * @param udata This argument is passed as the sole argument of 'proc'
  * @param name Thread name, any name could be assigned,
- *      and can also duplicable. But must not be exceed 200 bytes.
+ *      and can also duplicable. But must not be exceeded 200 bytes.
  * @return Created thread object.
  */
 CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadCreate(
@@ -1359,28 +1359,163 @@ CMUTIL_API CMUTIL_String *CMUTIL_StringCreateEx(
  */
 typedef struct CMUTIL_StringArray CMUTIL_StringArray;
 struct CMUTIL_StringArray {
+    /**
+     * @brief Add a string object to this array.
+     *
+     * Note that ownership of string object will be moved to this array object.
+     * So destroying original string will lead to undefined behavior.
+     * Destroying this array object will destroy all owned strings.
+     *
+     * @param array This string array object.
+     * @param string String object to be added, ownership of string object will
+     *          be moved to this array object.
+     */
     void (*Add)(
             CMUTIL_StringArray *array, CMUTIL_String *string);
+
+    /**
+     * @brief Add a new c-style string.
+     *
+     * This method will create new <code>CMUTIL_String</code> object which
+     * contents will be same as given <code>string</code>.
+     *
+     * @param array This string array object.
+     * @param string c-style(NULL-terminated) string to be added.
+     */
     void (*AddCString)(
             CMUTIL_StringArray *array, const char *string);
-    void (*InsertAt)(
+
+    /**
+     * @brief Insert string object to this array at given index.
+     *
+     * Note that ownership of string object will be moved to this array object.
+     * So destroying original string will lead to undefined behavior.
+     * Destroying this array object will destroy all owned strings.
+     *
+     * @param array This string array object.
+     * @param string String object to be added, ownership of string object will
+     *          be moved to this array object if CMTrue returned.
+     * @param index The index where new string will be inserted.
+     * @return CMTrue if insertion performed successfully.
+     *          CMFalse if failed, the ownership of string did not move.
+     */
+    CMBool (*InsertAt)(
             CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index);
-    void (*InsertAtCString)(
+
+    /**
+     * @brief Insert a new c-style string at given index.
+     *
+     * This method will create new <code>CMUTIL_String</code> object which
+     * contents will be same as given <code>string</code>.
+     *
+     * @param array This string array object.
+     * @param string c-style(NULL-terminated) string to be added.
+     * @param index The index where new string will be inserted.
+     * @return CMTrue if insertion performed successfully.
+     *          CMFalse if failed.
+     */
+    CMBool (*InsertAtCString)(
             CMUTIL_StringArray *array, const char *string, uint32_t index);
+
+    /**
+     * @brief Remove string element at given index, and return it.
+     *
+     * Note, this method will transfer ownership of result string to caller.
+     * The caller must receive return value and destroy it after use.
+     *
+     * @param array This string array object.
+     * @param index The index where the string wanted to remove.
+     * @return String object which removed from this array, ownership of the
+     *          string will be transferred to caller.
+     *          NULL if index out of bound.
+     */
     CMUTIL_String *(*RemoveAt)(
             CMUTIL_StringArray *array, uint32_t index);
+
+    /**
+     * @brief Set new string object to this array at given index and old string
+     *          will be returned.
+     *
+     * Note that ownership of string object will be moved to this array object.
+     * So destroying original string will lead to undefined behavior.
+     * Destroying this array object will destroy all owned strings.
+     * And this method will transfer ownership of result string to caller.
+     * The caller must receive return value and destroy it after use.
+     *
+     * @param array This string array object.
+     * @param string String object to be added, ownership of string object will
+     *          be moved to this array object if CMTrue returned.
+     * @param index The index where the string wanted to remove.
+     * @return String object which removed from this array, ownership of the
+     *          string will be transferred to caller.
+     *          NULL if index out of bound.
+     */
     CMUTIL_String *(*SetAt)(
             CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index);
+
+    /**
+     * @brief Set new c-style string to this array at given index
+     *          and old string will be returned.
+     *
+     * Note this method will transfer ownership of result string to caller.
+     * The caller must receive return value and destroy it after use.
+     *
+     * @param array This string array object.
+     * @param string c-style(NULL-terminated) string to be added.
+     * @param index The index where the string wanted to remove.
+     * @return String object which removed from this array, ownership of the
+     *          string will be transferred to caller.
+     *          NULL if index out of bound.
+     */
     CMUTIL_String *(*SetAtCString)(
             CMUTIL_StringArray *array, const char *string, uint32_t index);
-    CMUTIL_String *(*GetAt)(
+
+    /**
+     * @brief Get string object at given index.
+     *
+     * Note, this method does not transfer ownership of result string to caller.
+     * The caller must not destroy the result object.
+     *
+     * @param array This string array object.
+     * @param index The index where the string wanted to get.
+     * @return Result string object. NULL if index out of bound.
+     */
+    const CMUTIL_String *(*GetAt)(
             const CMUTIL_StringArray *array, uint32_t index);
+
+    /**
+     * @brief Get c-style string at given index.
+     *
+     * @param array This string array object.
+     * @param index The index where the string wanted to get.
+     * @return Result c-style string object. NULL if index out of bound.
+     */
     const char *(*GetCString)(
             const CMUTIL_StringArray *array, uint32_t index);
+
+    /**
+     * @brief Get number of items in this array.
+     *
+     * @param array This string array object.
+     * @return The size of this array.
+     */
     size_t (*GetSize)(
             const CMUTIL_StringArray *array);
+
+    /**
+     * @brief Get the iterator of this array.
+     *
+     * @param array This string object.
+     * @return Iterator object of this array, must be destroyed after use.
+     */
     CMUTIL_Iterator *(*Iterator)(
             const CMUTIL_StringArray *array);
+
+    /**
+     * @brief Destroy this array object and it's contents.
+     *
+     * @param array This string object.
+     */
     void (*Destroy)(
             CMUTIL_StringArray *array);
 };
@@ -1439,6 +1574,8 @@ struct CMUTIL_ByteBuffer {
     size_t (*GetCapacity)(
             const CMUTIL_ByteBuffer *buffer);
     void (*Destroy)(
+            CMUTIL_ByteBuffer *buffer);
+    void (*Clear)(
             CMUTIL_ByteBuffer *buffer);
 };
 
@@ -1978,9 +2115,9 @@ typedef enum CMSocketResult {
 } CMSocketResult;
 
 typedef struct sockaddr_in CMUTIL_SocketAddr;
-CMSocketResult CMUTIL_SocketAddrGet(
+CMUTIL_API CMSocketResult CMUTIL_SocketAddrGet(
         const CMUTIL_SocketAddr *saddr, char *hostbuf, int *port);
-CMSocketResult CMUTIL_SocketAddrSet(
+CMUTIL_API CMSocketResult CMUTIL_SocketAddrSet(
         CMUTIL_SocketAddr *saddr, char *host, int port);
 
 typedef struct CMUTIL_Socket CMUTIL_Socket;
@@ -2051,10 +2188,10 @@ typedef struct CMUTIL_DGramSocket CMUTIL_DGramSocket;
 struct CMUTIL_DGramSocket {
     CMSocketResult (*Bind)(
             CMUTIL_DGramSocket *dsock,
-            CMUTIL_SocketAddr *saddr);
+            const CMUTIL_SocketAddr *saddr);
     CMSocketResult (*Connect)(
             CMUTIL_DGramSocket *dsock,
-            CMUTIL_SocketAddr *saddr);
+            const CMUTIL_SocketAddr *saddr);
     CMBool (*IsConnected)(
             CMUTIL_DGramSocket *dsock);
     void (*Disconnect)(

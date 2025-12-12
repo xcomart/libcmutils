@@ -44,6 +44,7 @@ typedef struct CMUTIL_DGramSocket_Internal {
     CMUTIL_SocketAddr   raddr;
     SOCKET              sock;
     CMBool              connected;
+    CMBool              binded;
     CMBool              silent;
 } CMUTIL_DGramSocket_Internal;
 
@@ -77,12 +78,13 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketBind(
     // ( http://msdn.microsoft.com/library/ms738543.aspx ):
     idsock->laddr.sin_addr.s_addr = addr.sin_addr.s_addr;
     idsock->laddr.sin_family = addr.sin_family;
+    idsock->binded = CMTrue;
     return CMSocketOk;
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketConnect(
         CMUTIL_DGramSocket *dsock,
-        CMUTIL_SocketAddr *saddr)
+        const CMUTIL_SocketAddr *saddr)
 {
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
     if (idsock->connected)
@@ -121,7 +123,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketGetRemoteAddr(
 {
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
     if (idsock->connected) {
-        memcpy(&(idsock->raddr), saddr, sizeof(CMUTIL_SocketAddr));
+        memcpy(saddr, &(idsock->raddr), sizeof(CMUTIL_SocketAddr));
         return CMSocketOk;
     } else {
         CMLogErrorS("socket not connected");
@@ -134,13 +136,12 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketGetLocalAddr(
         CMUTIL_SocketAddr *saddr)
 {
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
-    if (idsock->connected) {
-        memcpy(&(idsock->laddr), saddr, sizeof(CMUTIL_SocketAddr));
+    if (idsock->connected || idsock->binded) {
+        memcpy(saddr, &(idsock->laddr), sizeof(CMUTIL_SocketAddr));
         return CMSocketOk;
-    } else {
-        CMLogErrorS("socket not connected");
-        return CMSocketNotConnected;
     }
+    CMLogErrorS("socket not connected or not binded");
+    return CMSocketNotConnected;
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketSend(
@@ -150,7 +151,18 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketSend(
 {
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
     if (idsock->connected) {
-        return CMCall(dsock, SendTo, buf, &idsock->raddr, timeout);
+        CMSocketResult sr = CMUTIL_SocketCheckBase(
+                    idsock->sock, timeout, CMFalse, CMFalse);
+        if (sr == CMSocketOk) {
+            const ssize_t sent = send(
+                idsock->sock, CMCall(buf, GetBytes), CMCall(buf, GetSize), 0);
+            if (sent < (ssize_t)CMCall(buf, GetSize)) {
+                CMLogErrorS("sendto() failed: %s", strerror(errno));
+                return CMSocketSendFailed;
+            }
+            return CMSocketOk;
+        }
+        return sr;
     } else {
         CMLogErrorS("socket not connected");
         return CMSocketNotConnected;
@@ -189,22 +201,23 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketRecv(
     if (idsock->connected) {
         CMUTIL_SocketAddr raddr;
         CMSocketResult sr;
+        ssize_t size;
 
-RETRY:
-        sr = CMCall(dsock, RecvFrom, buf, &raddr, timeout);
+        sr = CMUTIL_SocketCheckBase(
+                idsock->sock, timeout, CMTrue, CMFalse);
         if (sr != CMSocketOk)
             return sr;
-        if (raddr.sin_addr.s_addr != idsock->raddr.sin_addr.s_addr ||
-                raddr.sin_port != idsock->raddr.sin_port) {
-            // not interested remote. retry to receive.
-            goto RETRY;
-        } else {
-            return CMSocketOk;
+        size = recv(idsock->sock, CMCall(buf, GetBytes),
+            CMCall(buf, GetCapacity), 0);
+        if (size < 0) {
+            CMLogErrorS("recv() failed: %s", strerror(errno));
+            return CMSocketReceiveFailed;
         }
-    } else {
-        CMLogErrorS("socket not connected");
-        return CMSocketNotConnected;
+        CMCall(buf, ShrinkTo, size);
+        return CMSocketOk;
     }
+    CMLogErrorS("socket not connected");
+    return CMSocketNotConnected;
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketRecvFrom(
@@ -223,15 +236,14 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketRecvFrom(
     if (sr != CMSocketOk)
         return sr;
     size = recvfrom(idsock->sock,
-            CMCall(buf, GetBytes), CMCall(buf, GetSize),
+            CMCall(buf, GetBytes), CMCall(buf, GetCapacity),
             0, (struct sockaddr*)saddr, &addrsize);
     if (size < 0) {
         CMLogErrorS("recvfrom() failed: %s", strerror(errno));
         return CMSocketReceiveFailed;
-    } else {
-        CMCall(buf, ShrinkTo, (size_t)size);
-        return CMSocketOk;
     }
+    CMCall(buf, ShrinkTo, (size_t)size);
+    return CMSocketOk;
 }
 
 CMUTIL_STATIC void CMUTIL_DGramSocketClose(CMUTIL_DGramSocket *dsock)
@@ -268,6 +280,7 @@ CMUTIL_DGramSocket *CMUTIL_DGramSocketCreateInternal(
     int rc;
     memset(res, 0x0, sizeof(CMUTIL_DGramSocket_Internal));
     memcpy(res, &g_cmutil_dgramsocket, sizeof(CMUTIL_DGramSocket));
+    res->memst = memst;
     res->silent = silent;
     res->sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (res->sock == INVALID_SOCKET) {

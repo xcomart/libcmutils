@@ -109,7 +109,13 @@ CMUTIL_STATIC void* CMUTIL_ArrayInsertAtPrivate(
     if (index < iarray->size)
         memmove(iarray->data+index+1, iarray->data+index,
                 (uint32_t)(iarray->size - index) * sizeof(void*));
-    iarray->data[index] = item;
+    else if (index == iarray->size)
+        iarray->data[index] = item;
+    else {
+        CMLogError("Index out of bound: %d (array size is %d).",
+                   index, iarray->size);
+        return NULL;
+    }
     iarray->size++;
 
     return item;
@@ -135,7 +141,7 @@ CMUTIL_STATIC void* CMUTIL_ArraySetAtPrivate(
         res = iarray->data[index];
         iarray->data[index] = item;
     } else {
-        CMLogError("Index out of range: %d (array size is %d).",
+        CMLogError("Index out of bound: %d (array size is %d).",
                    index, iarray->size);
     }
 
@@ -185,7 +191,7 @@ CMUTIL_STATIC void *CMUTIL_ArrayRemoveAt(
                 (uint32_t)(iarray->size - index - 1) * sizeof(void*));
         iarray->size--;
     } else {
-        CMLogError("Index out of range: %d (array size is %d).",
+        CMLogError("Index out of bound: %d (array size is %d).",
                    index, iarray->size);
     }
     return res;
