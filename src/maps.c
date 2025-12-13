@@ -123,7 +123,7 @@ CMUTIL_STATIC CMUTIL_MapItem *CMUTIL_MapPutBase(
     ires = CMCall(bucket, Add, item);
     if (ires) {
         *prev = ires->value;
-        CMUTIL_MapItem tv = {item->key, NULL};
+        const CMUTIL_MapItem tv = {item->key, NULL};
         CMCall(imap->keyset, Remove, &tv);
         imap->memst->Free(ires->key);
         imap->memst->Free(ires);
@@ -138,9 +138,8 @@ CMUTIL_STATIC void *CMUTIL_MapPut(
 {
     CMUTIL_Map_Internal *imap = (CMUTIL_Map_Internal*)map;
     void *res = NULL;
-    CMUTIL_MapItem *item = CMUTIL_MapPutBase(imap, key, value, &res);
-    if (item)
-        CMCall(imap->keyset, Add, item->key);
+    const CMUTIL_MapItem *item = CMUTIL_MapPutBase(imap, key, value, &res);
+    CMCall(imap->keyset, Add, item->key);
     return res;
 }
 
@@ -150,7 +149,7 @@ CMUTIL_STATIC void CMUTIL_MapPutAll(
     CMUTIL_StringArray *keys = CMCall(src, GetKeys);
     uint32_t i;
     for (i=0; i<CMCall(keys, GetSize); i++) {
-        CMUTIL_String *skey = CMCall(keys, GetAt, i);
+        const CMUTIL_String *skey = CMCall(keys, GetAt, i);
         const char *key = CMCall(skey, GetCString);
         void *val = CMCall(src, Get, key);
         CMCall(map, Put, key, val);
@@ -231,9 +230,7 @@ CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_MapGetKeys(const CMUTIL_Map *map)
     uint32_t i;
     for (i=0; i<CMCall(imap->keyset, GetSize); i++) {
         const char *key = (const char*)CMCall(imap->keyset, GetAt, i);
-        CMUTIL_String *skey = CMUTIL_StringCreateInternal(
-                    imap->memst, 20, key);
-        CMCall(res, Add, skey);
+        CMCall(res, AddCString, key);
     }
 
     return res;
@@ -429,8 +426,8 @@ CMUTIL_Map *CMUTIL_MapCreateInternal(
     memset(imap, 0x0, sizeof(CMUTIL_Map_Internal));
 
     memcpy(imap, &g_cmutil_map, sizeof(CMUTIL_Map));
-    imap->buckets = memst->Alloc(sizeof(CMUTIL_Array)*(uint32_t)bucketsize);
-    memset(imap->buckets, 0x0, sizeof(CMUTIL_Array)*(uint32_t)bucketsize);
+    imap->buckets = memst->Alloc(sizeof(CMUTIL_Array)*bucketsize);
+    memset(imap->buckets, 0x0, sizeof(CMUTIL_Array)*bucketsize);
     imap->bucketsize = bucketsize;
     imap->isucase = isucase;
     imap->keyset = CMUTIL_ArrayCreateInternal(
