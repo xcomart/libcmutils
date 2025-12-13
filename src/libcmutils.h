@@ -296,16 +296,16 @@ typedef enum CMMemOper {
  * any function in this library.
  *
  *  <ul>
- *   <li>CMUTIL_MemSystem: All memory operation will be replaced with
+ *   <li>CMMemSystem: All memory operation will be replaced with
  *         malloc, realloc, strdup and free.
  *         same as direct call system calls.</li>
- *   <li>CMUTIL_MemRecycle: All memory allocation will be managed with pool.
+ *   <li>CMMemRecycle: All memory allocation will be managed with pool.
  *         Pool is consist of memory blocks which size is power of 2 bytes.
  *         Recommended for any purpose. This option prevents heap memory
  *         fragments and checks memory leak at termination. But a little
  *         overhead required for recycling and needs much more memory
  *         usage.</li>
- *   <li>CMUTIL_MemDebug: Option for memory debugging.
+ *   <li>CMMemDebug: Option for memory debugging.
  *         Any memory operation will be traced including stack tracing.
  *         Recommended only for memory debugging.
  *         Much slower than any other options.</li>
@@ -319,8 +319,11 @@ CMUTIL_API void CMUTIL_Init(CMMemOper memoper);
 
 /**
  * @brief Clear allocated resource for this library.
+ *
+ * @return CMTrue if all resources are cleared successfully or inited with CMMemSystem,
+ *      CMFalse if some resources are leaked, when inited with CMMemRecycle or CMMemDebug.
  */
-CMUTIL_API void CMUTIL_Clear(void);
+CMUTIL_API CMBool CMUTIL_Clear(void);
 
 /**
  * Memory operation interface.
@@ -528,7 +531,8 @@ struct CMUTIL_Mutex {
      * @brief Try to lock given mutex object.
      * @param  mutex   a mutex object to be tested.
      * @return CMTrue if mutex locked successfully,
-     *         CMFalse if lock failed.
+     *         CMFalse if another thread locked this mutex already,
+     *         so lock failed.
      */
     CMBool (*TryLock)(CMUTIL_Mutex *mutex);
 
@@ -550,6 +554,19 @@ struct CMUTIL_Mutex {
  */
 CMUTIL_API CMUTIL_Mutex *CMUTIL_MutexCreate(void);
 
+/**
+ * @brief Synchronized block macro.
+ *
+ * This macro will lock given mutex object, execute given statements,
+ * and unlock given mutex object.
+ *
+ * Note that do not use 'return', 'break', 'continue' or "goto" statements
+ * inside synchronized block, because these statements will bypass
+ * unlocking mutex operation, which will cause deadlock.
+ *
+ * @param a Mutex object to be locked.
+ * @param ... Statements to be executed in synchronized block.
+ */
 #define CMSync(a, ...) do {     \
     CMCall((a), Lock);          \
     __VA_ARGS__                 \
@@ -685,9 +702,11 @@ struct CMUTIL_ThreadPool {
  *
  * @param pool_size Thread count of this threadpool if positive, otherwise
  *              this object will increase pool size automatically.
+ * @param name Name of this threadpool object, any name could be assigned,
+ *              and can also duplicable. But must not be exceeded 200 bytes.
  * @return A new threadpool object.
  */
-CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(int pool_size);
+CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(int pool_size, const char *name);
 
 /**
  * @typedef CMUTIL_Semaphore Platform independent semaphore object.
@@ -857,7 +876,9 @@ struct CMUTIL_Array {
     /**
      * @brief Remove an item from sorted array.
      *
-     * This method will only work if this array is a sorted array.
+     * This method will work both this array is a sorted or not.
+     * But if this array is sorted, more efficient binary search will be used,
+     * otherwise linear search will be used.
      * <code>compval</code> will be compared with array elements in
      * binary search manner.
      *
@@ -1137,7 +1158,7 @@ struct CMUTIL_String {
      * @return New size of this string object.
      */
     size_t (*AddAnother)(
-            CMUTIL_String *string, CMUTIL_String *tobeadded);
+            CMUTIL_String *string, const CMUTIL_String *tobeadded);
 
     /**
      * @brief Insert string to this string object.
@@ -2363,46 +2384,6 @@ CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
 CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
 
-
-//////////////////////////////////////////////////////////////////////////////
-// HTTP client Implementations
-//////////////////////////////////////////////////////////////////////////////
-
-typedef enum CMHttpMethodType {
-    CMHttpGet,
-    CMHttpPost,
-    CMHttpPut,
-    CMHttpHead,
-    CMHttpOptions,
-    CMHttpDelete,
-    CMHttpPatch,
-    CMHttpTrace
-} CMHttpMethodType;
-
-typedef struct CMUTIL_HttpMethod CMUTIL_HttpMethod;
-struct CMUTIL_HttpMethod {
-    CMUTIL_HttpMethod *(*AddFormData)(
-            CMUTIL_HttpMethod *method,
-            const char *name,
-            CMUTIL_String *data);
-    CMUTIL_HttpMethod *(*SetRawData)(
-            CMUTIL_HttpMethod *method,
-            CMUTIL_ByteBuffer *data);
-    CMUTIL_HttpMethod *(*SetRequestHeader)(
-            CMUTIL_HttpMethod *method,
-            const char *name,
-            CMUTIL_String *data);
-};
-
-CMUTIL_API CMUTIL_HttpMethod *CMUTIL_HttpMethodCreate(CMHttpMethodType type);
-
-typedef CMBool (*CMHttpResponseHandler)(CMUTIL_String *data, void *udata);
-
-typedef struct CMUTIL_HttpClient CMUTIL_HttpClient;
-struct CMUTIL_HttpClient {
-    CMUTIL_JsonArray *(*GetCookies)(
-            CMUTIL_HttpClient *client);
-};
 
 //////////////////////////////////////////////////////////////////////////////
 // NIO Implementations
