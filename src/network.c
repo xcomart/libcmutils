@@ -222,11 +222,15 @@ void CMUTIL_NetworkClear()
 CMSocketResult CMUTIL_SocketAddrGet(
         const CMUTIL_SocketAddr *saddr, char *hostbuf, int *port)
 {
-    uint8_t ip[4];
-    uint32_t addr = ntohl(saddr->sin_addr.s_addr);
-    memcpy(ip, &addr, sizeof(addr));
-    sprintf(hostbuf, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
-    *port = (int)ntohs(saddr->sin_port);
+    if (hostbuf) {
+        uint8_t ip[4];
+        const uint32_t addr = ntohl(saddr->sin_addr.s_addr);
+        memcpy(ip, &addr, sizeof(addr));
+        sprintf(hostbuf, "%u.%u.%u.%u", ip[3], ip[2], ip[1], ip[0]);
+    }
+    if (port) {
+        *port = (int)ntohs(saddr->sin_port);
+    }
     return CMSocketOk;
 }
 
@@ -241,7 +245,7 @@ CMSocketResult CMUTIL_SocketAddrSet(
     if (rval == 0) {
         if (ainfo) {
             memcpy(saddr, ainfo->ai_addr, ainfo->ai_addrlen);
-            saddr->sin_port = (unsigned short)port;
+            saddr->sin_port = (unsigned short)htons(port);
             freeaddrinfo(ainfo);
             return CMSocketOk;
         } else {
@@ -605,11 +609,11 @@ CMSocketResult CMUTIL_SocketCheckBase(
         if (!silent)
             CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
         return CMSocketPollFailed;
-    } else if (rc == 0) {
-        return CMSocketTimeout;
-    } else {
-        return CMSocketOk;
     }
+    if (rc == 0) {
+        return CMSocketTimeout;
+    }
+    return CMSocketOk;
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckBuffer(

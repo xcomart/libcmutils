@@ -38,6 +38,7 @@ typedef struct CMUTIL_ConfItem {
 } CMUTIL_ConfItem;
 
 typedef struct CMUTIL_Config_Internal {
+    CMUTIL_Config   base;
     CMUTIL_Map      *confs;
     CMUTIL_Array    *sequence;
     CMUTIL_Map      *revconf;
@@ -78,6 +79,7 @@ CMUTIL_STATIC int CMUTIL_AppendTrimmedLine(
     while (*p) {
         if (!strchr(spaces, *p))
             last = p + 1;
+        p++;
     }
     if (*(last - 1) == '\\') {
         iscont = 1;
@@ -167,6 +169,11 @@ void CMUTIL_ConfigSet(CMUTIL_Config *conf, const char *key, const char *value)
     CMUTIL_Config_Internal *iconf = (CMUTIL_Config_Internal*)conf;
     char *prev = (char*)CMCall(
                 iconf->confs, Put, key, iconf->memst->Strdup(value));
+
+    const int keylen = (int)strlen(key);
+    if (iconf->maxkeylen < keylen)
+        iconf->maxkeylen = keylen;
+
     if (prev) {
         iconf->memst->Free(prev);
     }
@@ -272,8 +279,8 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
                 continue;
 
             item = (CMUTIL_ConfItem*)memst->Alloc(sizeof(CMUTIL_ConfItem));
-            memset(res, 0x0, sizeof(CMUTIL_ConfItem));
-            res->memst = memst;
+            memset(item, 0x0, sizeof(CMUTIL_ConfItem));
+            item->memst = memst;
 
             p = (char*)CMCall(str, GetCString);
             p = CMUTIL_StrSkipSpaces(p, SPACES);

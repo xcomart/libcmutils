@@ -119,16 +119,6 @@ extern "C" {
 # define pid_t      DWORD
 #endif
 
-#define LIBCMUTIL_VER_MAJOR     0
-#define LIBCMUTIL_VER_MINOR     1
-#define LIBCMUTIL_VER_PATCH     0
-
-#define CMUTIL_TOSTR(x)         #x
-
-#define LIBCMUTIL_VER \
-    CMUTIL_TOSTR(LIBCMUTIL_VER_MAJOR)"."\
-    CMUTIL_TOSTR(LIBCMUTIL_VER_MINOR)"."\
-    CMUTIL_TOSTR(LIBCMUTIL_VER_PATCH)
 
 /**
  * @defgroup CMUTIL Types.
@@ -139,7 +129,7 @@ extern "C" {
  */
 
 /**
- * 64 bit signed / unsigned integer max values.
+ * 64-bit signed / unsigned integer max values.
  */
 #if !defined(INT64_MAX)
 # define INT64_MAX  i64(0x7FFFFFFFFFFFFFFF)
@@ -210,7 +200,7 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
  * @brief Method caller for this library.
  *
  * This library built on C language, but some of the usage of this library
- * simillar to object oriented languages like C++ or Java.
+ * simillar to object-oriented languages like C++ or Java.
  *
  * Create instance of type CMUTIL_XX with CMUTIL_XXCreate function,
  * and call method with member callbacks.
@@ -296,7 +286,7 @@ typedef enum CMMemOper {
      */
     CMMemRecycle,
     /**
-     * Use memory operation with debugging informations.
+     * Use memory operation with debugging information.
      */
     CMMemDebug
 } CMMemOper;
@@ -306,16 +296,16 @@ typedef enum CMMemOper {
  * any function in this library.
  *
  *  <ul>
- *   <li>CMUTIL_MemSystem: All memory operation will be replaced with
+ *   <li>CMMemSystem: All memory operation will be replaced with
  *         malloc, realloc, strdup and free.
  *         same as direct call system calls.</li>
- *   <li>CMUTIL_MemRecycle: All memory allocation will be managed with pool.
+ *   <li>CMMemRecycle: All memory allocation will be managed with pool.
  *         Pool is consist of memory blocks which size is power of 2 bytes.
  *         Recommended for any purpose. This option prevents heap memory
  *         fragments and checks memory leak at termination. But a little
  *         overhead required for recycling and needs much more memory
  *         usage.</li>
- *   <li>CMUTIL_MemDebug: Option for memory debugging.
+ *   <li>CMMemDebug: Option for memory debugging.
  *         Any memory operation will be traced including stack tracing.
  *         Recommended only for memory debugging.
  *         Much slower than any other options.</li>
@@ -329,8 +319,11 @@ CMUTIL_API void CMUTIL_Init(CMMemOper memoper);
 
 /**
  * @brief Clear allocated resource for this library.
+ *
+ * @return CMTrue if all resources are cleared successfully or inited with CMMemSystem,
+ *      CMFalse if some resources are leaked, when inited with CMMemRecycle or CMMemDebug.
  */
-CMUTIL_API void CMUTIL_Clear(void);
+CMUTIL_API CMBool CMUTIL_Clear(void);
 
 /**
  * Memory operation interface.
@@ -347,7 +340,7 @@ typedef struct CMUTIL_Mem {
      * @param size  Count of bytes to be allocated.
      * @return A pointer to the allocated memory, which is suitably aligned for
      *  any built-in type. On error this function returns NULL. NULL may also
-     *  be returned by a successfull call to this function with a
+     *  be returned by a successful call to this function with a
      *  <code>size</code> of zero.
      */
     void *(*Alloc)(
@@ -538,7 +531,8 @@ struct CMUTIL_Mutex {
      * @brief Try to lock given mutex object.
      * @param  mutex   a mutex object to be tested.
      * @return CMTrue if mutex locked successfully,
-     *         CMFalse if lock failed.
+     *         CMFalse if another thread locked this mutex already,
+     *         so lock failed.
      */
     CMBool (*TryLock)(CMUTIL_Mutex *mutex);
 
@@ -560,6 +554,24 @@ struct CMUTIL_Mutex {
  */
 CMUTIL_API CMUTIL_Mutex *CMUTIL_MutexCreate(void);
 
+/**
+ * @brief Synchronized block macro.
+ *
+ * This macro will lock given mutex object, execute given statements,
+ * and unlock given mutex object.
+ *
+ * Note that do not use 'return', 'break', 'continue' or "goto" statements
+ * inside synchronized block, because these statements will bypass
+ * unlocking mutex operation, which will cause deadlock.
+ *
+ * @param a Mutex object to be locked.
+ * @param ... Statements to be executed in synchronized block.
+ */
+#define CMSync(a, ...) do {     \
+    CMCall((a), Lock);          \
+    __VA_ARGS__                 \
+    CMCall((a), Unlock);        \
+} while(0)
 
 /**
  * @typedef CMUTIL_Thread Platform independent thread object.
@@ -581,8 +593,8 @@ struct CMUTIL_Thread {
      * @brief Join this thread.
      *
      * This function joins this thread and clean up it's resources including
-     * this thread object, so this references are must not be used after
-     * calling this method. Every threads which been created by this library
+     * this thread object, so these references are must not be used after
+     * calling this method. Every thread which been created by this library
      * must be joined by calling this method.
      * @param thread This thread object.
      * @return Thread return value.
@@ -623,7 +635,7 @@ struct CMUTIL_Thread {
  * @param proc Start routine of the created thread.
  * @param udata This argument is passed as the sole argument of 'proc'
  * @param name Thread name, any name could be assigned,
- *      and can also duplicable. But must not be exceed 200 bytes.
+ *      and can also duplicable. But must not be exceeded 200 bytes.
  * @return Created thread object.
  */
 CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadCreate(
@@ -647,6 +659,54 @@ CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadSelf(void);
  * @return System dependent thread id.
  */
 CMUTIL_API uint64_t CMUTIL_ThreadSystemSelfId(void);
+
+/**
+ * @typedef CMUTIL_ThreadPool A threadpool object.
+ */
+typedef struct CMUTIL_ThreadPool CMUTIL_ThreadPool;
+struct CMUTIL_ThreadPool {
+
+    /**
+     * @brief Execute a job in this threadpool.
+     *
+     * This method will return immediately. Job will be queued and executed
+     * when any idle thread is available in this pool.
+     *
+     * @param tp This threadpool object.
+     * @param runnable A callback function to be executed.
+     * @param udata User data object which would be passed to
+     *          <code>runnable</code> callback function.
+     */
+    void (*Execute)(CMUTIL_ThreadPool *tp, CMProcCB runnable, void *udata);
+
+    /**
+     * @brief Wait until all jobs are finished.
+     *
+     * @param tp This threadpool object
+     */
+    void (*Wait)(CMUTIL_ThreadPool *tp);
+
+    /**
+     * @brief Destroy all resources related with this object
+     * @param tp This threadpool object
+     */
+    void (*Destroy)(CMUTIL_ThreadPool *tp);
+};
+
+/**
+ * @brief Creates a new threadpool object.
+ *
+ * This function will create a new threadpool object with initial size.
+ * If <code>pool_size</code> is zero or negative value, this threadpool object's
+ * pool size will not be fixed, will be increased one by one if needed.
+ *
+ * @param pool_size Thread count of this threadpool if positive, otherwise
+ *              this object will increase pool size automatically.
+ * @param name Name of this threadpool object, any name could be assigned,
+ *              and can also duplicable. But must not be exceeded 200 bytes.
+ * @return A new threadpool object.
+ */
+CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(int pool_size, const char *name);
 
 /**
  * @typedef CMUTIL_Semaphore Platform independent semaphore object.
@@ -816,14 +876,16 @@ struct CMUTIL_Array {
     /**
      * @brief Remove an item from sorted array.
      *
-     * This method will only work if this array is a sorted array.
+     * This method will work both this array is a sorted or not.
+     * But if this array is sorted, more efficient binary search will be used,
+     * otherwise linear search will be used.
      * <code>compval</code> will be compared with array elements in
      * binary search manner.
      *
      * @param array This dynamic array object.
      * @param compval Search key of item to be removed.
      * @return Removed element if given item found in this array.
-     *         NULL if given key does not exists in this array or
+     *         NULL if given key does not exist in this array or
      *         this array is not a sorted array.
      */
     void *(*Remove)(CMUTIL_Array *array, const void *compval);
@@ -1096,7 +1158,7 @@ struct CMUTIL_String {
      * @return New size of this string object.
      */
     size_t (*AddAnother)(
-            CMUTIL_String *string, CMUTIL_String *tobeadded);
+            CMUTIL_String *string, const CMUTIL_String *tobeadded);
 
     /**
      * @brief Insert string to this string object.
@@ -1318,28 +1380,163 @@ CMUTIL_API CMUTIL_String *CMUTIL_StringCreateEx(
  */
 typedef struct CMUTIL_StringArray CMUTIL_StringArray;
 struct CMUTIL_StringArray {
+    /**
+     * @brief Add a string object to this array.
+     *
+     * Note that ownership of string object will be moved to this array object.
+     * So destroying original string will lead to undefined behavior.
+     * Destroying this array object will destroy all owned strings.
+     *
+     * @param array This string array object.
+     * @param string String object to be added, ownership of string object will
+     *          be moved to this array object.
+     */
     void (*Add)(
             CMUTIL_StringArray *array, CMUTIL_String *string);
+
+    /**
+     * @brief Add a new c-style string.
+     *
+     * This method will create new <code>CMUTIL_String</code> object which
+     * contents will be same as given <code>string</code>.
+     *
+     * @param array This string array object.
+     * @param string c-style(NULL-terminated) string to be added.
+     */
     void (*AddCString)(
             CMUTIL_StringArray *array, const char *string);
-    void (*InsertAt)(
+
+    /**
+     * @brief Insert string object to this array at given index.
+     *
+     * Note that ownership of string object will be moved to this array object.
+     * So destroying original string will lead to undefined behavior.
+     * Destroying this array object will destroy all owned strings.
+     *
+     * @param array This string array object.
+     * @param string String object to be added, ownership of string object will
+     *          be moved to this array object if CMTrue returned.
+     * @param index The index where new string will be inserted.
+     * @return CMTrue if insertion performed successfully.
+     *          CMFalse if failed, the ownership of string did not move.
+     */
+    CMBool (*InsertAt)(
             CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index);
-    void (*InsertAtCString)(
+
+    /**
+     * @brief Insert a new c-style string at given index.
+     *
+     * This method will create new <code>CMUTIL_String</code> object which
+     * contents will be same as given <code>string</code>.
+     *
+     * @param array This string array object.
+     * @param string c-style(NULL-terminated) string to be added.
+     * @param index The index where new string will be inserted.
+     * @return CMTrue if insertion performed successfully.
+     *          CMFalse if failed.
+     */
+    CMBool (*InsertAtCString)(
             CMUTIL_StringArray *array, const char *string, uint32_t index);
+
+    /**
+     * @brief Remove string element at given index, and return it.
+     *
+     * Note, this method will transfer ownership of result string to caller.
+     * The caller must receive return value and destroy it after use.
+     *
+     * @param array This string array object.
+     * @param index The index where the string wanted to remove.
+     * @return String object which removed from this array, ownership of the
+     *          string will be transferred to caller.
+     *          NULL if index out of bound.
+     */
     CMUTIL_String *(*RemoveAt)(
             CMUTIL_StringArray *array, uint32_t index);
+
+    /**
+     * @brief Set new string object to this array at given index and old string
+     *          will be returned.
+     *
+     * Note that ownership of string object will be moved to this array object.
+     * So destroying original string will lead to undefined behavior.
+     * Destroying this array object will destroy all owned strings.
+     * And this method will transfer ownership of result string to caller.
+     * The caller must receive return value and destroy it after use.
+     *
+     * @param array This string array object.
+     * @param string String object to be added, ownership of string object will
+     *          be moved to this array object if CMTrue returned.
+     * @param index The index where the string wanted to remove.
+     * @return String object which removed from this array, ownership of the
+     *          string will be transferred to caller.
+     *          NULL if index out of bound.
+     */
     CMUTIL_String *(*SetAt)(
             CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index);
+
+    /**
+     * @brief Set new c-style string to this array at given index
+     *          and old string will be returned.
+     *
+     * Note this method will transfer ownership of result string to caller.
+     * The caller must receive return value and destroy it after use.
+     *
+     * @param array This string array object.
+     * @param string c-style(NULL-terminated) string to be added.
+     * @param index The index where the string wanted to remove.
+     * @return String object which removed from this array, ownership of the
+     *          string will be transferred to caller.
+     *          NULL if index out of bound.
+     */
     CMUTIL_String *(*SetAtCString)(
             CMUTIL_StringArray *array, const char *string, uint32_t index);
-    CMUTIL_String *(*GetAt)(
+
+    /**
+     * @brief Get string object at given index.
+     *
+     * Note, this method does not transfer ownership of result string to caller.
+     * The caller must not destroy the result object.
+     *
+     * @param array This string array object.
+     * @param index The index where the string wanted to get.
+     * @return Result string object. NULL if index out of bound.
+     */
+    const CMUTIL_String *(*GetAt)(
             const CMUTIL_StringArray *array, uint32_t index);
+
+    /**
+     * @brief Get c-style string at given index.
+     *
+     * @param array This string array object.
+     * @param index The index where the string wanted to get.
+     * @return Result c-style string object. NULL if index out of bound.
+     */
     const char *(*GetCString)(
             const CMUTIL_StringArray *array, uint32_t index);
+
+    /**
+     * @brief Get number of items in this array.
+     *
+     * @param array This string array object.
+     * @return The size of this array.
+     */
     size_t (*GetSize)(
             const CMUTIL_StringArray *array);
+
+    /**
+     * @brief Get the iterator of this array.
+     *
+     * @param array This string object.
+     * @return Iterator object of this array, must be destroyed after use.
+     */
     CMUTIL_Iterator *(*Iterator)(
             const CMUTIL_StringArray *array);
+
+    /**
+     * @brief Destroy this array object and it's contents.
+     *
+     * @param array This string object.
+     */
     void (*Destroy)(
             CMUTIL_StringArray *array);
 };
@@ -1398,6 +1595,8 @@ struct CMUTIL_ByteBuffer {
     size_t (*GetCapacity)(
             const CMUTIL_ByteBuffer *buffer);
     void (*Destroy)(
+            CMUTIL_ByteBuffer *buffer);
+    void (*Clear)(
             CMUTIL_ByteBuffer *buffer);
 };
 
@@ -1937,9 +2136,9 @@ typedef enum CMSocketResult {
 } CMSocketResult;
 
 typedef struct sockaddr_in CMUTIL_SocketAddr;
-CMSocketResult CMUTIL_SocketAddrGet(
+CMUTIL_API CMSocketResult CMUTIL_SocketAddrGet(
         const CMUTIL_SocketAddr *saddr, char *hostbuf, int *port);
-CMSocketResult CMUTIL_SocketAddrSet(
+CMUTIL_API CMSocketResult CMUTIL_SocketAddrSet(
         CMUTIL_SocketAddr *saddr, char *host, int port);
 
 typedef struct CMUTIL_Socket CMUTIL_Socket;
@@ -2010,10 +2209,10 @@ typedef struct CMUTIL_DGramSocket CMUTIL_DGramSocket;
 struct CMUTIL_DGramSocket {
     CMSocketResult (*Bind)(
             CMUTIL_DGramSocket *dsock,
-            CMUTIL_SocketAddr *saddr);
+            const CMUTIL_SocketAddr *saddr);
     CMSocketResult (*Connect)(
             CMUTIL_DGramSocket *dsock,
-            CMUTIL_SocketAddr *saddr);
+            const CMUTIL_SocketAddr *saddr);
     CMBool (*IsConnected)(
             CMUTIL_DGramSocket *dsock);
     void (*Disconnect)(
@@ -2187,46 +2386,6 @@ CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
 
 //////////////////////////////////////////////////////////////////////////////
-// HTTP client Implementations
-//////////////////////////////////////////////////////////////////////////////
-
-typedef enum CMHttpMethodType {
-    CMHttpGet,
-    CMHttpPost,
-    CMHttpPut,
-    CMHttpHead,
-    CMHttpOptions,
-    CMHttpDelete,
-    CMHttpPatch,
-    CMHttpTrace
-} CMHttpMethodType;
-
-typedef struct CMUTIL_HttpMethod CMUTIL_HttpMethod;
-struct CMUTIL_HttpMethod {
-    CMUTIL_HttpMethod *(*AddFormData)(
-            CMUTIL_HttpMethod *method,
-            const char *name,
-            CMUTIL_String *data);
-    CMUTIL_HttpMethod *(*SetRawData)(
-            CMUTIL_HttpMethod *method,
-            CMUTIL_ByteBuffer *data);
-    CMUTIL_HttpMethod *(*SetRequestHeader)(
-            CMUTIL_HttpMethod *method,
-            const char *name,
-            CMUTIL_String *data);
-};
-
-CMUTIL_API CMUTIL_HttpMethod *CMUTIL_HttpMethodCreate(CMHttpMethodType type);
-
-typedef CMBool (*CMHttpResponseHandler)(CMUTIL_String *data, void *udata);
-
-typedef struct CMUTIL_HttpClient CMUTIL_HttpClient;
-struct CMUTIL_HttpClient {
-    CMUTIL_JsonArray *(*GetCookies)(
-            CMUTIL_HttpClient *client);
-};
-
-//////////////////////////////////////////////////////////////////////////////
 // NIO Implementations
 //////////////////////////////////////////////////////////////////////////////
 
@@ -2381,9 +2540,9 @@ struct CMUTIL_NIOSelectionKey {
     CMBool (*IsWritable)(
             const CMUTIL_NIOSelectionKey *selkey);
     /**
-     * @brief Tells whether or not this key is valid.
+     * @brief Tells whether this key is valid.
      *
-     * A key is valid upon creation and remains so until it is cancelled,
+     * A key is valid upon creation and remains so until it is canceled,
      * its channel is closed, or its selector is closed.
      *
      * @return CMTrue if, and only if, this key is valid
@@ -2410,18 +2569,18 @@ struct CMUTIL_NIOSelectionKey {
             CMUTIL_NIOSelectionKey *selkey);
     /**
      * @brief Requests that the registration of this key's channel with
-     * its selector be cancelled.
+     * its selector be canceled.
      *
      * Upon return the key will be invalid and will have been added to its
-     * selector's cancelled-key set.
-     * The key will be removed from all of the selector's key sets during
+     * selector's canceled-key set.
+     * The key will be removed from all the selector's key sets during
      * the next selection operation.
      *
-     * If this key has already been cancelled then
+     * If this key has already been canceled then
      * invoking this method unpredictable.
      *
      * This method may be invoked at any time.
-     * It synchronizes on the selector's cancelled-key set,
+     * It synchronizes on the selector's canceled-key set,
      * and therefore may block briefly if invoked concurrently
      * with a cancellation or selection operation involving the same selector.
      */

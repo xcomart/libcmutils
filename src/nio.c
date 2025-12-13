@@ -457,7 +457,7 @@ CMUTIL_STATIC void CMUTIL_NIOSelectorClose(
         karr = CMCall(is->keys, GetKeys);
         size = CMCall(karr, GetSize);
         for (i=0; i<size; i++) {
-            CMUTIL_String *key = CMCall(karr, GetAt, i);
+            const CMUTIL_String *key = CMCall(karr, GetAt, i);
             const char *skey = CMCall(key, GetCString);
             CMUTIL_NIOSelectionKey_Internal *selkey =
                     (CMUTIL_NIOSelectionKey_Internal*)CMCall(
@@ -478,5 +478,5 @@ CMUTIL_STATIC CMBool CMUTIL_NIOSelectorIsOpen(
         const CMUTIL_NIOSelector *selector)
 {
     CMUTIL_NIOSelector_Internal *is = (CMUTIL_NIOSelector_Internal*)selector;
-
+    return CMTrue;
 }
