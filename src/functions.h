@@ -63,7 +63,7 @@ void CMUTIL_NetworkClear(void);
 void CMUTIL_StringBaseInit(void);
 void CMUTIL_StringBaseClear(void);
 void CMUTIL_MemDebugInit(CMMemOper memoper);
-void CMUTIL_MemDebugClear(void);
+CMBool CMUTIL_MemDebugClear(void);
 
 
 CMUTIL_Array *CMUTIL_ArrayCreateInternal(CMUTIL_Mem *mem,
@@ -87,7 +87,8 @@ CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
         const char *name);
 CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreateInternal(
         CMUTIL_Mem *memst,
-        int pool_size);
+        int pool_size,
+        const char *name);
 CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
         CMUTIL_Mem *memst,
         int initcnt);
