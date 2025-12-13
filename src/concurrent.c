@@ -511,8 +511,8 @@ CMUTIL_STATIC int CMUTIL_ThreadComparator(const void *a, const void *b)
     const CMUTIL_Thread_Internal *ia = (const CMUTIL_Thread_Internal*)a;
     const CMUTIL_Thread_Internal *ib = (const CMUTIL_Thread_Internal*)b;
     if (ia->sysid > ib->sysid) return 1;
-    else if (ia->sysid < ib->sysid) return -1;
-    else return 0;
+    if (ia->sysid < ib->sysid) return -1;
+    return 0;
 }
 
 void CMUTIL_ThreadInit()
@@ -548,6 +548,12 @@ CMUTIL_STATIC void *CMUTIL_ThreadProc(void *param)
 #endif
 {
     CMUTIL_Thread_Internal *iparam = (CMUTIL_Thread_Internal*)param;
+    // we must create a name for unnamed thread to identify it in the thread list
+    if (iparam->name == NULL) {
+        char namebuf[64];
+        sprintf(namebuf, "Thread-%u", iparam->id);
+        iparam->name = iparam->memst->Strdup(namebuf);
+    }
 
     iparam->isrunning = CMTrue;
     iparam->retval = iparam->proc(iparam->udata);
@@ -663,7 +669,9 @@ CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
     ithread->proc = proc;
     ithread->udata = udata;
     ithread->memst = memst;
-    ithread->name = memst->Strdup(name);
+    if (name) {
+        ithread->name = memst->Strdup(name);
+    }
 
     CMCall(g_cmutil_thread_context->mutex, Lock);
     if (g_cmutil_thread_context->threadIndex == UINT32_MAX)
@@ -767,6 +775,7 @@ typedef struct CMUTIL_ThreadPool_Internal {
     CMUTIL_Semaphore        *feed_sem;
     CMBool                  is_running;
     CMUTIL_Cond             *idle_cond;
+    char                    *name;
 } CMUTIL_ThreadPool_Internal;
 
 typedef struct CMUTIL_ThreadPoolJob {
@@ -833,7 +842,7 @@ CMUTIL_STATIC void CMUTIL_ThreadPoolExecute(
             CMUTIL_Thread *new_thread = NULL;
             pool->pool_size++;
             pool->idle_count++;
-            sprintf(namebuf, "p%d-t%d", pool->pool_id, pool->pool_size);
+            sprintf(namebuf, "%s-%d", pool->name, pool->pool_size);
             new_thread = CMUTIL_ThreadCreateInternal(
                 pool->memst, CMUTIL_ThreadPoolProc, pool, namebuf);
             CMCall(pool->threads, AddTail, new_thread);
@@ -870,6 +879,7 @@ CMUTIL_STATIC void CMUTIL_ThreadPoolDestroy(CMUTIL_ThreadPool *tp) {
     CMCall(pool->feed_sem, Destroy);
     CMCall(pool->idle_cond, Destroy);
 
+    pool->memst->Free(pool->name);
     pool->memst->Free(pool);
 }
 
@@ -879,7 +889,9 @@ static CMUTIL_ThreadPool g_cmutil_threadpool = {
     CMUTIL_ThreadPoolDestroy
 };
 
-CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreateInternal(CMUTIL_Mem *memst, int pool_size) {
+CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreateInternal(
+    CMUTIL_Mem *memst, int pool_size, const char *name)
+{
     CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)
             memst->Alloc(sizeof(CMUTIL_ThreadPool_Internal));
     memset(pool, 0, sizeof(CMUTIL_ThreadPool_Internal));
@@ -895,11 +907,18 @@ CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreateInternal(CMUTIL_Mem *memst, int pool_s
     pool->pool_size = pool_size <= 0 ? 1 : pool_size;
     pool->idle_count = pool->pool_size;
     pool->is_running = true;
+    if (name) {
+        pool->name = memst->Strdup(name);
+    } else {
+        char namebuf[64];
+        sprintf(namebuf, "Pool-%d", g_cmutil_thread_pool_id);
+        pool->name = memst->Strdup(namebuf);
+    }
 
     for (int i = 0; i < pool->pool_size; i++) {
         char namebuf[256];
         CMUTIL_Thread *new_thread = NULL;
-        sprintf(namebuf, "p%d-t%d", pool->pool_id, i+1);
+        sprintf(namebuf, "%s-%d", pool->name, i+1);
         new_thread = CMUTIL_ThreadCreateInternal(
             memst, CMUTIL_ThreadPoolProc, pool, namebuf);
         CMCall(pool->threads, AddTail, new_thread);
@@ -909,8 +928,9 @@ CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreateInternal(CMUTIL_Mem *memst, int pool_s
     return (CMUTIL_ThreadPool*) pool;
 }
 
-CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(int pool_size) {
-    return CMUTIL_ThreadPoolCreateInternal(CMUTIL_GetMem(), pool_size);
+CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(int pool_size, const char *name) {
+    return CMUTIL_ThreadPoolCreateInternal(
+        CMUTIL_GetMem(), pool_size, name);
 }
 
 
