@@ -26,7 +26,6 @@ SET ( LIB_SRCS
     src/concurrent.c
     src/config.c
     src/datagram.c
-    src/http.c
     src/lists.c
     src/logger.c
     src/maps.c
