@@ -61,8 +61,9 @@ void CMUTIL_Init(CMMemOper memoper)
     g_cmutil_init_cnt++;
 }
 
-void CMUTIL_Clear()
+CMBool CMUTIL_Clear()
 {
+    CMBool res = CMTrue;
     if (g_cmutil_init_cnt > 0) {
         g_cmutil_init_cnt--;
         if (g_cmutil_init_cnt == 0) {
@@ -71,10 +72,11 @@ void CMUTIL_Clear()
             CMUTIL_XmlClear();
             CMUTIL_StringBaseClear();
             CMUTIL_ThreadClear();
-            CMUTIL_MemDebugClear();
+            res = CMUTIL_MemDebugClear();
             CMUTIL_CallStackClear();
         }
     }
+    return res;
 }
 
 void CMUTIL_UnusedP(void *p,...)
