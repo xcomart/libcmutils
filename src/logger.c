@@ -230,7 +230,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendLoggerName(
 {
     CMUTIL_Logger_Internal *ilog = (CMUTIL_Logger_Internal*)params->logger;
     CMUTIL_String *buf = CMUTIL_StringCreateInternal(ilog->memst, 10, NULL);
-    CMUTIL_String *curr = NULL;
+    const CMUTIL_String *curr = NULL;
     uint32_t i, tsize = (uint32_t)CMCall(ilog->namepath, GetSize);
     switch (params->item->precisioncnt) {
     case 0:
@@ -332,10 +332,10 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendLineNumber(
 CMUTIL_STATIC void CMUTIL_LogPatternAppendLogLevel(
     CMUTIL_LogPatternAppendFuncParam *params)
 {
-    CMUTIL_String *val = CMCall(g_cmutil_log_levels, GetAt, params->level);
+    const CMUTIL_String *val = CMCall(g_cmutil_log_levels, GetAt, params->level);
     if (params->item->hasext) {
         CMUTIL_Map *lvlmap = (CMUTIL_Map*)params->item->anything;
-        CMUTIL_String *key = val;
+        const CMUTIL_String *key = val;
         const char *skey = CMCall(key, GetCString);
         val = CMCall(lvlmap, Get, skey);
         if (val == NULL) val = key;
@@ -363,7 +363,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendStack(
         size_t maxlen = params->item->hasext ?
             params->item->precisioncnt : CMCall(params->stack, GetSize);
         for (i = 0; i < maxlen; i++) {
-            CMUTIL_String *item = CMCall(params->stack, GetAt, i);
+            const CMUTIL_String *item = CMCall(params->stack, GetAt, i);
             CMCall(params->dest, AddString, S_CRLF);
             CMCall(params->dest, AddAnother, item);
         }
@@ -642,9 +642,8 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
                     item->memst, CMCall(str, GetCString), "=");
         if (CMCall(arr, GetSize) == 2) {
             const CMUTIL_String *key = CMCall(arr, GetAt, 0);
-            CMUTIL_String *val = CMCall(arr, GetAt, 1);
             const char *ks = CMCall(key, GetCString);
-            const char *vs = CMCall(val, GetCString);
+            const char *vs = CMCall(arr, GetCString, 1);
             if (strcmp(ks, "length") == 0) {
                 int slen = atoi(vs);
                 if (slen > 0) {
@@ -677,7 +676,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
                 CMCall(iter, Destroy);
             }
             else {
-                CMCall(arr, RemoveAt, 1);
+                CMUTIL_String *val = CMCall(arr, RemoveAt, 1);
                 CMUTIL_String *prev =
                         (CMUTIL_String*)CMCall(map, Put, ks, val);
                 if (prev)
@@ -735,7 +734,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
             while (strchr("0123456789", *q))
                 *br++ = *q++;
             *br = 0x0;
-            length = (uint32_t)atoi(buf);
+            length = strtol(buf, NULL, 10);
             zero = *buf == '0'? CMTrue : CMFalse;
         }
         // check the pattern item
@@ -1773,16 +1772,18 @@ CMUTIL_STATIC void CMUTIL_LogConfigClean(CMUTIL_Json *json)
         CMUTIL_JsonObject *jobj = (CMUTIL_JsonObject*)json;
         CMUTIL_StringArray *keys = CMCall(jobj, GetKeys);
         for (i=0; i<CMCall(keys, GetSize); i++) {
-            CMUTIL_String *str = CMCall(keys, GetAt, i);
+            const CMUTIL_String *str = CMCall(keys, GetAt, i);
             const char *key = CMCall(str, GetCString);
             CMUTIL_Json *item = CMCall(jobj, Remove, key);
-            // change internal buffer to lowercase
-            CMCall(str, SelfToLower);
+            // change key to lowercase
+            CMUTIL_String *nstr = CMCall(str, ToLower);
             // change item recursively.
             CMUTIL_LogConfigClean(item);
             // 'key' is changed to lowercase already.
             // so just put with it.
+            key = CMCall(nstr, GetCString);
             CMCall(jobj, Put, key, item);
+            CMCall(nstr, Destroy);
         }
         CMCall(keys, Destroy);
         break;
