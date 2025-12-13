@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "libcmutils.h"
+#include "test.h"
 
 CMUTIL_LogDefine("test.concurrent")
 
@@ -20,8 +21,8 @@ void *thread_func(void *param) {
         CMUTIL_ThreadSelfId(),
         CMUTIL_ThreadSystemSelfId(),
         CMCall(t, GetName));
-    // wait 1 second
-    usleep(1000 * 1000);
+    // wait 100 milliseconds
+    usleep(100000);
     CMCall(tp->mutex, Lock);
     tp->value++;
     CMCall(tp->mutex, Unlock);
@@ -37,61 +38,42 @@ int main() {
     CMUTIL_Init(CMMemRecycle);
 
     CMUTIL_ThreadPool *tpool = NULL;
-    CMUTIL_Mutex *mtx = CMUTIL_MutexCreate();
-    CMLogInfo("mutex creation - passed");
-    ThreadParam tp = {0, mtx};
-    CMUTIL_Thread *t = CMUTIL_ThreadCreate(&thread_func, &tp, "test1");
-    CMLogInfo("thread creation - passed");
-    CMCall(t, Start);
-    if (tp.value != 0) {
-        CMLogError("thread test - failed");
-        goto END_POINT;
-    }
-    CMCall(t, Join); t = NULL;
-    if (tp.value != 1) {
-        CMLogError("thread test - failed");
-        goto END_POINT;
-    }
-    CMLogInfo("thread test - passed");
+    CMUTIL_Mutex *mtx = NULL;
+    ThreadParam tp;
+    CMUTIL_Thread *t = NULL;
 
-    tpool = CMUTIL_ThreadPoolCreate(-1);
+    mtx = CMUTIL_MutexCreate();
+    ASSERT(mtx != NULL, "CMUTIL_MutexCreate");
+
+    tp.value = 0;
+    tp.mutex = mtx;
+
+    t = CMUTIL_ThreadCreate(&thread_func, &tp, NULL);
+    ASSERT(t != NULL, "CMUTIL_ThreadCreate");
+    CMCall(t, Start);
+    ASSERT(tp.value == 0, "thread started");
+
+    CMCall(t, Join); t = NULL;
+    ASSERT(tp.value == 1, "thread joined");
+
+    tpool = CMUTIL_ThreadPoolCreate(-1, NULL);
+    ASSERT(tpool != NULL, "CMUTIL_ThreadPoolCreate with dynamic size");
     for (int i=0; i<10; i++)
         CMCall(tpool, Execute, thread_func2, &tp);
+    ASSERT(tp.value == 1, "after 10 asynchronous calls");
 
     CMCall(tpool, Wait);
-    if (tp.value != 11) {
-        CMLogError("thread test - failed");
-        goto END_POINT;
-    }
-
-    CMLogInfo("threadpool test end - passed");
-
-    CMUTIL_List *threads = CMUTIL_ListCreate();
-    for (int i=0; i<10; i++) {
-        char namebuf[256];
-        sprintf(namebuf, "thread %d", i+1);
-        t = CMUTIL_ThreadCreate(&thread_func, &tp, namebuf);
-        CMCall(threads, AddTail, t);
-        CMCall(t, Start); t = NULL;
-    }
-
-    while (CMCall(threads, GetSize) > 0) {
-        t = CMCall(threads, RemoveFront);
-        CMCall(t, Join); t = NULL;
-    }
-    CMCall(threads, Destroy);
-    if (tp.value != 21) {
-        CMLogError("multi-thread test - failed");
-        goto END_POINT;
-    }
-
-    CMLogInfo("multi-thread test end - passed");
+    ASSERT(tp.value == 11, "Threadpool Wait");
+    CMLogInfo("ThreadPool operations contains CMUTIL_Thread, "
+              "CMUTIL_Mutex, CMUTIL_Cond and CMUTIL_Semaphore tests. "
+              "So if this log shown without any error, "
+              "all concurrent objects are working properly.");
 
     ir = 0;
 END_POINT:
     if (tpool) CMCall(tpool, Destroy);
     if (mtx) CMCall(mtx, Destroy);
     if (t) CMCall(t, Join);
-    CMUTIL_Clear();
+    if (!CMUTIL_Clear()) ir = -1;
     return ir;
 }

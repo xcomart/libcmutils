@@ -8,13 +8,14 @@
 #include <netinet/in.h>
 
 #include "libcmutils.h"
+#include "test.h"
 
 CMUTIL_LogDefine("test.dgram")
 
 static CMBool is_running = CMTrue;
 
 void *dgram_server(void *udata) {
-    int ir = 1;
+    void *res = udata;
     CMUTIL_DGramSocket *dsock = (CMUTIL_DGramSocket *)udata;
     CMUTIL_ByteBuffer *buffer = CMUTIL_ByteBufferCreateEx(2048);
     while (is_running) {
@@ -33,7 +34,7 @@ void *dgram_server(void *udata) {
                     sr = CMCall(dsock, SendTo, buffer, &remote_addr, 1000);
                     if (sr != CMSocketOk) {
                         CMLogError("datagram socket send failed - failed");
-                        ir = 0;
+                        res = NULL;
                         is_running = CMFalse;
                     }
                 }
@@ -46,7 +47,7 @@ void *dgram_server(void *udata) {
 
     CMCall(buffer, Destroy);
 
-    return (void*)ir;
+    return res;
 }
 
 int main() {
@@ -58,31 +59,19 @@ int main() {
     CMUTIL_ByteBuffer *buffer = CMUTIL_ByteBufferCreateEx(2048);
     CMUTIL_DGramSocket *dsock = CMUTIL_DGramSocketCreate();
     CMSocketResult sr = CMSocketOk;
-    if (dsock == NULL) {
-        CMLogError("datagram socket creation failed - failed");
-        goto END_POINT;
-    }
-    CMLogInfo("datagram socket created - passed");
+
+    ASSERT(dsock != NULL, "CMUTIL_DGramSocketCreate");
 
     CMUTIL_SocketAddr localaddr;
     sr = CMUTIL_SocketAddrSet(&localaddr, "0.0.0.0", 9898);
-    if (sr != CMSocketOk) {
-        CMLogError("CMUTIL_SocketAddrSet failed - failed");
-        goto END_POINT;
-    }
+    ASSERT(sr == CMSocketOk, "CMUTIL_SocketAddrSet");
     sr = CMCall(dsock, Bind, &localaddr);
-    if (sr != CMSocketOk) {
-        CMLogError("datagram socket binding failed - failed");
-        goto END_POINT;
-    }
+    ASSERT(sr == CMSocketOk, "Bind");
+
     char *host = "127.0.0.1";
     int port;
     sr = CMUTIL_SocketAddrGet(&localaddr, NULL, &port);
-    if (sr != CMSocketOk) {
-        CMLogError("datagram socket get address failed - failed");
-        goto END_POINT;
-    }
-    CMLogInfo("binded address %s:%d - passed", host, port);
+    ASSERT(sr == CMSocketOk, "CMUTIL_SocketAddrGet");
 
     server = CMUTIL_ThreadCreate(dgram_server, dsock, "dssvr");
     CMCall(server, Start);
@@ -92,17 +81,12 @@ int main() {
     CMUTIL_SocketAddrSet(&localaddr, host, port);
 
     sr = CMCall(client, Connect, &localaddr);
-    if (sr != CMSocketOk) {
-        CMLogError("datagram socket connect failed - failed");
-        goto END_POINT;
-    }
-    CMLogInfo("datagram socket connect - passed");
+    ASSERT(sr == CMSocketOk, "Connect");
+
     CMUTIL_SocketAddr raddr;
     sr = CMCall(client, GetRemoteAddr, &raddr);
-    if (sr != CMSocketOk) {
-        CMLogError("datagram GetRemoteAddr failed - failed");
-        goto END_POINT;
-    }
+    ASSERT(sr == CMSocketOk, "GetRemoteAddr");
+
     char rhost[1024];
     int rport;
     CMUTIL_SocketAddrGet(&raddr, rhost, &rport);
@@ -111,40 +95,36 @@ int main() {
     const char *send_data = "this is sample message";
     CMCall(buffer, AddBytes, (const uint8_t*)send_data, strlen(send_data));
     sr = CMCall(client, Send, buffer, 1000);
-    if (sr != CMSocketOk) {
-        CMLogError("datagram socket send failed - failed");
-        goto END_POINT;
-    }
-    CMLogInfo("datagram socket send - passed");
+    ASSERT(sr == CMSocketOk, "Send");
 
     sr = CMCall(client, Recv, buffer, 1000);
-    if (sr != CMSocketOk) {
-        CMLogError("datagram socket receive failed - failed");
-        goto END_POINT;
-    }
-    CMLogInfo("datagram socket recv - passed");
+    ASSERT(sr == CMSocketOk, "Recv");
+
     CMCall(buffer, GetBytes)[CMCall(buffer, GetSize)] = 0;
     CMLogInfo("received data: [%s]", CMCall(buffer, GetBytes));
-
+    ASSERT(strcmp((char*)CMCall(buffer, GetBytes), "resp-this is sample message") == 0,
+        "Recv received data validation");
+    CMCall(buffer, Clear);
     CMCall(client, Close); client = NULL;
 
     client = CMUTIL_DGramSocketCreateBind(NULL);
     send_data = "second data";
-    CMCall(buffer, Clear);
     CMCall(buffer, AddBytes, (const uint8_t*)send_data, strlen(send_data));
     sr = CMCall(client, SendTo, buffer, &localaddr, 1000);
-    if (sr != CMSocketOk) {
-        CMLogError("datagram socket sendto failed - failed");
-        goto END_POINT;
-    }
+    ASSERT(sr == CMSocketOk, "SendTo");
+
     CMUTIL_SocketAddr secaddr;
     sr = CMCall(client, RecvFrom, buffer, &secaddr, 1000);
-    if (sr != CMSocketOk) {
-        CMLogError("datagram socket recvfrom failed - failed");
-        goto END_POINT;
-    }
+    ASSERT(sr == CMSocketOk, "RecvFrom");
+
+    CMUTIL_SocketAddrGet(&secaddr, rhost, &rport);
+    ASSERT(strcmp(rhost, "127.0.0.1") == 0 && rport == 9898,
+        "RecvFrom address validation");
+
     CMCall(buffer, GetBytes)[CMCall(buffer, GetSize)] = 0;
     CMLogInfo("received data: [%s]", CMCall(buffer, GetBytes));
+    ASSERT(strcmp((char*)CMCall(buffer, GetBytes), "resp-second data") == 0,
+        "RecvFrom received data validation");
 
     CMCall(buffer, Clear);
     send_data = "!@#$$#@!";
@@ -154,8 +134,8 @@ int main() {
         CMLogError("datagram socket send failed - failed");
         goto END_POINT;
     }
-    void *res = CMCall(server, Join); server = NULL;
-    if (((int)res) == 0) {
+    const void *res = CMCall(server, Join); server = NULL;
+    if (res == NULL) {
         CMLogError("server returned error");
         goto END_POINT;
     }
@@ -167,6 +147,6 @@ END_POINT:
     if (client) CMCall(client, Close);
     if (dsock) CMCall(dsock, Close);
     if (buffer) CMCall(buffer, Destroy);
-    CMUTIL_Clear();
+    if (!CMUTIL_Clear()) ir = -1;
     return ir;
 }

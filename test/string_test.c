@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "libcmutils.h"
+#include "test.h"
 
 CMUTIL_LogDefine("test.string")
 
@@ -14,15 +15,6 @@ void add_vprint(CMUTIL_String *str, const char *fmt, ...) {
     CMCall(str, AddVPrint, fmt, ap);
     va_end(ap);
 }
-
-#define ASSERT(assert, msg) do {        \
-    if (assert) {                       \
-        CMLogInfo("%s - passed", msg);  \
-    } else {                            \
-        CMLogError("%s - failed", msg); \
-        goto END_POINT;                 \
-    }                                   \
-} while(0)
 
 int main() {
     int ir = -1;
@@ -112,6 +104,6 @@ int main() {
 END_POINT:
     if (str) CMCall(str, Destroy);
     if (another) CMCall(another, Destroy);
-    CMUTIL_Clear();
+    if (!CMUTIL_Clear()) ir = -1;
     return ir;
 }

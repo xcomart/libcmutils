@@ -5,15 +5,12 @@
 #include <string.h>
 
 #include "libcmutils.h"
+#include "test.h"
 
 CMUTIL_LogDefine("test.array")
 
 void destructor(void *data) {
     CMFree(data);
-}
-
-int str_comparator(const void *a, const void *b) {
-    return strcmp(a, b);
 }
 
 int main()
@@ -23,71 +20,102 @@ int main()
 
     int a[] = {1, 2, 3};
 
+    char *str = NULL;
     CMUTIL_Iterator *iter = NULL;
     CMUTIL_Array *arr = CMUTIL_ArrayCreateEx(
         4, NULL, NULL);
-    CMLogInfo("array creation with initial capacity - passed");
+    ASSERT(arr != NULL, "CMUTIL_ArrayCreateEx with capacity");
+    ASSERT(CMCall(arr, GetSize) == 0, "GetSize");
 
     CMCall(arr, Add, &a[2]);
-    CMLogInfo("array add element - passed");
-    CMCall(arr, Add, &a[1]);
-    CMCall(arr, Add, &a[0]);
+    ASSERT((CMCall(arr, GetSize) == 1 && *(int*)CMCall(arr, GetAt, 0) == 3), "Add");
 
-    if (CMCall(arr, GetSize) != 3) {
-        CMLogError("size mismatch after adding elements");
-        goto END_POINT;
-    }
-    CMLogInfo("array size validation - passed");
+    CMCall(arr, Add, &a[0]);
+    CMCall(arr, Add, &a[0]);
+    CMCall(arr, Add, &a[0]);
+    CMCall(arr, Add, &a[0]);
+    ASSERT(CMCall(arr, GetSize) == 5, "array extension");
+
+    ASSERT(CMCall(arr, Remove, &a[2]) == &a[2] && CMCall(arr, GetSize) == 4, "Remove in unsorted array");
+
+    ASSERT(CMCall(arr, RemoveAt, 1) == &a[0] && CMCall(arr, GetSize) == 3, "RemoveAt");
+
+    CMCall(arr, InsertAt, &a[1], 1);
+    ASSERT(*(int*)CMCall(arr, GetAt, 1) == 2 && CMCall(arr, GetSize) == 4, "InsertAt");
+
+    ASSERT(CMCall(arr, SetAt, &a[2], 1) == &a[1] && *(int*)CMCall(arr, GetAt, 1) == 3 && CMCall(arr, GetSize) == 4, "SetAt & GetAt");
+
+    uint32_t idx = 0;
+    ASSERT(CMCall(arr, Find, &a[2], &idx) == &a[2] && idx == 1, "Find in unsorted array");
+
+    ASSERT(CMCall(arr, Push, &a[1]) && CMCall(arr, GetSize) == 5, "Push");
+    ASSERT(*(int*)CMCall(arr, Top) == 2, "Top");
+    ASSERT(*(int*)CMCall(arr, Bottom) == 1, "Bottom");
+    ASSERT(*(int*)CMCall(arr, Pop) == 2 && CMCall(arr, GetSize) == 4, "Pop");
+
+    CMCall(arr, Clear);
+    ASSERT(CMCall(arr, GetSize) == 0, "Clear");
 
     CMCall(arr, Destroy); arr = NULL;
 
 
-    arr = CMUTIL_ArrayCreateEx(5, str_comparator, destructor);
-    CMLogInfo("sorted array creation with initial capacity - passed");
+    arr = CMUTIL_ArrayCreateEx(5, (int(*)(const void*,const void*))strcmp, destructor);
+    ASSERT(arr != NULL, "CMUTIL_ArrayCreateEx with comparator and destructor");
+    ASSERT(CMCall(arr, GetSize) == 0, "GetSize");
 
     CMCall(arr, Add, CMStrdup("banana"));
     CMCall(arr, Add, CMStrdup("cherry"));
     CMCall(arr, Add, CMStrdup("apple"));
 
-    if (strcmp(CMCall(arr, GetAt, 0), "apple") != 0) {
-        CMLogError("first element of sorted array must be 'apple' but '%s' - failed",
-            CMCall(arr, GetAt, 0));
-        CMCall(arr, Destroy);
-        goto END_POINT;
-    }
-    CMLogInfo("sorting test - passed");
+    ASSERT(CMCall(arr, GetSize) == 3, "GetSize after adding 3 string elements");
+    ASSERT(strcmp(CMCall(arr, GetAt, 0), "apple") == 0, "Check sorted order at index 0");
 
-    if (CMCall(arr, GetSize) != 3) {
-        CMLogError("size mismatch after adding string elements - failed");
-        goto END_POINT;
-    }
+    str = (char*)CMCall(arr, Remove, "banana");
+    ASSERT(strcmp(str, "banana") == 0 && CMCall(arr, GetSize) == 2, "Remove string element");
+    CMFree(str); str = NULL;
+
+    str = CMStrdup("banana");
+    ASSERT(CMCall(arr, Push, str) == CMFalse && CMCall(arr, GetSize) == 2, "Push to sorted array should fail");
+    CMCall(arr, Add, str); str = NULL;
+    ASSERT(strcmp(CMCall(arr, Top), "cherry") == 0, "Top in sorted array");
+    ASSERT(strcmp(CMCall(arr, Bottom), "apple") == 0, "Bottom in sorted array");
+    str = CMCall(arr, Pop);
+    ASSERT(strcmp(str, "cherry") == 0 && CMCall(arr, GetSize) == 2, "Pop in sorted array");
+    CMCall(arr, Add, str); str = NULL;
+
 
     iter = CMCall(arr, Iterator);
+    ASSERT(iter != NULL, "Iterator");
+    int count = 0;
     while (CMCall(iter, HasNext)) {
         char *s = (char*)CMCall(iter, Next);
-        CMLogInfo(" - %s", s);
+        CMLogInfo("%d - %s", count, s);
+        count++;
     }
     CMCall(iter, Destroy); iter = NULL;
-    CMLogInfo("array iterator test - passed");
+    ASSERT(count == CMCall(arr, GetSize), "Iterator count matches array size");
 
+    str = (char*)CMCall(arr, Remove, "cherry");
+    ASSERT(strcmp(str, "cherry") == 0 && CMCall(arr, GetSize) == 2, "Remove in sorted array");
+    CMCall(arr, Add, str); str = NULL;
 
-    CMFree(CMCall(arr, RemoveAt, 0));
-    if (CMCall(arr, GetSize) != 2) {
-        CMLogError("size mismatch after adding string elements");
-        goto END_POINT;
-    }
+    str = CMCall(arr, RemoveAt, 1);
+    ASSERT(strcmp(str, "banana") == 0 && CMCall(arr, GetSize) == 2, "RemoveAt in sorted array");
+    CMCall(arr, Add, str); str = NULL;
 
-    iter = CMCall(arr, Iterator);
-    CMLogInfo("array elements in order:");
-    while (CMCall(iter, HasNext)) {
-        char *s = (char*)CMCall(iter, Next);
-        CMLogInfo(" - %s", s);
-    }
+    idx = 0;
+    ASSERT(strcmp(CMCall(arr, Find, "banana", &idx), "banana") == 0 && idx == 1, "Find in sorted array");
+
+    str = CMStrdup("damson");
+    ASSERT(CMCall(arr, SetAt, str, 1) == NULL, "SetAt to sorted array should fail");
+    ASSERT(strcmp(CMCall(arr, GetAt, 1), "banana") == 0, "GetAt in sorted array");
+    ASSERT(CMCall(arr, GetSize) == 3, "GetSize after SetAt/GetAt in sorted array");
 
     ir = 0;
 END_POINT:
+    if (str) CMFree(str);
     if (iter) CMCall(iter, Destroy);
     if (arr) CMCall(arr, Destroy);
-    CMUTIL_Clear();
+    if (!CMUTIL_Clear()) ir = -1;
     return ir;
 }
