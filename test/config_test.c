@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "libcmutils.h"
+#include "test.h"
 
 CMUTIL_LogDefine("test.config")
 
@@ -14,33 +15,45 @@ int main(void) {
     CMUTIL_Init(CMMemRecycle);
 
     CMUTIL_Config *conf = CMUTIL_ConfigCreate();
-    CMCall(conf, Set, "config.item.1", "item.value.1");
-    CMCall(conf, Set, "config.item.2", "item.value.2");
-    CMCall(conf, Set, "config.item.3", "item.value.3");
-    CMCall(conf, Set, "config.item.4", "item.value.4");
-    CMCall(conf, Set, "config.item.5", "item.value.5");
-    CMCall(conf, Save, "test_config.conf");
+    CMUTIL_File *file = NULL;
+    ASSERT(conf != NULL, "CMUTIL_ConfigCreate");
 
+    CMCall(conf, Set, "config.item.1", "1");
+    ASSERT(strcmp(CMCall(conf, Get, "config.item.1"), "1") == 0,
+        "CMUTIL_Config Set/Get string");
+    CMCall(conf, SetLong, "config.item.2", 2L);
+    ASSERT(CMCall(conf, GetLong, "config.item.2") == 2,
+        "CMUTIL_Config Set/Get long");
+    CMCall(conf, SetBoolean, "config.item.3", CMTrue);
+    ASSERT(CMCall(conf, GetBoolean, "config.item.3") == CMTrue,
+        "CMUTIL_Config Set/Get boolean");
+    CMCall(conf, SetDouble, "config.item.4", 1.234);
+    ASSERT(CMCall(conf, GetDouble, "config.item.4") - 1.234 < 0.00001,
+        "CMUTIL_Config Set/Get double");
+    CMCall(conf, Save, "test_config.conf");
+    file = CMUTIL_FileCreate("test_config.conf");
+    ASSERT(CMCall(file, IsExists), "config file saved");
+    CMUTIL_String *content = CMCall(file, GetContents);
+    CMLogInfo("config file contents:\n%s", CMCall(content, GetCString));
+    CMCall(file, Destroy); file = NULL;
+    CMCall(content, Destroy); content = NULL;
     CMCall(conf, Destroy); conf = NULL;
 
     conf = CMUTIL_ConfigLoad("test_config.conf");
-    for (int i=0; i<5; i++) {
-        char keybuf[128], valbuf[128];
-        sprintf(keybuf, "config.item.%d", i+1);
-        sprintf(valbuf, "item.value.%d", i+1);
-        const char *confval = CMCall(conf, Get, keybuf);
-        CMLogInfo("config item %s = %s", keybuf, confval);
-        if (strcmp(confval, valbuf) != 0) {
-            CMLogError("config value of %s does not match '%' != '%'",
-                keybuf, valbuf, confval);
-            goto END_POINT;
-        }
-    }
-    CMLogInfo("config test - passed");
+    ASSERT(conf != NULL, "CMUTIL_ConfigLoad");
+    ASSERT(strcmp(CMCall(conf, Get, "config.item.1"), "1") == 0,
+        "CMUTIL_ConfigLoad string value");
+    ASSERT(CMCall(conf, GetLong, "config.item.2") == 2,
+        "CMUTIL_ConfigLoad long value");
+    ASSERT(CMCall(conf, GetBoolean, "config.item.3") == CMTrue,
+        "CMUTIL_ConfigLoad boolean value");
+    ASSERT(CMCall(conf, GetDouble, "config.item.4") - 1.234 < 0.00001,
+        "CMUTIL_ConfigLoad double value");
 
     ir = 0;
 END_POINT:
+    if (file) CMCall(file, Destroy);
     if (conf) CMCall(conf, Destroy);
-    CMUTIL_Clear();
+    if (!CMUTIL_Clear()) ir = -1;
     return ir;
 }
