@@ -411,8 +411,9 @@ void CMUTIL_MemDebugInit(CMMemOper memoper)
     }
 }
 
-void CMUTIL_MemDebugClear()
+CMBool CMUTIL_MemDebugClear()
 {
+    CMBool res = CMTrue;
     if (g_cmutil_memoper != CMMemSystem) {
         uint32_t i;
         for (i=0; i<MEM_BLOCK_SZ; i++) {
@@ -432,6 +433,7 @@ void CMUTIL_MemDebugClear()
                                       CMCall(node->stack, GetCString));
                     }
                 }
+                res = CMFalse;
             }
             CMCall(list->used, Destroy);
             while (list->head) {
@@ -452,6 +454,7 @@ void CMUTIL_MemDebugClear()
         __CMUTIL_Mem = &g_cmutil_memdebug_system;
         g_cmutil_memoper = CMMemSystem;
     }
+    return res;
 }
 
 CMUTIL_Mem *CMUTIL_GetMem()
