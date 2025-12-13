@@ -286,10 +286,10 @@ CMUTIL_STATIC size_t CMUTIL_StringAddVPrint(
 }
 
 CMUTIL_STATIC size_t CMUTIL_StringAddAnother(
-        CMUTIL_String *string, CMUTIL_String *tobeadded)
+        CMUTIL_String *string, const CMUTIL_String *tobeadded)
 {
     const char *str = CMCall(tobeadded, GetCString);
-    size_t len = CMCall(tobeadded, GetSize);
+    const size_t len = CMCall(tobeadded, GetSize);
     return CMCall(string, AddNString, str, len);
 }
 
@@ -548,7 +548,7 @@ CMUTIL_String *CMUTIL_StringCreateInternal(
 {
     CMUTIL_String_Internal *istr = memst->Alloc(sizeof(CMUTIL_String_Internal));
     size_t capacity = initcapacity;
-    const size_t len = initcontent ? strlen((char*)initcontent) : 0;
+    const size_t len = initcontent ? strlen(initcontent) : 0;
     memset(istr, 0x0, sizeof(CMUTIL_String_Internal));
     memcpy(istr, &g_cmutil_string, sizeof(CMUTIL_String));
 
@@ -566,7 +566,8 @@ CMUTIL_String *CMUTIL_StringCreateInternal(
     *(istr->data) = 0x0;
     istr->memst = memst;
 
-    CMCall((CMUTIL_String*)istr, AddNString, initcontent, len);
+    if (initcontent)
+        CMCall((CMUTIL_String*)istr, AddNString, initcontent, len);
     return (CMUTIL_String*)istr;
 }
 
@@ -601,7 +602,7 @@ CMUTIL_STATIC void CMUTIL_StringArrayAdd(
 CMUTIL_STATIC void CMUTIL_StringArrayAddCString(
         CMUTIL_StringArray *array, const char *string)
 {
-    CMUTIL_String *data = CMUTIL_StringCreateEx(64, string);
+    CMUTIL_String *data = CMUTIL_StringCreateEx(0, string);
     CMCall(array, Add, data);
 }
 
