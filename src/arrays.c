@@ -106,16 +106,15 @@ CMUTIL_STATIC void* CMUTIL_ArrayInsertAtPrivate(
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
 
     CMUTIL_ArrayCheckSize(iarray, 1);
-    if (index < iarray->size)
+    if (index < iarray->size) {
         memmove(iarray->data+index+1, iarray->data+index,
                 (uint32_t)(iarray->size - index) * sizeof(void*));
-    else if (index == iarray->size)
-        iarray->data[index] = item;
-    else {
-        CMLogError("Index out of bound: %d (array size is %d).",
+    } else if (index > iarray->size) {
+        CMLogErrorS("Index out of bound: %d (array size is %d).",
                    index, iarray->size);
         return NULL;
     }
+    iarray->data[index] = item;
     iarray->size++;
 
     return item;
@@ -128,7 +127,7 @@ CMUTIL_STATIC void* CMUTIL_ArrayInsertAt(
 
     if (!iarray->issorted)
         return CMUTIL_ArrayInsertAtPrivate(array, item, index);
-    CMLogError("InsertAt is not applicable to sorted array.");
+    CMLogErrorS("InsertAt is not applicable to sorted array.");
     return NULL;
 }
 
@@ -141,7 +140,7 @@ CMUTIL_STATIC void* CMUTIL_ArraySetAtPrivate(
         res = iarray->data[index];
         iarray->data[index] = item;
     } else {
-        CMLogError("Index out of bound: %d (array size is %d).",
+        CMLogErrorS("Index out of bound: %d (array size is %d).",
                    index, iarray->size);
     }
 
@@ -154,7 +153,7 @@ CMUTIL_STATIC void* CMUTIL_ArraySetAt(
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
     if (!iarray->issorted)
         return CMUTIL_ArraySetAtPrivate(array, item, index);
-    CMLogError("SetAt is not applicable to sorted array.");
+    CMLogErrorS("SetAt is not applicable to sorted array.");
     return NULL;
 }
 
@@ -191,7 +190,7 @@ CMUTIL_STATIC void *CMUTIL_ArrayRemoveAt(
                 (uint32_t)(iarray->size - index - 1) * sizeof(void*));
         iarray->size--;
     } else {
-        CMLogError("Index out of bound: %d (array size is %d).",
+        CMLogErrorS("Index out of bound: %d (array size is %d).",
                    index, iarray->size);
     }
     return res;
@@ -204,7 +203,7 @@ CMUTIL_STATIC void *CMUTIL_ArrayGetAt(const CMUTIL_Array *array, uint32_t index)
     if (index < iarray->size)
         res = iarray->data[index];
     else
-        CMLogError("Index out of range: %d (array size is %d).",
+        CMLogErrorS("Index out of range: %d (array size is %d).",
                    index, iarray->size);
     return res;
 }
@@ -267,7 +266,7 @@ CMUTIL_STATIC CMBool CMUTIL_ArrayPush(CMUTIL_Array *array, void *item)
 {
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
     if (iarray->issorted) {
-        CMLogError("Push method cannot applicable to sorted array.");
+        CMLogErrorS("Push method cannot applicable to sorted array.");
         return CMFalse;
     }
     CMCall(array, Add, item);
