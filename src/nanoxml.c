@@ -247,7 +247,7 @@ CMUTIL_STATIC void CMUTIL_XmlBuildAttribute(
         CMUTIL_StringArray *keys = CMCall(inode->attributes, GetKeys);
         len = CMCall(keys, GetSize);
         for (i=0; i<len; i++) {
-            CMUTIL_String *key = CMCall(keys, GetAt, i);
+            const CMUTIL_String *key = CMCall(keys, GetAt, i);
             const char *skey = CMCall(key, GetCString);
             CMCall(buffer, AddChar, ' ');
             CMCall(buffer, AddAnother, key);
@@ -842,7 +842,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(
     if (attrnames != NULL && CMCall(attrnames, GetSize) > 0) {
         CMUTIL_JsonObject *ores = CMUTIL_JsonObjectCreateInternal(ctx->memst);
         for (i=0; i<CMCall(attrnames, GetSize); i++) {
-            CMUTIL_String *aname = CMCall(attrnames, GetAt, i);
+            const CMUTIL_String *aname = CMCall(attrnames, GetAt, i);
             const char *sname = CMCall(aname, GetCString);
             CMUTIL_String *value = CMCall(node, GetAttribute, sname);
             const char *svalue = CMCall(value, GetCString);

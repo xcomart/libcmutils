@@ -37,16 +37,16 @@ CMUTIL_STATIC void CMUTIL_JsonToStringInternal(
         const CMUTIL_Json *json, CMUTIL_String *buf,
         CMBool pretty, int depth);
 
-typedef void (*CMUTIL_JsonValToStrFunc)(CMUTIL_String *str, CMUTIL_String *buf);
+typedef void (*CMUTIL_JsonValToStrFunc)(const CMUTIL_String *str, CMUTIL_String *buf);
 
 CMUTIL_STATIC void CMUTIL_JsonValueNumberToStr(
-        CMUTIL_String *data, CMUTIL_String *buf)
+        const CMUTIL_String *data, CMUTIL_String *buf)
 {
     CMCall(buf, AddAnother, data);
 }
 
 CMUTIL_STATIC void CMUTIL_JsonValueStringToStr(
-        CMUTIL_String *data, CMUTIL_String *buf)
+        const CMUTIL_String *data, CMUTIL_String *buf)
 {
     const char *p, *sdata = CMCall(data, GetCString);
     p = sdata;
@@ -131,9 +131,9 @@ CMUTIL_STATIC void CMUTIL_JsonObjectToStringInternal(
     CMCall(buf, AddChar, '{');
     if (CMCall(keys, GetSize) > 0) {
         for (i=0; i<CMCall(keys, GetSize); i++) {
-            CMUTIL_String *key = CMCall(keys, GetAt, i);
+            const CMUTIL_String *key = CMCall(keys, GetAt, i);
             const char *skey = CMCall(key, GetCString);
-            CMUTIL_Json *item = CMCall(jobj, Get, skey);
+            const CMUTIL_Json *item = CMCall(jobj, Get, skey);
             if (i) CMCall(buf, AddChar, ',');
             if (pretty) {
                 CMCall(buf, AddChar, '\n');
@@ -211,13 +211,12 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonObjectClone(const CMUTIL_Json *json)
     CMUTIL_JsonObject_Internal *res = (CMUTIL_JsonObject_Internal*)
             CMUTIL_JsonObjectCreateInternal(iobj->memst);
     CMUTIL_StringArray *keys = CMCall(iobj->map, GetKeys);
-    CMUTIL_Json *val, *dup;
     uint32_t i;
     for (i=0; i<CMCall(keys, GetSize); i++) {
-        CMUTIL_String *key = CMCall(keys, GetAt, i);
+        const CMUTIL_String *key = CMCall(keys, GetAt, i);
         const char *skey = CMCall(key, GetCString);
-        val = CMCall(&iobj->base, Get, skey);
-        dup = CMCall(val, Clone);
+        const CMUTIL_Json* val = CMCall(&iobj->base, Get, skey);
+        CMUTIL_Json* dup = CMCall(val, Clone);
         CMCall(&res->base, Put, skey, dup);
     }
     CMCall(keys, Destroy);
@@ -232,7 +231,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonArrayClone(const CMUTIL_Json *json)
             CMUTIL_JsonArrayCreateInternal(iarr->memst);
     uint32_t i;
     for (i=0; i<CMCall(iarr->arr, GetSize); i++) {
-        CMUTIL_Json *item = CMCall(&iarr->base, Get, i);
+        const CMUTIL_Json *item = CMCall(&iarr->base, Get, i);
         CMUTIL_Json *dup = CMCall(item, Clone);
         CMCall(&res->base, Add, dup);
     }
@@ -281,14 +280,14 @@ CMUTIL_STATIC int64_t CMUTIL_JsonValueGetLong(const CMUTIL_JsonValue *jval)
 {
     const CMUTIL_JsonValue_Internal *ijval =
             (const CMUTIL_JsonValue_Internal*)jval;
-    return atoll(CMCall(ijval->data, GetCString));
+    return strtoll(CMCall(ijval->data, GetCString), NULL, 10);
 }
 
 CMUTIL_STATIC double CMUTIL_JsonValueGetDouble(const CMUTIL_JsonValue *jval)
 {
     const CMUTIL_JsonValue_Internal *ijval =
             (const CMUTIL_JsonValue_Internal*)jval;
-    return atof(CMCall(ijval->data, GetCString));
+    return strtod(CMCall(ijval->data, GetCString), NULL);
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_JsonValueGetString(
@@ -956,16 +955,18 @@ CMUTIL_STATIC CMBool CMUTIL_JsonParseConst(
             return CMFalse;
         }
     } else if (strchr(cstr, '.')) {
-        double value = 0.0;
-        if (sscanf(cstr, "%lf", &value) != 1) {
+        char *eptr = NULL;
+        const double value = strtod(cstr, &eptr);;
+        if (value == 0 && cstr == eptr) {
             if (!pctx->silent)
                 CMUTIL_JSON_PARSE_ERROR(pctx, "cannot parse constant.");
             return CMFalse;
         }
         CMCall(jval, SetDouble, value);
     } else {
-        int64_t value = 0;
-        if (sscanf(cstr, PRINT64I, &value) != 1) {
+        char *eptr = NULL;
+        const int64_t value = strtoll(cstr, &eptr, 10);
+        if (value == 0 && cstr == eptr) {
             if (!pctx->silent)
                 CMUTIL_JSON_PARSE_ERROR(pctx, "cannot parse constant.");
             return CMFalse;

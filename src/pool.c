@@ -141,7 +141,7 @@ CMUTIL_STATIC void CMUTIL_PoolPingTester(void *p)
     for (i=0; i<size; i++) {
         /*
          * if "test on borrow" option is on,
-         * test will automatically performed when checkout.
+         * test will automatically be performed when checkout.
          */
         void *rsrc = CMCall(pool, CheckOut, 1);
         if (!ipool->testonb) {

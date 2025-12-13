@@ -286,10 +286,10 @@ CMUTIL_STATIC size_t CMUTIL_StringAddVPrint(
 }
 
 CMUTIL_STATIC size_t CMUTIL_StringAddAnother(
-        CMUTIL_String *string, CMUTIL_String *tobeadded)
+        CMUTIL_String *string, const CMUTIL_String *tobeadded)
 {
     const char *str = CMCall(tobeadded, GetCString);
-    size_t len = CMCall(tobeadded, GetSize);
+    const size_t len = CMCall(tobeadded, GetSize);
     return CMCall(string, AddNString, str, len);
 }
 
@@ -305,7 +305,7 @@ CMUTIL_STATIC size_t CMUTIL_StringInsertNString(CMUTIL_String *string,
 {
     CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
     CMUTIL_StringCheckSize(istr, size);
-    memmove(istr->data+at+size, istr->data+at, istr->size-(size_t)at);
+    memmove(istr->data+at+size, istr->data+at, istr->size-(size_t)at+1);
     memcpy(istr->data+at, tobeadded, size);
     istr->size += size;
     return istr->size;
@@ -547,16 +547,27 @@ CMUTIL_String *CMUTIL_StringCreateInternal(
         const char *initcontent)
 {
     CMUTIL_String_Internal *istr = memst->Alloc(sizeof(CMUTIL_String_Internal));
+    size_t capacity = initcapacity;
+    const size_t len = initcontent ? strlen(initcontent) : 0;
     memset(istr, 0x0, sizeof(CMUTIL_String_Internal));
     memcpy(istr, &g_cmutil_string, sizeof(CMUTIL_String));
 
-    istr->data = memst->Alloc(initcapacity+1);
-    istr->capacity = initcapacity+1;
+    if (capacity == 0) {
+        if (initcontent) {
+            capacity = len;
+        } else {
+            CMLogError("initcapacty is zero and initcontent is null");
+            memst->Free(istr);
+            return NULL;
+        }
+    }
+    istr->data = memst->Alloc(capacity+1);
+    istr->capacity = capacity+1;
     *(istr->data) = 0x0;
     istr->memst = memst;
 
     if (initcontent)
-        CMCall((CMUTIL_String*)istr, AddString, initcontent);
+        CMCall((CMUTIL_String*)istr, AddNString, initcontent, len);
     return (CMUTIL_String*)istr;
 }
 
@@ -591,22 +602,27 @@ CMUTIL_STATIC void CMUTIL_StringArrayAdd(
 CMUTIL_STATIC void CMUTIL_StringArrayAddCString(
         CMUTIL_StringArray *array, const char *string)
 {
-    CMUTIL_String *data = CMUTIL_StringCreateEx(64, string);
+    CMUTIL_String *data = CMUTIL_StringCreateEx(0, string);
     CMCall(array, Add, data);
 }
 
-CMUTIL_STATIC void CMUTIL_StringArrayInsertAt(
+CMUTIL_STATIC CMBool CMUTIL_StringArrayInsertAt(
         CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index)
 {
     CMUTIL_StringArray_Internal *iarray = (CMUTIL_StringArray_Internal*)array;
-    CMCall(iarray->array, InsertAt, string, index);
+    return CMCall(iarray->array, InsertAt, string, index) == NULL ?
+            CMFalse:CMTrue;
 }
 
-CMUTIL_STATIC void CMUTIL_StringArrayInsertAtCString(
+CMUTIL_STATIC CMBool CMUTIL_StringArrayInsertAtCString(
         CMUTIL_StringArray *array, const char *string, uint32_t index)
 {
-    CMUTIL_String *data = CMUTIL_StringCreateEx(64, string);
-    CMCall(array, InsertAt, data, index);
+    CMUTIL_String *data = CMUTIL_StringCreateEx(0, string);
+    if (CMCall(array, InsertAt, data, index)) {
+        return CMTrue;
+    }
+    CMCall(data, Destroy);
+    return CMFalse;
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_StringArrayRemoveAt(
@@ -620,17 +636,19 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringArraySetAt(
         CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index)
 {
     CMUTIL_StringArray_Internal *iarray = (CMUTIL_StringArray_Internal*)array;
-    return CMCall(iarray->array, SetAt, string, index);
+    return (CMUTIL_String*)CMCall(iarray->array, SetAt, string, index);
 }
 
 CMUTIL_STATIC CMUTIL_String *CMUTIL_StringArraySetAtCString(
         CMUTIL_StringArray *array, const char *string, uint32_t index)
 {
-    CMUTIL_String *data = CMUTIL_StringCreateEx(64, string);
-    return CMCall(array, SetAt, data, index);
+    CMUTIL_String *data = CMUTIL_StringCreateEx(0, string);
+    CMUTIL_String *res = (CMUTIL_String*)CMCall(array, SetAt, data, index);
+    if (res == NULL) CMCall(data, Destroy);
+    return res;
 }
 
-CMUTIL_STATIC CMUTIL_String *CMUTIL_StringArrayGetAt(
+CMUTIL_STATIC const CMUTIL_String *CMUTIL_StringArrayGetAt(
         const CMUTIL_StringArray *array, uint32_t index)
 {
     const CMUTIL_StringArray_Internal *iarray =
@@ -641,8 +659,9 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringArrayGetAt(
 CMUTIL_STATIC const char *CMUTIL_StringArrayGetCString(
         const CMUTIL_StringArray *array, uint32_t index)
 {
-    CMUTIL_String *v = CMCall(array, GetAt, index);
-    return CMCall(v, GetCString);
+    const CMUTIL_String *v = CMCall(array, GetAt, index);
+    if (v) return CMCall(v, GetCString);
+    return NULL;
 }
 
 CMUTIL_STATIC size_t CMUTIL_StringArrayGetSize(
@@ -665,12 +684,10 @@ CMUTIL_STATIC void CMUTIL_StringArrayDestroy(
         CMUTIL_StringArray *array)
 {
     CMUTIL_StringArray_Internal *iarray = (CMUTIL_StringArray_Internal*)array;
-    CMUTIL_Iterator *iter = CMCall(array, Iterator);
-    while (CMCall(iter, HasNext)) {
-        CMUTIL_String *item = (CMUTIL_String*)CMCall(iter, Next);
+    while (CMCall(iarray->array, GetSize) > 0) {
+        CMUTIL_String *item = (CMUTIL_String*)CMCall(iarray->array, Pop);
         CMCall(item, Destroy);
     }
-    CMCall(iter, Destroy);
     CMCall(iarray->array, Destroy);
     iarray->memst->Free(iarray);
 }
@@ -1071,8 +1088,8 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferInsertBytesAt(
     if (index == bbi->size)
         return CMCall(buffer, AddBytes, bytes, length);
     CMUTIL_ByteBufferCheckSize(bbi, length);
-    memmove(bbi->buffer + index,
-            bbi->buffer + index + length,
+    memmove(bbi->buffer + index + length,
+            bbi->buffer + index,
             bbi->size - index);
     memcpy(bbi->buffer + index, bytes, length);
     bbi->size += length;
@@ -1135,6 +1152,15 @@ CMUTIL_STATIC void CMUTIL_ByteBufferDestroy(
     }
 }
 
+CMUTIL_STATIC void CMUTIL_ByteBufferClear(
+        CMUTIL_ByteBuffer *buffer)
+{
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    if (bbi) {
+        bbi->size = 0;
+    }
+}
+
 static CMUTIL_ByteBuffer g_cmutil_bytebuffer = {
     CMUTIL_ByteBufferAddByte,
     CMUTIL_ByteBufferAddBytes,
@@ -1146,7 +1172,8 @@ static CMUTIL_ByteBuffer g_cmutil_bytebuffer = {
     CMUTIL_ByteBufferGetBytes,
     CMUTIL_ByteBufferShrinkTo,
     CMUTIL_ByteBufferGetCapacity,
-    CMUTIL_ByteBufferDestroy
+    CMUTIL_ByteBufferDestroy,
+    CMUTIL_ByteBufferClear
 };
 
 CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateInternal(
@@ -1157,6 +1184,7 @@ CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateInternal(
             memst->Alloc(sizeof(CMUTIL_ByteBuffer_Internal));
     memset(res, 0x0, sizeof(CMUTIL_ByteBuffer_Internal));
     memcpy(res, &g_cmutil_bytebuffer, sizeof(CMUTIL_ByteBuffer));
+    res->memst = memst;
     res->buffer = memst->Alloc(sizeof(uint8_t) * initcapacity);
     res->capacity = initcapacity;
     return (CMUTIL_ByteBuffer*)res;

@@ -180,10 +180,9 @@ CMUTIL_STATIC int CMUTIL_MemRcyComparator(const void *a, const void *b)
     // memory address comparison
     if (a > b)
         return 1;
-    else if (a < b)
+    if (a < b)
         return -1;
-    else
-        return 0;
+    return 0;
 }
 
 typedef struct CMUTIL_MemRcyList CMUTIL_MemRcyList;
@@ -290,14 +289,18 @@ CMUTIL_STATIC void CMUTIL_MemRcyFree(void *ptr)
             (CMUTIL_MemNode*)(((CMUTIL_MemNode*)ptr) - 1);
     CMUTIL_MemRcyList *list = &g_cmutil_memrcyblocks[node->index];
 
+    CMCall(list->mutex, Lock);
     if (CMCall(list->used, Remove, node) == NULL) {
+        CMCall(list->mutex, Unlock);
         CMUTIL_MemLogWithStack(
                     "*** FATAL - not allocated memory to be freed.");
         return;
     }
 
-    if (!CMUTIL_MemCheckFlow(node))
+    if (!CMUTIL_MemCheckFlow(node)) {
+        CMCall(list->mutex, Unlock);
         return;
+    }
 
     // clear stack
     if (node->stack) {
@@ -305,7 +308,6 @@ CMUTIL_STATIC void CMUTIL_MemRcyFree(void *ptr)
         node->stack = NULL;
     }
 
-    CMCall(list->mutex, Lock);
 
     node->next = list->head;
     list->head = node;
@@ -328,7 +330,7 @@ CMUTIL_STATIC void *CMUTIL_MemRcyRealloc(void *ptr, size_t size)
         return NULL;
     if (nidx >= MEM_BLOCK_SZ) {
         CMUTIL_MemLogWithStack("*** FATAL - memory index out of bound. "
-                               "requested memory too big("PRINT64U
+                               "requested memory too big(%"PRIu64
                                ") to allocate.", (uint64_t)size);
         return NULL;
     }
@@ -409,8 +411,9 @@ void CMUTIL_MemDebugInit(CMMemOper memoper)
     }
 }
 
-void CMUTIL_MemDebugClear()
+CMBool CMUTIL_MemDebugClear()
 {
+    CMBool res = CMTrue;
     if (g_cmutil_memoper != CMMemSystem) {
         uint32_t i;
         for (i=0; i<MEM_BLOCK_SZ; i++) {
@@ -430,6 +433,7 @@ void CMUTIL_MemDebugClear()
                                       CMCall(node->stack, GetCString));
                     }
                 }
+                res = CMFalse;
             }
             CMCall(list->used, Destroy);
             while (list->head) {
@@ -450,6 +454,7 @@ void CMUTIL_MemDebugClear()
         __CMUTIL_Mem = &g_cmutil_memdebug_system;
         g_cmutil_memoper = CMMemSystem;
     }
+    return res;
 }
 
 CMUTIL_Mem *CMUTIL_GetMem()

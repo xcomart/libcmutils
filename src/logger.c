@@ -79,6 +79,7 @@ struct CMUTIL_LogAppenderFormatItem {
     CMUTIL_String               *data2;
     void                        *anything;
     CMUTIL_Mem                  *memst;
+    CMBool                      zero;
 };
 
 typedef struct CMUTIL_LogAppenderBase CMUTIL_LogAppenderBase;
@@ -176,7 +177,7 @@ static char g_cmutil_spaces[] = "                                             "
         "                                                                     ";
 
 CMUTIL_STATIC void CMUTIL_LogPatternAppendPadding(
-    CMUTIL_LogAppenderFormatItem *item,
+    const CMUTIL_LogAppenderFormatItem *item,
     CMUTIL_String *dest,
     const char *data, size_t length)
 {
@@ -229,7 +230,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendLoggerName(
 {
     CMUTIL_Logger_Internal *ilog = (CMUTIL_Logger_Internal*)params->logger;
     CMUTIL_String *buf = CMUTIL_StringCreateInternal(ilog->memst, 10, NULL);
-    CMUTIL_String *curr = NULL;
+    const CMUTIL_String *curr = NULL;
     uint32_t i, tsize = (uint32_t)CMCall(ilog->namepath, GetSize);
     switch (params->item->precisioncnt) {
     case 0:
@@ -247,7 +248,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendLoggerName(
         break;
     }
     case 2: {
-        uint32_t i, size = params->item->precision[0];
+        const uint32_t size = params->item->precision[0];
         for (i = 0; i < (tsize - 1); i++) {
             if (size) {
                 size_t minsz = size;
@@ -280,12 +281,24 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendLoggerName(
 CMUTIL_STATIC void CMUTIL_LogPatternAppendThreadId(
     CMUTIL_LogPatternAppendFuncParam *params)
 {
-    char buf[256];
-    CMUTIL_Thread *t = CMUTIL_ThreadSelf();
-    unsigned int tid = CMCall(t, GetId);
-    const char *name = CMCall(t, GetName);
-    uint32_t size = (uint32_t)sprintf(buf, "%s-%u", name, tid);
-    CMUTIL_LogPatternAppendPadding(params->item, params->dest, buf, size);
+    // char buf[256];
+    // CMUTIL_Thread *t = CMUTIL_ThreadSelf();
+    // unsigned int tid = CMCall(t, GetId);
+    // const char *name = CMCall(t, GetName);
+    // uint32_t size = (uint32_t)sprintf(buf, "%s-%u", name, tid);
+    // CMUTIL_LogPatternAppendPadding(params->item, params->dest, buf, size);
+
+    const CMUTIL_Thread *t = CMUTIL_ThreadSelf();
+    const char *name;
+    if (t) {
+        name = CMCall(t, GetName);
+    } else {
+        printf("ERROR!! cannot get thread object of %"PRIu64"\n",
+            CMUTIL_ThreadSystemSelfId());
+        name = "unknown";
+    }
+    const uint32_t size = strlen(name);
+    CMUTIL_LogPatternAppendPadding(params->item, params->dest, name, size);
 }
 
 CMUTIL_STATIC void CMUTIL_LogPatternAppendFileName(
@@ -305,17 +318,24 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendLineNumber(
     CMUTIL_LogPatternAppendFuncParam *params)
 {
     char buf[20];
-    uint32_t size = (uint32_t)sprintf(buf, "%d", params->linenum);
+    uint32_t size;
+    if (params->item->zero) {
+        char fmtbuf[20];
+        sprintf(fmtbuf, "%%0%dd", (int)params->item->length);
+        size = (uint32_t)sprintf(buf, fmtbuf, params->linenum);
+    } else {
+        size = (uint32_t)sprintf(buf, "%d", params->linenum);
+    }
     CMUTIL_LogPatternAppendPadding(params->item, params->dest, buf, size);
 }
 
 CMUTIL_STATIC void CMUTIL_LogPatternAppendLogLevel(
     CMUTIL_LogPatternAppendFuncParam *params)
 {
-    CMUTIL_String *val = CMCall(g_cmutil_log_levels, GetAt, params->level);
+    const CMUTIL_String *val = CMCall(g_cmutil_log_levels, GetAt, params->level);
     if (params->item->hasext) {
         CMUTIL_Map *lvlmap = (CMUTIL_Map*)params->item->anything;
-        CMUTIL_String *key = val;
+        const CMUTIL_String *key = val;
         const char *skey = CMCall(key, GetCString);
         val = CMCall(lvlmap, Get, skey);
         if (val == NULL) val = key;
@@ -343,7 +363,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendStack(
         size_t maxlen = params->item->hasext ?
             params->item->precisioncnt : CMCall(params->stack, GetSize);
         for (i = 0; i < maxlen; i++) {
-            CMUTIL_String *item = CMCall(params->stack, GetAt, i);
+            const CMUTIL_String *item = CMCall(params->stack, GetAt, i);
             CMCall(params->dest, AddString, S_CRLF);
             CMCall(params->dest, AddAnother, item);
         }
@@ -622,9 +642,8 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
                     item->memst, CMCall(str, GetCString), "=");
         if (CMCall(arr, GetSize) == 2) {
             const CMUTIL_String *key = CMCall(arr, GetAt, 0);
-            CMUTIL_String *val = CMCall(arr, GetAt, 1);
             const char *ks = CMCall(key, GetCString);
-            const char *vs = CMCall(val, GetCString);
+            const char *vs = CMCall(arr, GetCString, 1);
             if (strcmp(ks, "length") == 0) {
                 int slen = atoi(vs);
                 if (slen > 0) {
@@ -657,7 +676,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
                 CMCall(iter, Destroy);
             }
             else {
-                CMCall(arr, RemoveAt, 1);
+                CMUTIL_String *val = CMCall(arr, RemoveAt, 1);
                 CMUTIL_String *prev =
                         (CMUTIL_String*)CMCall(map, Put, ks, val);
                 if (prev)
@@ -687,6 +706,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
         uint32_t length = 0;
         CMBool padleft = CMFalse;
         CMBool hasext = CMFalse;
+        CMBool zero = CMFalse;
         CMUTIL_LogFormatType type;
         CMUTIL_LogAppenderFormatItem *item = NULL;
         void *tvoid = NULL;
@@ -714,7 +734,8 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
             while (strchr("0123456789", *q))
                 *br++ = *q++;
             *br = 0x0;
-            length = (uint32_t)atoi(buf);
+            length = strtol(buf, NULL, 10);
+            zero = *buf == '0'? CMTrue : CMFalse;
         }
         // check the pattern item
         q = CMUTIL_StrNextToken(
@@ -836,7 +857,11 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
             item = CMUTIL_LogAppenderItemCreate(memst, LogFormatItem_String);
             item->data = CMUTIL_StringCreateInternal(memst, 50, NULL);
             if (length != 0) {
-                sprintf(fmt, "%%%s%dld", padleft ? "" : "-", length);
+                if (zero) {
+                    sprintf(fmt, "%%0%dld", length);
+                } else {
+                    sprintf(fmt, "%%%s%dld", padleft ? "" : "-", length);
+                }
             }
             else {
                 strcpy(fmt, "%ld");
@@ -905,6 +930,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
             item->length = length;
             item->padleft = padleft;
             item->hasext = hasext;
+            item->zero = zero;
             CMCall(list, AddTail, item);
         }
         p = q;
@@ -964,22 +990,25 @@ CMUTIL_STATIC void CMUTIL_LogConsoleAppenderWriter(
         CMUTIL_LogAppenderBase *appender,
         CMUTIL_String *logmsg, struct tm *logtm)
 {
+    CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)appender;
     CMUTIL_UNUSED(appender);
     CMUTIL_UNUSED(logtm);
-    printf("%s", CMCall(logmsg, GetCString));
+    CMSync(iap->mutex, printf("%s", CMCall(logmsg, GetCString)););
 }
 
 CMUTIL_STATIC void CMUTIL_LogConsoleAppenderFlush(
         CMUTIL_LogAppender *appender)
 {
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)appender;
-    CMUTIL_List *list = iap->flush_buffer;
-    while (CMCall(list, GetSize) > 0) {
-        CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
-                CMCall(list, RemoveFront);
-        printf("%s", CMCall(log->log, GetCString));
-        CMUTIL_LogAppderAsyncItemDestroy(log);
-    }
+    CMSync(iap->mutex, {
+        CMUTIL_List *list = iap->flush_buffer;
+        while (CMCall(list, GetSize) > 0) {
+            CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
+                    CMCall(list, RemoveFront);
+            printf("%s", CMCall(log->log, GetCString));
+            CMUTIL_LogAppderAsyncItemDestroy(log);
+        }
+    });
 }
 
 CMUTIL_STATIC void CMUTIL_LogConsoleAppenderDestroy(
@@ -1030,6 +1059,7 @@ CMUTIL_STATIC void CMUTIL_LogFileAppenderWriter(
     FILE *fp = NULL;
     int count = 0;
     CMUTIL_UNUSED(logtm);
+    CMCall(appender->mutex, Lock);
 RETRY:
     fp = fopen(iap->fpath, "ab");
     if (fp) {
@@ -1042,6 +1072,7 @@ RETRY:
     } else {
         printf("cannot open log file '%s'\n", iap->fpath);
     }
+    CMCall(appender->mutex, Unlock);
 }
 
 CMUTIL_STATIC void CMUTIL_LogFileAppenderFlush(
@@ -1049,17 +1080,19 @@ CMUTIL_STATIC void CMUTIL_LogFileAppenderFlush(
 {
     CMUTIL_LogFileAppender *iap = (CMUTIL_LogFileAppender*)appender;
     FILE *fp = NULL;
-    fp = fopen(iap->fpath, "ab");
-    if (fp) {
-        CMUTIL_List *list = iap->base.flush_buffer;
-        while (CMCall(list, GetSize) > 0) {
-            CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
-                    CMCall(list, RemoveFront);
-            fprintf(fp, "%s", CMCall(log->log, GetCString));
-            CMUTIL_LogAppderAsyncItemDestroy(log);
+    CMSync(iap->base.mutex, {
+        fp = fopen(iap->fpath, "ab");
+        if (fp) {
+            CMUTIL_List *list = iap->base.flush_buffer;
+            while (CMCall(list, GetSize) > 0) {
+                CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
+                        CMCall(list, RemoveFront);
+                fprintf(fp, "%s", CMCall(log->log, GetCString));
+                CMUTIL_LogAppderAsyncItemDestroy(log);
+            }
+            fclose(fp);
         }
-        fclose(fp);
-    }
+    });
 }
 
 CMUTIL_STATIC void CMUTIL_LogFileAppenderDestroy(
@@ -1106,7 +1139,7 @@ CMUTIL_LogAppender *CMUTIL_LogFileAppenderCreate(
 
 typedef struct CMUTIL_LogRollingFileAppender {
     CMUTIL_LogAppenderBase base;
-    CMLogTerm  logterm;
+    CMLogTerm       logterm;
     int             dummy_padder;
     char            *fpath;
     char            *rollpath;
@@ -1153,15 +1186,17 @@ CMUTIL_STATIC void CMUTIL_LogRollingFileAppenderWrite(
     CMUTIL_LogRollingFileAppender *iap =
             (CMUTIL_LogRollingFileAppender*)appender;
     FILE *fp = NULL;
-    if (CMUTIL_LogRollingFileAppenderIsChanged(iap, logtm))
-        CMUTIL_LogRollingFileAppenderRolling(iap, logtm);
-    fp = fopen(iap->fpath, "ab");
-    if (fp) {
-        fprintf(fp, "%s", CMCall(logmsg, GetCString));
-        fclose(fp);
-    } else {
-        printf("cannot open log file '%s'.\n", iap->fpath);
-    }
+    CMSync(iap->base.mutex, {
+        if (CMUTIL_LogRollingFileAppenderIsChanged(iap, logtm))
+            CMUTIL_LogRollingFileAppenderRolling(iap, logtm);
+        fp = fopen(iap->fpath, "ab");
+        if (fp) {
+            fprintf(fp, "%s", CMCall(logmsg, GetCString));
+            fclose(fp);
+        } else {
+            printf("cannot open log file '%s'.\n", iap->fpath);
+        }
+    });
 }
 
 CMUTIL_STATIC void CMUTIL_LogRollingFileAppenderFlush(
@@ -1170,21 +1205,23 @@ CMUTIL_STATIC void CMUTIL_LogRollingFileAppenderFlush(
     CMUTIL_LogRollingFileAppender *iap =
             (CMUTIL_LogRollingFileAppender*)appender;
     CMUTIL_List *list = iap->base.flush_buffer;
-    if (CMCall(list, GetSize) > 0) {
-        FILE *fp = fopen(iap->fpath, "ab");
-        while (CMCall(list, GetSize) > 0) {
-            CMUTIL_LogAppderAsyncItem *item =
-                    (CMUTIL_LogAppderAsyncItem*)CMCall(list, RemoveFront);
-            if (CMUTIL_LogRollingFileAppenderIsChanged(iap, &item->logtm)) {
-                fclose(fp);
-                CMUTIL_LogRollingFileAppenderRolling(iap, &item->logtm);
-                fp = fopen(iap->fpath, "ab");
+    CMSync(iap->base.mutex, {
+        if (CMCall(list, GetSize) > 0) {
+            FILE *fp = fopen(iap->fpath, "ab");
+            while (CMCall(list, GetSize) > 0) {
+                CMUTIL_LogAppderAsyncItem *item =
+                        (CMUTIL_LogAppderAsyncItem*)CMCall(list, RemoveFront);
+                if (CMUTIL_LogRollingFileAppenderIsChanged(iap, &item->logtm)) {
+                    fclose(fp);
+                    CMUTIL_LogRollingFileAppenderRolling(iap, &item->logtm);
+                    fp = fopen(iap->fpath, "ab");
+                }
+                fprintf(fp, "%s", CMCall(item->log, GetCString));
+                CMUTIL_LogAppderAsyncItemDestroy(item);
             }
-            fprintf(fp, "%s", CMCall(item->log, GetCString));
-            CMUTIL_LogAppderAsyncItemDestroy(item);
+            fclose(fp);
         }
-        fclose(fp);
-    }
+    });
 }
 
 CMUTIL_STATIC void CMUTIL_LogRollingFileAppenderDestroy(
@@ -1276,7 +1313,6 @@ typedef struct CMUTIL_LogSocketAppender {
     CMUTIL_ServerSocket *listener;
     CMUTIL_Thread       *acceptor;
     CMUTIL_Array        *clients;
-    CMUTIL_Mutex        *climtx;
 } CMUTIL_LogSocketAppender;
 
 CMUTIL_STATIC void CMUTIL_LogSocketAppenderWrite(
@@ -1285,17 +1321,17 @@ CMUTIL_STATIC void CMUTIL_LogSocketAppenderWrite(
 {
     uint32_t i;
     CMUTIL_LogSocketAppender *iap = (CMUTIL_LogSocketAppender*)appender;
-    CMCall(iap->climtx, Lock);
-    for (i = 0; i < CMCall(iap->clients, GetSize); i++) {
-        CMUTIL_Socket *cli = (CMUTIL_Socket*)
-                CMCall(iap->clients, GetAt, i);
-        if (CMCall(cli, Write, logmsg, 1000) != CMSocketOk) {
-            CMCall(iap->clients, RemoveAt, i);
-            i--;
-            CMCall(cli, Close);
+    CMSync(iap->base.mutex, {
+        for (i = 0; i < CMCall(iap->clients, GetSize); i++) {
+            CMUTIL_Socket *cli = (CMUTIL_Socket*)
+                    CMCall(iap->clients, GetAt, i);
+            if (CMCall(cli, Write, logmsg, 1000) != CMSocketOk) {
+                CMCall(iap->clients, RemoveAt, i);
+                i--;
+                CMCall(cli, Close);
+            }
         }
-    }
-    CMCall(iap->climtx, Unlock);
+    });
     CMUTIL_UNUSED(logtm);
 }
 
@@ -1303,19 +1339,21 @@ CMUTIL_STATIC void CMUTIL_LogSocketAppenderFlush(CMUTIL_LogAppender *appender)
 {
     CMUTIL_LogSocketAppender *iap = (CMUTIL_LogSocketAppender*)appender;
     CMUTIL_List *list = iap->base.flush_buffer;
-    if (CMCall(list, GetSize) > 0) {
-        CMUTIL_String *logbuf =
-                CMUTIL_StringCreateInternal(iap->base.memst, 1024, NULL);
-        while (CMCall(list, GetSize) > 0) {
-            CMUTIL_LogAppderAsyncItem *item = (CMUTIL_LogAppderAsyncItem*)
-                    CMCall(list, RemoveFront);
-            CMCall(logbuf, AddAnother, item->log);
-            CMUTIL_LogAppderAsyncItemDestroy(item);
+    CMSync(iap->base.mutex, {
+        if (CMCall(list, GetSize) > 0) {
+            CMUTIL_String *logbuf =
+                    CMUTIL_StringCreateInternal(iap->base.memst, 1024, NULL);
+            while (CMCall(list, GetSize) > 0) {
+                CMUTIL_LogAppderAsyncItem *item = (CMUTIL_LogAppderAsyncItem*)
+                        CMCall(list, RemoveFront);
+                CMCall(logbuf, AddAnother, item->log);
+                CMUTIL_LogAppderAsyncItemDestroy(item);
+            }
+            CMUTIL_LogSocketAppenderWrite(
+                        (CMUTIL_LogAppenderBase*)appender, logbuf, NULL);
+            CMCall(logbuf, Destroy);
         }
-        CMUTIL_LogSocketAppenderWrite(
-                    (CMUTIL_LogAppenderBase*)appender, logbuf, NULL);
-        CMCall(logbuf, Destroy);
-    }
+    });
 }
 
 CMUTIL_STATIC void CMUTIL_LogSocketAppenderDestroy(CMUTIL_LogAppender *appender)
@@ -1328,7 +1366,6 @@ CMUTIL_STATIC void CMUTIL_LogSocketAppenderDestroy(CMUTIL_LogAppender *appender)
         CMCall(iap->listener, Close);
         CMCall(iap->acceptor, Join);
         CMCall(iap->clients, Destroy);
-        CMCall(iap->climtx, Destroy);
         memst->Free(iap);
     }
 }
@@ -1344,9 +1381,7 @@ CMUTIL_STATIC void *CMUTIL_LogSocketAppenderAcceptor(void *data)
     while (iap->isrunning) {
         CMUTIL_Socket *cli = CMCall(iap->listener, Accept, 1000);
         if (cli) {
-            CMCall(iap->climtx, Lock);
-            CMCall(iap->clients, Add, cli);
-            CMCall(iap->climtx, Unlock);
+            CMSync(iap->base.mutex, CMCall(iap->clients, Add, cli););
         }
     }
     return NULL;
@@ -1375,7 +1410,6 @@ CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreateInternal(
     res->clients = CMUTIL_ArrayCreateInternal(
                 memst, 10, NULL,
                 CMUTIL_LogSocketAppenderCliDestroyer, CMFalse);
-    res->climtx = CMUTIL_MutexCreateInternal(memst);
     sprintf(namebuf, "LogAppender(%s)-SocketAcceptor", name);
     res->isrunning = CMTrue;
     res->acceptor = CMUTIL_ThreadCreateInternal(
@@ -1408,6 +1442,7 @@ typedef struct CMUTIL_LogSystem_Internal
     CMUTIL_Array        *loggers;
     CMUTIL_Array        *levelloggers;
     CMUTIL_Mem          *memst;
+    CMUTIL_Mutex        *mutex;
 } CMUTIL_LogSystem_Internal;
 
 typedef struct CMUTIL_ConfLogger_Internal CMUTIL_ConfLogger_Internal;
@@ -1435,9 +1470,10 @@ CMUTIL_STATIC void CMUTIL_LogSystemAddAppender(
     const CMUTIL_LogSystem_Internal *ilsys =
             (const CMUTIL_LogSystem_Internal*)lsys;
     const char *name = CMCall(appender, GetName);
-    if (CMCall(ilsys->appenders, Get, name))
-        return;
-    CMCall(ilsys->appenders, Put, name, appender);
+    CMSync(ilsys->mutex, {
+        if (CMCall(ilsys->appenders, Get, name) == NULL)
+            CMCall(ilsys->appenders, Put, name, appender);
+    });
 }
 
 CMUTIL_STATIC void CMUTIL_DoubleArrayDestroyer(void *data)
@@ -1603,37 +1639,40 @@ CMUTIL_STATIC CMUTIL_Logger *CMUTIL_LogSystemGetLogger(
     const CMUTIL_LogSystem_Internal *ilsys =
             (const CMUTIL_LogSystem_Internal*)lsys;
     CMUTIL_Logger_Internal q;
+    CMUTIL_Logger_Internal* res = NULL;
     q.fullname = CMUTIL_StringCreateInternal(ilsys->memst, 20, name);
-    CMUTIL_Logger_Internal* res =
-        (CMUTIL_Logger_Internal*)CMCall(ilsys->loggers, Find, &q, NULL);
-    if (res == NULL) {
-        uint32_t i;
-        // create logger
-        res = ilsys->memst->Alloc(sizeof(CMUTIL_Logger_Internal));
-        memset(res, 0x0, sizeof(CMUTIL_Logger_Internal));
-        res->memst = ilsys->memst;
-        res->fullname = q.fullname;
-        res->namepath = CMUTIL_StringSplitInternal(ilsys->memst, name, ".");
-        res->logrefs = CMUTIL_ArrayCreateInternal(
-                    ilsys->memst, 3, CMUTIL_LoggerRefComparator, NULL, CMTrue);
-        res->minlevel = CMLogLevel_Fatal;
-        for (i=0; i<CMCall(ilsys->cloggers, GetSize); i++) {
-            CMUTIL_ConfLogger_Internal *cl = (CMUTIL_ConfLogger_Internal*)
-                    CMCall(ilsys->cloggers, GetAt, i);
-            // adding root logger and parent loggers
-            if (strlen(cl->name) == 0 || strstr(name, cl->name) == 0) {
-                CMCall(res->logrefs, Add, cl);
-                if (res->minlevel > cl->level)
-                    res->minlevel = cl->level;
+
+    CMSync(ilsys->mutex, {
+        res = (CMUTIL_Logger_Internal*)CMCall(ilsys->loggers, Find, &q, NULL);
+        if (res == NULL) {
+            uint32_t i;
+            // create logger
+            res = ilsys->memst->Alloc(sizeof(CMUTIL_Logger_Internal));
+            memset(res, 0x0, sizeof(CMUTIL_Logger_Internal));
+            res->memst = ilsys->memst;
+            res->fullname = q.fullname;
+            res->namepath = CMUTIL_StringSplitInternal(ilsys->memst, name, ".");
+            res->logrefs = CMUTIL_ArrayCreateInternal(
+                        ilsys->memst, 3, CMUTIL_LoggerRefComparator, NULL, CMTrue);
+            res->minlevel = CMLogLevel_Fatal;
+            for (i=0; i<CMCall(ilsys->cloggers, GetSize); i++) {
+                CMUTIL_ConfLogger_Internal *cl = (CMUTIL_ConfLogger_Internal*)
+                        CMCall(ilsys->cloggers, GetAt, i);
+                // adding root logger and parent loggers
+                if (strlen(cl->name) == 0 || strstr(name, cl->name) == 0) {
+                    CMCall(res->logrefs, Add, cl);
+                    if (res->minlevel > cl->level)
+                        res->minlevel = cl->level;
+                }
             }
+            // logex and destroyer
+            res->base.LogEx = CMUTIL_LoggerLogEx;
+            res->Destroy = CMUTIL_LoggerDestroy;
+            CMCall(ilsys->loggers, Add, res);
+        } else {
+            CMCall(q.fullname, Destroy);
         }
-        // logex and destroyer
-        res->base.LogEx = CMUTIL_LoggerLogEx;
-        res->Destroy = CMUTIL_LoggerDestroy;
-        CMCall(ilsys->loggers, Add, res);
-    } else {
-        CMCall(q.fullname, Destroy);
-    }
+    });
     return (CMUTIL_Logger*)res;
 }
 
@@ -1679,6 +1718,7 @@ CMUTIL_STATIC void CMUTIL_LogSystemDestroy(CMUTIL_LogSystem *lsys)
         if (ilsys->cloggers) CMCall(ilsys->cloggers, Destroy);
         if (ilsys->levelloggers) CMCall(ilsys->levelloggers, Destroy);
         if (ilsys->loggers) CMCall(ilsys->loggers, Destroy);
+        if (ilsys->mutex) CMCall(ilsys->mutex, Destroy);
         ilsys->memst->Free(ilsys);
     }
 }
@@ -1694,6 +1734,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem *memst)
     res->base.GetLogger = CMUTIL_LogSystemGetLogger;
     res->base.Destroy = CMUTIL_LogSystemDestroy;
     res->memst = memst;
+    res->mutex = CMUTIL_MutexCreateInternal(memst);
     res->appenders = CMUTIL_MapCreateInternal(
                 memst, 256, CMFalse, CMUTIL_LogAppenderDestroyer);
     res->cloggers = CMUTIL_ArrayCreateInternal(
@@ -1731,16 +1772,18 @@ CMUTIL_STATIC void CMUTIL_LogConfigClean(CMUTIL_Json *json)
         CMUTIL_JsonObject *jobj = (CMUTIL_JsonObject*)json;
         CMUTIL_StringArray *keys = CMCall(jobj, GetKeys);
         for (i=0; i<CMCall(keys, GetSize); i++) {
-            CMUTIL_String *str = CMCall(keys, GetAt, i);
+            const CMUTIL_String *str = CMCall(keys, GetAt, i);
             const char *key = CMCall(str, GetCString);
             CMUTIL_Json *item = CMCall(jobj, Remove, key);
-            // change internal buffer to lowercase
-            CMCall(str, SelfToLower);
+            // change key to lowercase
+            CMUTIL_String *nstr = CMCall(str, ToLower);
             // change item recursively.
             CMUTIL_LogConfigClean(item);
             // 'key' is changed to lowercase already.
             // so just put with it.
+            key = CMCall(nstr, GetCString);
             CMCall(jobj, Put, key, item);
+            CMCall(nstr, Destroy);
         }
         CMCall(keys, Destroy);
         break;
@@ -1756,7 +1799,7 @@ CMUTIL_STATIC void CMUTIL_LogConfigClean(CMUTIL_Json *json)
     }
 }
 
-#define CMUITL_LOG_PATTERN_DEFAULT	"%d %P-[%10t] (%15F:%-4L) [%-5p] %c - %m%ex%n"
+#define CMUITL_LOG_PATTERN_DEFAULT	"%d %P-[%10t] (%-15F:%04L) [%-5p] %c - %m%ex%n"
 
 static const char *g_cmutil_log_term_format[] = {
     "%s.%%Y",
@@ -2085,7 +2128,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureInternal(
     CMUTIL_Json *appenders, *loggers;
     CMBool succeeded = CMFalse;
 
-    // all keys to lowercase for case insensitive.
+    // all keys to lowercase for case-insensitive.
     CMUTIL_LogConfigClean(json);
     if (CMCall(config, Get, "configuration"))
         config = (CMUTIL_JsonObject*)CMCall(config, Get, "configuration");
@@ -2175,7 +2218,6 @@ CMUTIL_LogSystem *CMUTIL_LogSystemGet()
 void CMUTIL_LogFallback(const CMLogLevel level,
         const char *file, const int line, const char *fmt, ...)
 {
-    uint32_t i;
     char fmtbuf[1024] = {0,};
     va_list args;
     const char *levelstr = NULL;
