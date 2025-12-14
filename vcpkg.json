@@ -1,0 +1,21 @@
+{
+  "name" : "libcmutils",
+  "version-string" : "1.0.0",
+  "builtin-baseline" : "594ad8871e1e8e45f8e626c015fd611163430207",
+  "dependencies" : [ {
+    "name" : "libiconv",
+    "version>=" : "1.18#3"
+  }, {
+    "name" : "openssl",
+    "version>=" : "3.6.0#3"
+  }, {
+    "name" : "vcpkg-cmake-config",
+    "version>=" : "2024-05-23"
+  }, {
+    "name" : "vcpkg-cmake-get-vars",
+    "version>=" : "2025-05-29"
+  }, {
+    "name" : "vcpkg-cmake",
+    "version>=" : "2024-04-23"
+  } ]
+}
