@@ -569,13 +569,19 @@ CMUTIL_STATIC void CMUTIL_LogAppenderBaseAppend(
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)appender;
     CMUTIL_Iterator *iter = NULL;
     struct tm currtm;
-    struct timeval tv;
     CMUTIL_LogPatternAppendFuncParam param;
+    struct timeval tv;
 
-    memset(&param, 0x0, sizeof(param));
-
+#if defined(MSWIN)
+    time_t nowtm = time(NULL);
+    gettimeofday(&tv, NULL);
+    localtime_s(&currtm, &nowtm);
+#else
     gettimeofday(&tv, NULL);
     localtime_r((time_t*)&(tv.tv_sec), &currtm);
+#endif
+
+    memset(&param, 0x0, sizeof(param));
 
     param.dest = CMUTIL_StringCreateInternal(iap->memst, 64, NULL);
     param.logger = logger;

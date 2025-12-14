@@ -854,7 +854,7 @@ CMUTIL_CSConv *CMUTIL_CSConvCreateInternal(
 {
     CMUTIL_CSConv_Internal *res = memst->Alloc(sizeof(CMUTIL_CSConv_Internal));
     memset(res, 0x0, sizeof(CMUTIL_CSConv_Internal));
-    memcpy(res, &g_cmutil_csconv, sizeof(CMUTIL_CSConv_Internal));
+    memcpy(res, &g_cmutil_csconv, sizeof(CMUTIL_CSConv));
     res->frcs = memst->Strdup(fromcs);
     res->tocs = memst->Strdup(tocs);
     res->memst = memst;

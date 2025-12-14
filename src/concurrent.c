@@ -446,7 +446,7 @@ CMUTIL_Mutex *CMUTIL_MutexCreateInternal(CMUTIL_Mem *memst)
     InitializeCriticalSection(&(res->mutex));
 #else
 # if defined(USE_THREADS_H_)
-    MUTEX_INIT(&(res->mutex), mtx_recursive);
+    mtx_init(&(res->mutex), mtx_recursive);
 # else
     /* setting up recursive mutex */
     pthread_mutexattr_init(&mta);
@@ -567,7 +567,11 @@ CMUTIL_STATIC void *CMUTIL_ThreadProc(void *param)
     _endthreadex(0);
     return 0;
 #else
+# if defined(USE_THREADS_H_)
+    return 0;
+# else
     return NULL;
+# endif
 #endif
 }
 
@@ -858,7 +862,7 @@ CMUTIL_STATIC void CMUTIL_ThreadPoolWait(CMUTIL_ThreadPool *tp) {
 
 CMUTIL_STATIC void CMUTIL_ThreadPoolDestroy(CMUTIL_ThreadPool *tp) {
     CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)tp;
-    pool->is_running = false;
+    pool->is_running = CMFalse;
     for (int i = 0; i < pool->pool_size; i++)
         CMCall(pool->feed_sem, Release);
     while (CMCall(pool->threads, GetSize) > 0) {
@@ -906,7 +910,7 @@ CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreateInternal(
     pool->auto_increment = pool_size <= 0 ? CMTrue: CMFalse;
     pool->pool_size = pool_size <= 0 ? 1 : pool_size;
     pool->idle_count = pool->pool_size;
-    pool->is_running = true;
+    pool->is_running = CMTrue;
     if (name) {
         pool->name = memst->Strdup(name);
     } else {
