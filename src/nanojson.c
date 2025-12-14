@@ -329,7 +329,7 @@ CMUTIL_STATIC void CMUTIL_JsonValueSetLong(
         CMUTIL_JsonValue *jval, int64_t value)
 {
     char buf[50];
-    size_t size = (uint32_t)sprintf(buf, PRINT64I, value);
+    size_t size = (uint32_t)sprintf(buf, "%"PRIi64, value);
     CMUTIL_JsonValueSetBase(jval, buf, size, CMJsonValueLong);
 }
 
