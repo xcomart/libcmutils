@@ -14,7 +14,7 @@ IF ( VERSION_CONTENTS MATCHES "([0-9]+)\\.([0-9]+)\\.([0-9]+)" )
 ENDIF ()
 MESSAGE ( STATUS "Configuring cmutils version ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}" )
 SET ( LIB_VERSION_STRING ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH} )
-add_compile_definitions(LIBCMUTIL_VERSION_STRING="${LIB_VERSION_STRING}")
+ADD_COMPILE_DEFINITIONS( LIBCMUTIL_VERSION_STRING="${LIB_VERSION_STRING}" )
 
 OPTION ( SUPPORT_SSL "Support SSL in networking" ON )
 OPTION ( BUILD_TESTS "Build tests" ON )
@@ -57,7 +57,11 @@ IF ( SUPPORT_SSL )
 
     FIND_LIBRARY ( OPENSSL_LIBRARY NAMES ssl
         PATHS ${OPENSSL_PREFIX}/lib /usr/lib /usr/local/lib /usr/local/opt/openssl/lib )
-    MESSAGE ( "OpenSSL library found: ${OPENSSL_LIBRARY}")
+    MESSAGE ( "SSL library found: ${OPENSSL_LIBRARY}")
+
+    FIND_LIBRARY ( CRYPTO_LIBRARY NAMES crypto
+            PATHS ${OPENSSL_PREFIX}/lib /usr/lib /usr/local/lib /usr/local/opt/openssl/lib )
+    MESSAGE ( "Crypto library found: ${CRYPTO_LIBRARY}")
 
     FIND_PATH ( OPENSSL_INCLUDE_DIRS NAMES ssl.h
         PATHS ${OPENSSL_PREFIX}/include /usr/include /usr/local/include /usr/local/opt/openssl/include
@@ -65,10 +69,20 @@ IF ( SUPPORT_SSL )
     MESSAGE ( "OpenSSL header found: ${OPENSSL_INCLUDE_DIRS}")
     
     IF ( OPENSSL_INCLUDE_DIRS AND OPENSSL_LIBRARY )
+        # get directory path
         GET_FILENAME_COMPONENT ( OPENSSL_LIBRARY_DIR ${OPENSSL_LIBRARY} PATH )
         # remove suffix 'openssl'
         GET_FILENAME_COMPONENT ( OPENSSL_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIRS} PATH )
-        SET ( OPENSSL_LIBRARIES ssl crypto )
+        SET ( OPENSSL_LIBRARIES SSL_LIB CRYPTO_LIB )
+        IF ( ${CMAKE_SYSTEM_NAME} STREQUAL "Windows" )
+            # get filename without extension
+            GET_FILENAME_COMPONENT ( SSL_LIB ${OPENSSL_LIBRARY} NAME_WE )
+            # get filename without extension
+            GET_FILENAME_COMPONENT ( CRYPTO_LIB ${CRYPTO_LIBRARY} NAME_WE )
+            SET ( OPENSSL_LIBRARIES ${SSL_LIB} ${CRYPTO_LIB} )
+        ELSE ()
+            SET ( OPENSSL_LIBRARIES ssl crypto )
+        ENDIF ()
         SET ( OPENSSL_FOUND TRUE )
     ENDIF ()
 
@@ -90,7 +104,13 @@ IF ( SUPPORT_SSL )
 ENDIF ( SUPPORT_SSL )
 
 SET_TARGET_PROPERTIES ( cmutils PROPERTIES VERSION ${LIB_VERSION_STRING} )
-SET_TARGET_PROPERTIES ( cmutilsStatic PROPERTIES OUTPUT_NAME cmutils )
+IF ( ${CMAKE_SYSTEM_NAME} STREQUAL "Windows" )
+    ADD_COMPILE_DEFINITIONS( _CRT_SECURE_NO_WARNINGS _UNICODE )
+    TARGET_LINK_LIBRARIES ( cmutils ws2_32 )
+    TARGET_LINK_LIBRARIES ( cmutilsStatic ws2_32 )
+ELSE ()
+    SET_TARGET_PROPERTIES ( cmutilsStatic PROPERTIES OUTPUT_NAME cmutils )
+ENDIF ()
 
 
 

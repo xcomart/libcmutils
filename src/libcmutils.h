@@ -114,9 +114,10 @@ extern "C" {
  * MSVC compatible definitions.
  */
 #if defined(_MSC_VER)
-# define strcasecmp _stricmp
-# define stat       _stat
-# define pid_t      DWORD
+# define strcasecmp     _stricmp
+# define stat           _stat
+# define pid_t          DWORD
+# define usleep(x)      Sleep(x / 1000)
 #endif
 
 
@@ -706,7 +707,8 @@ struct CMUTIL_ThreadPool {
  *              and can also duplicable. But must not be exceeded 200 bytes.
  * @return A new threadpool object.
  */
-CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(int pool_size, const char *name);
+CMUTIL_API CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(
+        int pool_size, const char *name);
 
 /**
  * @typedef CMUTIL_Semaphore Platform independent semaphore object.

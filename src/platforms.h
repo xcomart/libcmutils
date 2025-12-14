@@ -42,6 +42,7 @@ SOFTWARE.
 # define CMUTIL_LIB_ENV     "PATH"
 # define CMUTIL_LIB_DFLT    ""
 # define CMUTIL_PATH_SEPS   ";"
+# define __STDC_WANT_LIB_EXT1__ 1
 #endif
 
 /* dynamic library of cygwin is DLL */
@@ -106,6 +107,10 @@ SOFTWARE.
 # define DeleteFile unlink
 #endif
 
+#if defined(_MSC_VER)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
 
 #if defined(MSWIN)
 # ifdef UNICODE
