@@ -48,8 +48,6 @@ typedef uint64_t    CMPtrDiff;
 int gettimeofday(struct timeval *tv, struct timezone *tz);
 #endif
 
-typedef struct CMUTIL_Mem CMUTIL_Mem;
-
 void CMUTIL_XmlInit(void);
 void CMUTIL_XmlClear(void);
 void CMUTIL_LogInit(void);

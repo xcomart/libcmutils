@@ -533,7 +533,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonObjectRemove(
     CMUTIL_JsonObject_Internal *ijobj = (CMUTIL_JsonObject_Internal*)jobj;
     uint32_t idx = 0;
     if (CMCall(ijobj->keys, Find, key, &idx))
-        CMCall(ijobj->keys, RemoveAt, idx);
+        ijobj->memst->Free(CMCall(ijobj->keys, RemoveAt, idx));
     return (CMUTIL_Json*)CMCall(ijobj->map, Remove, key);
 }
 
@@ -580,7 +580,7 @@ CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst)
                 memst, 256, CMFalse, CMUTIL_JsonDestroyInternal);
     res->keys = CMUTIL_ArrayCreateInternal(
                 memst, 10, (int(*)(const void*,const void*))strcmp,
-                CMFree, CMFalse);
+                memst->Free, CMFalse);
     return (CMUTIL_JsonObject*)res;
 }
 
