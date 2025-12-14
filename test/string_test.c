@@ -18,7 +18,7 @@ void add_vprint(CMUTIL_String *str, const char *fmt, ...) {
 
 int main() {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMMemDebug);
 
     CMUTIL_String *str = CMUTIL_StringCreate();
     CMUTIL_String *another = NULL;

@@ -494,19 +494,19 @@ CMUTIL_STATIC void *CMUTIL_LogAppenderAsyncWriter(void *udata)
     while (iap->isasync) {
         temp = iap->flush_buffer;
         // swap buffer
-        CMCall(iap->mutex, Lock);
-        iap->flush_buffer = iap->buffer;
-        iap->buffer = temp;
-        CMCall(iap->mutex, Unlock);
+        CMSync(iap->mutex, {
+            iap->flush_buffer = iap->buffer;
+            iap->buffer = temp;
+        });
         CMCall((CMUTIL_LogAppender*)iap, Flush);
         USLEEP(100000);	// sleep 100 milliseconds
     }
     CMCall((CMUTIL_LogAppender*)iap, Flush);
     temp = iap->flush_buffer;
-    CMCall(iap->mutex, Lock);
-    iap->flush_buffer = iap->buffer;
-    iap->buffer = temp;
-    CMCall(iap->mutex, Unlock);
+    CMSync(iap->mutex, {
+        iap->flush_buffer = iap->buffer;
+        iap->buffer = temp;
+    });
     CMCall((CMUTIL_LogAppender*)iap, Flush);
     return NULL;
 }
@@ -651,7 +651,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
             const char *ks = CMCall(key, GetCString);
             const char *vs = CMCall(arr, GetCString, 1);
             if (strcmp(ks, "length") == 0) {
-                int slen = atoi(vs);
+                long slen = strtol(vs, NULL, 10);
                 if (slen > 0) {
                     const uint32_t len = (uint32_t)slen;
                     CMUTIL_Iterator *iter =
@@ -1072,9 +1072,17 @@ RETRY:
         fprintf(fp, "%s", CMCall(logmsg, GetCString));
         fclose(fp);
     } else if (!count) {
-        CMUTIL_LogPathCreate(iap->fpath);
-        count++;
-        goto RETRY;
+        CMUTIL_File *f = CMUTIL_FileCreateInternal(
+                    appender->memst, iap->fpath);
+        if (CMCall(f, IsExists)) {
+            printf("cannot open log file '%s'\n", iap->fpath);
+            CMCall(f, Destroy);
+        } else {
+            CMCall(f, Destroy);
+            CMUTIL_LogPathCreate(iap->fpath);
+            count++;
+            goto RETRY;
+        }
     } else {
         printf("cannot open log file '%s'\n", iap->fpath);
     }
@@ -1875,8 +1883,8 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneAppender(
                     lsys->memst, sname, spattern);
     } else if (strcmp("file", stype) == 0) {
         const char *filename = NULL;
-        if (CMCall(jobj, Get, "fileName")) {
-            filename = CMCall(jobj, GetCString, "fileName");
+        if (CMCall(jobj, Get, "filename")) {
+            filename = CMCall(jobj, GetCString, "filename");
         } else {
             printf("fileName must be specified in File type appender.\n");
             return CMFalse;
@@ -1984,7 +1992,8 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessAppenderRef(
         const char *sval = CMCall(jval, GetCString);
         return CMUTIL_LogSystemAddAppenderToLogger(
                     lsys, clogger, sval, level);
-    } else if (CMCall(json, GetType) == CMJsonTypeObject) {
+    }
+    if (CMCall(json, GetType) == CMJsonTypeObject) {
         CMUTIL_JsonObject *jobj = (CMUTIL_JsonObject*)json;
         CMLogLevel alevel = level;
         const char *ref = NULL;
@@ -2003,10 +2012,9 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessAppenderRef(
         }
         return CMUTIL_LogSystemAddAppenderToLogger(
                     lsys, clogger, ref, alevel);
-    } else {
-        printf("invalid type of AppenderRef\n");
-        return CMFalse;
     }
+    printf("invalid type of AppenderRef\n");
+    return CMFalse;
 }
 
 CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
@@ -2056,7 +2064,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
 
     clogger = CMCall(
                 &(lsys->base), CreateLogger, sname, level, additivity);
-    apref = CMCall(jobj, Get, "appenderRef");
+    apref = CMCall(jobj, Get, "appenderref");
     if (apref) {
         switch (CMCall(apref, GetType)) {
         case CMJsonTypeArray: {
@@ -2068,10 +2076,9 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
                 if (type == CMJsonTypeArray) {
                     printf("invalid appender reference in logger.\n");
                     return CMFalse;
-                } else {
-                    res = CMUTIL_LogSystemProcessAppenderRef(
-                                lsys, clogger, item, level);
                 }
+                res = CMUTIL_LogSystemProcessAppenderRef(
+                            lsys, clogger, item, level);
                 if (!res) {
                     printf("invalid appender reference in logger.\n");
                     return res;
@@ -2079,7 +2086,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
             }
             break;
         }
-        case CMJsonTypeObject:
+        case CMJsonTypeValue:
             return CMUTIL_LogSystemProcessAppenderRef(
                         lsys, clogger, apref, level);
         default:

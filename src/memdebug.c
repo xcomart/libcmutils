@@ -421,9 +421,9 @@ CMBool CMUTIL_MemDebugClear()
             CMUTIL_MemRcyList *list = &g_cmutil_memrcyblocks[i];
             // TODO: print used items;
             if (CMCall(list->used, GetSize) > 0) {
-                CMUTIL_MemLog("*** FATAL - index:%d count:%d total:%ld byte "
-                        "memory leak detected.",
-                        i, list->cnt - list->avlcnt, list->usedsize);
+                CMUTIL_MemLog("*** FATAL - index:%d count:%d "
+                              "total:%ld byte memory leak detected.",
+                              i, list->cnt - list->avlcnt, list->usedsize);
                 if (g_cmutil_memoper == CMMemDebug) {
                     uint32_t j;
                     for (j=0; j<CMCall(list->used, GetSize); j++) {

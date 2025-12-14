@@ -1936,7 +1936,7 @@ struct CMUTIL_File {
 
 CMUTIL_API CMUTIL_File *CMUTIL_FileCreate(const char *path);
 
-CMBool CMUTIL_PathCreate(const char *path, uint32_t mode);
+CMUTIL_API CMBool CMUTIL_PathCreate(const char *path, uint32_t mode);
 
 typedef struct CMUTIL_Config CMUTIL_Config;
 struct CMUTIL_Config {
@@ -2089,6 +2089,20 @@ typedef struct CMUTIL_LogSystem CMUTIL_LogSystem;
 struct CMUTIL_LogSystem {
     void(*AddAppender)(
             const CMUTIL_LogSystem *logsys, CMUTIL_LogAppender *appender);
+    /**
+     * @brief Create a new logger object.
+     *
+     * This method will create a new logger object with given name, log level
+     * and additivity.
+     *
+     * @param logsys The log system object.
+     * @param name The name of logger. If NULL or empty string given,
+     *          root logger will be created.
+     * @param level The log level of this logger.
+     * @param additivity If CMTrue, this logger will also log to parent
+     *          loggers' appenders.
+     * @return The created logger object.
+     */
     CMUTIL_ConfLogger *(*CreateLogger)(
         const CMUTIL_LogSystem *logsys,
         const char *name,
