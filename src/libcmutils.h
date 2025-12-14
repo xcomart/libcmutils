@@ -65,6 +65,7 @@ extern "C" {
 #else
 # include <sys/time.h>
 # include <unistd.h>
+# include <netinet/in.h>
 #endif
 #include <stdarg.h>
 #include <stdint.h>
@@ -152,19 +153,11 @@ extern "C" {
 #endif
 
 /**
- * 64 bit signed / unsigned integer printf format string.
- */
-#if !defined(PRINT64I)
-# define PRINT64I  "%"PRIi64
-# define PRINT64U  "%"PRIu64
-#endif
-
-/**
  * @brief Boolean definition for this library.
  */
 typedef enum CMBool {
-    CMTrue         =0x0001,
-    CMFalse        =0x0000
+    CMTrue         = 1,
+    CMFalse        = 0
 } CMBool;
 
 /**
