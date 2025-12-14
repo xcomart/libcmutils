@@ -35,6 +35,8 @@ static WSADATA wsa_data;
 # include <poll.h>
 #endif
 
+#include <stdint.h>
+
 CMUTIL_LogDefine("cmutils.datagram")
 
 typedef struct CMUTIL_DGramSocket_Internal {

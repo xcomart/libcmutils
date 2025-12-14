@@ -26,6 +26,7 @@ SOFTWARE.
 #include <math.h>
 #include <assert.h>
 #include <time.h>
+#include <stdint.h>
 
 #if defined(_MSC_VER)
 # define STRDUP _strdup
