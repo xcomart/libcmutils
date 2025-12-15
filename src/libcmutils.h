@@ -2152,7 +2152,7 @@ typedef struct sockaddr_in CMUTIL_SocketAddr;
 CMUTIL_API CMSocketResult CMUTIL_SocketAddrGet(
         const CMUTIL_SocketAddr *saddr, char *hostbuf, int *port);
 CMUTIL_API CMSocketResult CMUTIL_SocketAddrSet(
-        CMUTIL_SocketAddr *saddr, char *host, int port);
+        CMUTIL_SocketAddr *saddr, const char *host, int port);
 
 typedef struct CMUTIL_Socket CMUTIL_Socket;
 struct CMUTIL_Socket {
@@ -2211,8 +2211,10 @@ CMUTIL_API CMUTIL_Socket *CMUTIL_SSLSocketConnectWithAddr(
 
 typedef struct CMUTIL_ServerSocket CMUTIL_ServerSocket;
 struct CMUTIL_ServerSocket {
-    CMUTIL_Socket *(*Accept)(
-            const CMUTIL_ServerSocket *server, long timeout);
+    CMSocketResult (*Accept)(
+            const CMUTIL_ServerSocket *server,
+            CMUTIL_Socket **res,
+            long timeout);
     void (*Close)(CMUTIL_ServerSocket *server);
 };
 

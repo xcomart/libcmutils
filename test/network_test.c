@@ -23,7 +23,7 @@ void client_handler(void* udata) {
     CMUTIL_SocketAddrGet(&caddr, host, &port);
     CMLogInfo("client connected %s:%d", host, port);
 
-    while (CMTrue) {
+    while (g_running) {
         sr = CMCall(csock, Read, buf, 4, 1000);
         if (sr == CMSocketOk) {
             int len = (int)strtol(CMCall(buf, GetCString), NULL, 10);
@@ -39,21 +39,25 @@ void client_handler(void* udata) {
             if (sr != CMSocketOk) break;
             CMLogInfo("sent to client: %s", CMCall(buf, GetCString));
             CMCall(buf, Clear);
-        } else if (sr != CMSocketTimeout) {
+        } else {
             break;
         }
     }
     CMCall(buf, Destroy);
+    CMCall(csock, Close);
 }
 
 void *server_proc(void* udata) {
     CMUTIL_ServerSocket *ssock = (CMUTIL_ServerSocket*)udata;
     CMUTIL_ThreadPool *pool = CMUTIL_ThreadPoolCreate(-1, NULL);
     while (g_running) {
-        CMUTIL_Socket *csock = CMCall(ssock, Accept, 1000);
-        if (csock) {
+        CMUTIL_Socket *csock = NULL;
+        CMSocketResult sr = CMCall(ssock, Accept, &csock, 1000);
+        if (sr == CMSocketOk) {
             CMCall(pool, Execute, client_handler, csock);
         }
+        if (sr != CMSocketTimeout)
+            break;
     }
     CMCall(pool, Wait);
     CMCall(pool, Destroy);
@@ -70,7 +74,7 @@ void client_proc(void* udata) {
 
     if (csock) {
         for (int i=0; i<100; i++) {
-            CMCall(buf, AddPrint, "%s-%d", tname, i);
+            CMCall(buf, AddPrint, "%s: %d", tname, i);
             int len = CMCall(buf, GetSize);
             CMCall(buf, InsertPrint, 0, "%04d", len);
             sr = CMCall(csock, Write, buf, 1000);
@@ -79,6 +83,7 @@ void client_proc(void* udata) {
             CMCall(buf, Clear);
             sr = CMCall(csock, Read, buf, 4, 1000);
             if (sr != CMSocketOk) break;
+            CMLogInfo("received length : %s", CMCall(buf, GetCString));
             len = (int)strtol(CMCall(buf, GetCString), NULL, 10);
             CMCall(buf, Clear);
             sr = CMCall(csock, Read, buf, len, 1000);
