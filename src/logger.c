@@ -651,8 +651,8 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
             const CMUTIL_String *key = CMCall(arr, GetAt, 0);
             const char *ks = CMCall(key, GetCString);
             const char *vs = CMCall(arr, GetCString, 1);
-            if (strcmp(ks, "length") == 0) {
-                long slen = strtol(vs, NULL, 10);
+            if (strcasecmp(ks, "length") == 0) {
+                const long slen = strtol(vs, NULL, 10);
                 if (slen > 0) {
                     const uint32_t len = (uint32_t)slen;
                     CMUTIL_Iterator *iter =
@@ -669,7 +669,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
                     CMCall(iter, Destroy);
                 }
             }
-            else if (strcmp(ks, "lowerCase") == 0) {
+            else if (strcasecmp(ks, "lowerCase") == 0) {
                 CMUTIL_Iterator *iter =
                         CMCall(g_cmutil_log_levels, Iterator);
                 while (CMCall(iter, HasNext)) {
@@ -1394,8 +1394,9 @@ CMUTIL_STATIC void *CMUTIL_LogSocketAppenderAcceptor(void *data)
 {
     CMUTIL_LogSocketAppender *iap = (CMUTIL_LogSocketAppender*)data;
     while (iap->isrunning) {
-        CMUTIL_Socket *cli = CMCall(iap->listener, Accept, 1000);
-        if (cli) {
+        CMUTIL_Socket *cli = NULL;
+        const CMSocketResult sr = CMCall(iap->listener, Accept, &cli, 1000);
+        if (sr == CMSocketOk) {
             CMSync(iap->base.mutex, CMCall(iap->clients, Add, cli););
         }
     }
