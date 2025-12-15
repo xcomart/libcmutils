@@ -22,7 +22,7 @@
                 "asyncBufferSize": 512,
                 "type": "RollingFile",  // can be one of (console, file, rollingfile, socket)
                 "fileName": "log/sample_rolling_file_log.log",
-                "rollterm": "day"  // can be one of (year, month, day, hour, minute)
+                "rollTerm": "day"  // can be one of (year, month, day, hour, minute)
             },{
                 "name": "SampleSocketAppender",
                 "pattern": "%d %P-[%10t] [%-15F:%04L] [%-5p] %c - %m%ex%n",
@@ -40,7 +40,7 @@
                 "appenderRef":["SampleConsoleAppender","SampleRollingFileAppender"]
             },{
                 "name": "cmutil.network",
-                "additive": false,
+                "additivity": false,
                 "level": "TRACE",
                 "appenderRef": "SampleConsoleAppender"
             }

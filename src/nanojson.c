@@ -436,7 +436,7 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonObjectGet(
 #define CMUTIL_JsonObjectGetBody(jobj, key, method, v) do {                 \
     CMUTIL_Json *json = CMUTIL_JsonObjectGet(jobj, key);                    \
     if (json) {                                                             \
-        if (CMCall(json, GetType) == CMJsonTypeValue)                  \
+        if (CMCall(json, GetType) == CMJsonTypeValue)                       \
             return CMCall((CMUTIL_JsonValue*)json, method );                \
         else                                                                \
             CMLogError("JsonObject item with key '%s' is not a value type.",\
