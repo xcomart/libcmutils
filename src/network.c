@@ -312,7 +312,8 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketRead(
             if (!isock->silent)
                 CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
             return CMSocketPollFailed;
-        } else if (rc == 0) {
+        }
+        if (rc == 0) {
             if (!isock->silent)
                 CMLogError("socket read timeout.");
             return CMSocketTimeout;
@@ -327,7 +328,8 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketRead(
             if (!isock->silent)
                 CMLogError("recv failed.(%d:%s)", errno, strerror(errno));
             return CMSocketReceiveFailed;
-        } else if (rc == 0) {
+        }
+        if (rc == 0) {
             if (!isock->silent)
                 CMLogError("socket read timeout.");
             return CMSocketTimeout;
@@ -726,7 +728,7 @@ CONNECT_RETRY:
 #endif
     tout = (int)timeout;
 
-    rc = connect(s, (struct sockaddr *) &serv, sizeof(serv));
+    rc = connect(s, (struct sockaddr *) serv, sizeof(*serv));
     if (rc < 0) {
 
 #if defined(MSWIN)
@@ -933,7 +935,7 @@ CMBool CMUTIL_SocketConnectBase(
         CMUTIL_Socket_Internal *res, const char *host, int port, long timeout,
         CMBool silent)
 {
-#if 0
+#if 1
     uint8_t ip[4];
     uint32_t in[4];
     int rc, i;
@@ -991,6 +993,7 @@ CMBool CMUTIL_SocketConnectBase(
             sin->sin_port = (unsigned short)port;
             if (CMUTIL_SocketConnectByAddr(res, sin, timeout, issilent))
                 break;
+            curr = curr->ai_next;
         }
         if (ainfo)
             freeaddrinfo(ainfo);

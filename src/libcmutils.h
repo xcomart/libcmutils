@@ -1956,6 +1956,8 @@ CMUTIL_API CMUTIL_Config *CMUTIL_ConfigCreate(void);
 CMUTIL_API CMUTIL_Config *CMUTIL_ConfigLoad(const char *fconf);
 
 
+#define CMUTIL_LOG_CONFIG_DEFAULT       "cmutil_log.jsonc"
+
 typedef enum CMLogLevel {
     CMLogLevel_Trace = 0,
     CMLogLevel_Debug,
@@ -2036,28 +2038,29 @@ CMUTIL_API void CMUTIL_LogFallback(CMLogLevel level,
 
 #define CMUTIL_LogDefine(name)                                          \
     static CMUTIL_Logger *___logger = NULL;                             \
+    static CMUTIL_LogSystem *__lsys = NULL;                             \
     static CMUTIL_Logger *__CMUTIL_GetLogger() {                        \
-        if (___logger == NULL) {                                        \
-            CMUTIL_LogSystem *lsys = CMUTIL_LogSystemGet();             \
-            if (lsys) ___logger =                                       \
-                CMCall(CMUTIL_LogSystemGet(), GetLogger, name);         \
+        if (___logger == NULL || __lsys != CMUTIL_LogSystemGet()) {     \
+            __lsys = CMUTIL_LogSystemGet();                             \
+            if (__lsys) ___logger = CMCall(__lsys, GetLogger, name);    \
+            else ___logger = NULL;                                      \
         }                                                               \
         return ___logger;                                               \
     }
 
 #define CMUTIL_Log__(level,stack,f,...) do {                            \
-    CMUTIL_Logger *logger = __CMUTIL_GetLogger();                       \
-    if (logger)                                                         \
-        logger->LogEx(logger, CMLogLevel_##level,__FILE__,__LINE__,     \
+    CMUTIL_Logger *__logger = __CMUTIL_GetLogger();                     \
+    if (__logger)                                                       \
+        __logger->LogEx(__logger, CMLogLevel_##level,__FILE__,__LINE__, \
                       CM##stack,f,##__VA_ARGS__);                       \
     else                                                                \
         CMUTIL_LogFallback(CMLogLevel_##level, __FILE__, __LINE__,      \
                            f, ##__VA_ARGS__);                           \
     } while(0)
 #define CMUTIL_Log2__(level,stack,f,...)    do {                        \
-    CMUTIL_Logger *logger = __CMUTIL_GetLogger();                       \
-    if (logger)                                                         \
-        logger->LogEx(logger, level,__FILE__,__LINE__,                  \
+    CMUTIL_Logger *__logger = __CMUTIL_GetLogger();                     \
+    if (__logger)                                                       \
+        __logger->LogEx(__logger, level,__FILE__,__LINE__,              \
                       CM##stack,f,##__VA_ARGS__);                       \
     else                                                                \
         CMUTIL_LogFallback(CMLogLevel_##level, __FILE__, __LINE__,      \
@@ -2117,6 +2120,7 @@ CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemCreate(void);
 CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJson(
         const char *jsonfile);
 CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemGet(void);
+CMUTIL_API void CMUTIL_LogSystemSet(CMUTIL_LogSystem *lsys);
 
 
 typedef struct CMUTIL_StackWalker CMUTIL_StackWalker;
@@ -2182,6 +2186,15 @@ struct CMUTIL_Socket {
             const CMUTIL_Socket *socket, uint8_t c);
 };
 
+/**
+ * Create a new socket which connected to given endpoint.
+ *
+ * @param host host where connect to.
+ * @param port port where connect to.
+ * @param timeout connect timeout in milliseconds.
+ * @return A connected socket if succeeded it must be closed after use.
+ *      NULL if connect failed.
+ */
 CMUTIL_API CMUTIL_Socket *CMUTIL_SocketConnect(
         const char *host, int port, long timeout);
 CMUTIL_API CMUTIL_Socket *CMUTIL_SocketConnectWithAddr(
