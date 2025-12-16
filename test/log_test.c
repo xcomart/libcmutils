@@ -27,10 +27,11 @@ void *thread_proc(void *udata) {
                 break;
             }
             if (CMCall(buffer, GetSize) > 0) {
-                printf("%s", CMCall(buffer, GetCString));
+                CMUTIL_LogFallback(CMLogLevel_Trace, __FILE__, __LINE__, "%s", CMCall(buffer, GetCString));
                 CMCall(buffer, Clear);
             }
         }
+        CMCall(buffer, Destroy);
         CMCall(sock, Close);
     } else {
         CMLogError("cannot connect to server");
@@ -50,18 +51,18 @@ int main() {
     CMUTIL_LogSystem *lsys = CMUTIL_LogSystemCreate();
     ASSERT(lsys != NULL, "CMUTIL_LogSystemCreate");
 
-    logger = CMCall(lsys, CreateLogger, NULL, CMLogLevel_Trace, CMTrue);
+    logger = CMCall(lsys, CreateLogger, NULL, CMLogLevel_Debug, CMTrue);
     ASSERT(logger != NULL, "LogSystem::CreateLogger");
 
     apndr = CMUTIL_LogConsoleAppenderCreate("Console", pattern);
     ASSERT(apndr != NULL, "LogConsoleAppenderCreate");
     CMCall(apndr, SetAsync, 64);
-    CMCall(logger, AddAppender, apndr, CMLogLevel_Trace); apndr = NULL;
+    CMCall(logger, AddAppender, apndr, CMLogLevel_Debug); apndr = NULL;
 
     apndr = CMUTIL_LogFileAppenderCreate("FileAppender", "log_file.txt", pattern);
     ASSERT(apndr != NULL, "LogFileAppenderCreate");
     CMCall(apndr, SetAsync, 64);
-    CMCall(logger, AddAppender, apndr, CMLogLevel_Trace); apndr = NULL;
+    CMCall(logger, AddAppender, apndr, CMLogLevel_Debug); apndr = NULL;
 
     apndr = CMUTIL_LogRollingFileAppenderCreate(
         "RollingFileAppender", "rolling_log.txt",
@@ -69,18 +70,20 @@ int main() {
         pattern);
     ASSERT(apndr != NULL, "LogRollingFileAppenderCreate");
     CMCall(apndr, SetAsync, 64);
-    CMCall(logger, AddAppender, apndr, CMLogLevel_Trace); apndr = NULL;
+    CMCall(logger, AddAppender, apndr, CMLogLevel_Debug); apndr = NULL;
 
-    apndr = CMUTIL_LogSocketAppenderCreate(
-        "SocketAppender", "0.0.0.0", 9999, pattern);
-    ASSERT(apndr != NULL, "LogSocketAppenderCreate");
-    CMCall(apndr, SetAsync, 64);
-    CMCall(logger, AddAppender, apndr, CMLogLevel_Trace); apndr = NULL;
+    // apndr = CMUTIL_LogSocketAppenderCreate(
+    //     "SocketAppender", "0.0.0.0", 9999, pattern);
+    // ASSERT(apndr != NULL, "LogSocketAppenderCreate");
+    // CMCall(apndr, SetAsync, 64);
+    // CMCall(logger, AddAppender, apndr, CMLogLevel_Debug); apndr = NULL;
 
     CMUTIL_LogSystemSet(lsys); lsys = NULL;
 
-    tlogcli = CMUTIL_ThreadCreate(thread_proc, "name", "Cli");
-    CMCall(tlogcli, Start);
+    // tlogcli = CMUTIL_ThreadCreate(thread_proc, "name", "Cli");
+    // CMCall(tlogcli, Start);
+    //
+    // usleep(100);
 
     for (int i=0; i<100; i++) {
         CMLogInfo("test log %d", i);

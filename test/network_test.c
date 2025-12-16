@@ -13,15 +13,8 @@ static CMBool g_running = CMTrue;
 
 void client_handler(void* udata) {
     CMUTIL_Socket *csock = (CMUTIL_Socket *) udata;
-    CMUTIL_SocketAddr caddr;
-    char host[128];
-    int port;
     CMSocketResult sr = CMSocketOk;
     CMUTIL_String *buf = CMUTIL_StringCreate();
-
-    CMCall(csock, GetRemoteAddr, &caddr);
-    CMUTIL_SocketAddrGet(&caddr, host, &port);
-    CMLogInfo("client connected %s:%d", host, port);
 
     while (g_running) {
         sr = CMCall(csock, Read, buf, 4, 1000);
@@ -49,14 +42,20 @@ void client_handler(void* udata) {
 
 void *server_proc(void* udata) {
     CMUTIL_ServerSocket *ssock = (CMUTIL_ServerSocket*)udata;
-    CMUTIL_ThreadPool *pool = CMUTIL_ThreadPoolCreate(-1, NULL);
+    CMUTIL_ThreadPool *pool = CMUTIL_ThreadPoolCreate(-1, "Handler");
     while (g_running) {
         CMUTIL_Socket *csock = NULL;
         CMSocketResult sr = CMCall(ssock, Accept, &csock, 1000);
         if (sr == CMSocketOk) {
+            CMUTIL_SocketAddr caddr;
+            char host[128];
+            int port;
+            CMCall(csock, GetRemoteAddr, &caddr);
+            CMUTIL_SocketAddrGet(&caddr, host, &port);
+            CMLogInfo("client connected %s:%d", host, port);
             CMCall(pool, Execute, client_handler, csock);
-        }
-        if (sr != CMSocketTimeout)
+            csock = NULL;
+        } else if (sr != CMSocketTimeout)
             break;
     }
     CMCall(pool, Wait);
@@ -73,6 +72,9 @@ void client_proc(void* udata) {
     CMSocketResult sr = CMSocketOk;
 
     if (csock) {
+        char host[128]; int port;
+        CMUTIL_SocketAddrGet(addr, host, &port);
+        CMLogInfo("connected to server: %s:%d", host, port);
         for (int i=0; i<100; i++) {
             CMCall(buf, AddPrint, "%s: %d", tname, i);
             int len = CMCall(buf, GetSize);
@@ -90,6 +92,10 @@ void client_proc(void* udata) {
             if (sr != CMSocketOk) break;
             CMLogInfo("received from server: %04d%s", len, CMCall(buf, GetCString));
             CMCall(buf, Clear);
+        }
+        if (sr == CMSocketOk) {
+            CMCall(buf, AddString, "0000");
+            CMCall(csock, Write, buf, 1000);
         }
     }
 
