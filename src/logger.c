@@ -1635,6 +1635,14 @@ CMUTIL_STATIC void CMUTIL_LoggerLogEx(
     if (stack) CMCall(stack, Destroy);
 }
 
+CMUTIL_STATIC CMBool CMUTIL_LoggerIsEnabled(
+    CMUTIL_Logger *logger, CMLogLevel level)
+{
+    CMUTIL_Logger_Internal *il = (CMUTIL_Logger_Internal*)logger;
+    if (level < il->minlevel) return CMFalse;
+    return CMTrue;
+}
+
 CMUTIL_STATIC void CMUTIL_LoggerDestroy(CMUTIL_Logger_Internal *logger)
 {
     CMUTIL_Logger_Internal *il = logger;
@@ -1683,6 +1691,7 @@ CMUTIL_STATIC CMUTIL_Logger *CMUTIL_LogSystemGetLogger(
             }
             // logex and destroyer
             res->base.LogEx = CMUTIL_LoggerLogEx;
+            res->base.IsEnabled = CMUTIL_LoggerIsEnabled;
             res->Destroy = CMUTIL_LoggerDestroy;
             CMCall(ilsys->loggers, Add, res);
         } else {
@@ -1737,6 +1746,13 @@ CMUTIL_STATIC void CMUTIL_LogSystemDestroy(CMUTIL_LogSystem *lsys)
         if (ilsys->mutex) CMCall(ilsys->mutex, Destroy);
         ilsys->memst->Free(ilsys);
     }
+}
+
+CMBool CMUTIL_LogIsEnabled(CMUTIL_Logger *logger, CMLogLevel level)
+{
+    if (logger)
+        return CMCall(logger, IsEnabled, level);
+    return CMFalse;
 }
 
 CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem *memst)

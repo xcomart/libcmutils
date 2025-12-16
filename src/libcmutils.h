@@ -208,8 +208,8 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
  * obj->Destroy(obj);
  * </code>
  *
- * As you see instance variable used redundently in method call,
- * we created an macro CMCall because this inconvinience.
+ * As you see instance variable used redundantly in method call,
+ * we created a macro CMCall because this inconvenience.
  * As a result below code will produce the same result with above code.
  * <code>
  * // Create CMUTIL_XX object instance.
@@ -261,8 +261,8 @@ typedef void (*CMProcCB)(void*);
  *      corruption while freeing.</li>
  *  <li> Memory recycling with stack information.
  *      This option is same as previous recycling option except all memory
- *      allocation will also create it's callstack information,
- *      increadibly slow. Only use for memory leak debugging.</li>
+ *      allocation will also create its callstack information,
+ *      incredibly slow. Only use for memory leak debugging.</li>
  * </ul>
  */
 
@@ -1995,6 +1995,9 @@ struct CMUTIL_Logger {
         CMBool printStack,
         const char *fmt,
         ...);
+    CMBool(*IsEnabled)(
+            CMUTIL_Logger *logger,
+            CMLogLevel level);
 };
 
 struct CMUTIL_LogAppender {
@@ -2047,6 +2050,12 @@ CMUTIL_API void CMUTIL_LogFallback(CMLogLevel level,
         }                                                               \
         return ___logger;                                               \
     }
+
+
+CMUTIL_API CMBool CMUTIL_LogIsEnabled(
+        CMUTIL_Logger *logger, CMLogLevel level);
+
+#define CMLogIsEnabled(level) CMUTIL_LogIsEnabled(__CMUTIL_GetLogger(),level)
 
 #define CMUTIL_Log__(level,stack,f,...) do {                            \
     CMUTIL_Logger *__logger = __CMUTIL_GetLogger();                     \
