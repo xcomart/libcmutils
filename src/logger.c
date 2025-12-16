@@ -530,7 +530,7 @@ CMUTIL_STATIC void CMUTIL_LogAppenderBaseSetAsync(
                         iap->memst, CMUTIL_LogAppenderStringDestroyer);
         if (iap->writer == NULL) {
             char namebuf[256];
-            sprintf(namebuf, "LogAppender(%s)-AsyncWriter", iap->name);
+            sprintf(namebuf, "%s-AsyncWriter", iap->name);
             iap->writer = CMUTIL_ThreadCreateInternal(
                         iap->memst, CMUTIL_LogAppenderAsyncWriter,
                         appender, namebuf);
@@ -975,6 +975,10 @@ CMUTIL_STATIC CMUTIL_Mem *CMUTIL_LogAppenderBaseClean(
     CMUTIL_Mem *res = NULL;
     if (iap) {
         res = iap->memst;
+        if (iap->buffer && CMCall(iap->buffer, GetSize) > 0) {
+            // we need to flush items
+            CMCall((CMUTIL_LogAppender*)iap, Flush);
+        }
         if (iap->writer) {
             iap->isasync = CMFalse;
             CMCall(iap->writer, Join);

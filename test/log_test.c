@@ -9,44 +9,12 @@
 
 CMUTIL_LogDefine("test.log")
 
-static CMBool g_sock_running = CMTrue;
-
-void *thread_proc(void *udata) {
-    void *res = udata;
-    CMUTIL_SocketAddr addr;
-    CMUTIL_SocketAddrSet(&addr, "127.0.0.1", 9999);
-    CMUTIL_Socket *sock = CMUTIL_SocketConnectWithAddr(&addr, 5000);
-    if (sock) {
-        CMSocketResult sr = CMSocketOk;
-        CMUTIL_String *buffer = CMUTIL_StringCreate();
-        while (g_sock_running) {
-            sr = CMCall(sock, Read, buffer, 1024, 100);
-            if (sr != CMSocketOk && sr != CMSocketTimeout) {
-                CMLogError("socket read failed");
-                res = NULL;
-                break;
-            }
-            if (CMCall(buffer, GetSize) > 0) {
-                CMUTIL_LogFallback(CMLogLevel_Trace, __FILE__, __LINE__, "%s", CMCall(buffer, GetCString));
-                CMCall(buffer, Clear);
-            }
-        }
-        CMCall(buffer, Destroy);
-        CMCall(sock, Close);
-    } else {
-        CMLogError("cannot connect to server");
-        res = NULL;
-    }
-    return res;
-}
-
 int main() {
     int ir = -1;
     CMUTIL_Init(CMMemRecycle);
     CMUTIL_LogAppender *apndr = NULL;
     CMUTIL_ConfLogger *logger = NULL;
     const char *pattern = "%d %P-[%10t] (%-15F:%04L) [%-5p] %c - %m%ex%n";
-    CMUTIL_Thread *tlogcli = NULL;
 
     CMUTIL_LogSystem *lsys = CMUTIL_LogSystemCreate();
     ASSERT(lsys != NULL, "CMUTIL_LogSystemCreate");
@@ -72,27 +40,27 @@ int main() {
     CMCall(apndr, SetAsync, 64);
     CMCall(logger, AddAppender, apndr, CMLogLevel_Debug); apndr = NULL;
 
-    // apndr = CMUTIL_LogSocketAppenderCreate(
-    //     "SocketAppender", "0.0.0.0", 9999, pattern);
-    // ASSERT(apndr != NULL, "LogSocketAppenderCreate");
-    // CMCall(apndr, SetAsync, 64);
-    // CMCall(logger, AddAppender, apndr, CMLogLevel_Debug); apndr = NULL;
+    apndr = CMUTIL_LogSocketAppenderCreate(
+        "SocketAppender", "0.0.0.0", 9999, pattern);
+    ASSERT(apndr != NULL, "LogSocketAppenderCreate");
+    CMCall(apndr, SetAsync, 64);
+    CMCall(logger, AddAppender, apndr, CMLogLevel_Debug); apndr = NULL;
 
     CMUTIL_LogSystemSet(lsys); lsys = NULL;
 
-    // tlogcli = CMUTIL_ThreadCreate(thread_proc, "name", "Cli");
-    // CMCall(tlogcli, Start);
-    //
-    // usleep(100);
+    // how you can view logs via command "telnet localhost 9999"
 
-    for (int i=0; i<100; i++) {
+    for (int i=0; i<50; i++) {
         CMLogInfo("test log %d", i);
+        usleep(500000);
+    }
+
+    for (int i=0; i<1000; i++) {
+        CMLogInfo("test fast log %d", i);
     }
 
     ir = 0;
 END_POINT:
-    g_sock_running = CMFalse;
-    if (tlogcli) CMCall(tlogcli, Join);
     if (lsys) CMCall(lsys, Destroy);
     if (!CMUTIL_Clear()) ir = 1;
     return ir;
