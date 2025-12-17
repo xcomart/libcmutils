@@ -2062,13 +2062,16 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
     }
 
     if (CMCall(jobj, Get, "name")) {
-        CMUTIL_String *name = CMCall(jobj, GetString, "name");
-        CMCall(name, SelfTrim);
-        sname = CMCall(name, GetCString);
+        const CMUTIL_String *name = CMCall(jobj, GetString, "name");
+        CMUTIL_String *cname = CMCall(name, Clone);
+        CMCall(cname, SelfTrim);
+        sname = CMCall(cname, GetCString);
         if (*sname == 0x0 && strcmp(stype, "root") != 0) {
             printf("Name must be specified except root logger.\n");
+            CMCall(cname, Destroy);
             return CMFalse;
         }
+        CMCall(cname, Destroy);
     } else {
         if (strcmp(stype, "root") != 0) {
             printf("Name must be specified except root logger.\n");
@@ -2140,7 +2143,8 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessItems(
     for (i=0; i<CMCall(jarr, GetSize); i++) {
         CMUTIL_Json *item = CMCall(jarr, Get, i);
         CMUTIL_JsonObject *oitem = NULL;
-        CMUTIL_String *type = NULL;
+        const CMUTIL_String *type;
+        CMUTIL_String *ctype = NULL;
         const char *stype = NULL;
         if (CMCall(item, GetType) != CMJsonTypeObject) {
             printf("invalid configuration structure.\n");
@@ -2148,13 +2152,16 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessItems(
         }
         oitem = (CMUTIL_JsonObject*)item;
         type = CMCall(oitem, GetString, "type");
-        CMCall(type, SelfToLower);
-        stype = CMCall(type, GetCString);
+        ctype = CMCall(type, Clone);
+        CMCall(ctype, SelfToLower);
+        stype = CMCall(ctype, GetCString);
 
         if (!oneprocf(lsys, stype, item)) {
             printf("processing one item failed.\n");
+            CMCall(ctype, Destroy);
             goto ENDPOINT;
         }
+        CMCall(ctype, Destroy);
     }
     res = CMTrue;
 ENDPOINT:

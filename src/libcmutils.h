@@ -193,11 +193,11 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
 /**
  * @brief Method caller for this library.
  *
- * This library built on C language, but some of the usage of this library
- * simillar to object-oriented languages like C++ or Java.
+ * This library is built on the C language, but some usage of this library
+ * is similar to object-oriented languages like C++ or Java.
  *
- * Create instance of type CMUTIL_XX with CMUTIL_XXCreate function,
- * and call method with member callbacks.
+ * Create an instance of the type CMUTIL_XX with CMUTIL_XXCreate function
+ * and call the method with member callbacks.
  *
  * ie)<code>
  * // Create CMUTIL_XX object instance.
@@ -209,8 +209,8 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
  * </code>
  *
  * As you see instance variable used redundantly in method call,
- * we created a macro CMCall because this inconvenience.
- * As a result below code will produce the same result with above code.
+ * we created a macro CMCall because of this inconvenience.
+ * As a result, the below code will produce the same result with the above code.
  * <code>
  * // Create CMUTIL_XX object instance.
  * CMUTIL_XX *obj = CMUTIL_XXCreate();
@@ -225,7 +225,7 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
 #define CMUTIL_CALL CMUTIL_CALL__
 
 /**
- * @brief Get version string of this library.
+ * @brief Get a version string of this library.
  * @return Version string of this library.
  */
 CMUTIL_API const char *CMUTIL_GetLibVersion(void);
@@ -252,17 +252,18 @@ typedef void (*CMProcCB)(void*);
  * libcmutils offers three types of memory management:
  *
  * <ul>
- *  <li> System version malloc, realloc, strdup and free.
+ *  <li> System version malloc, realloc, strdup, and free.
  *      This option has no memory management, proper for external memory
  *      debugger like 'duma' or 'valgrind'.</li>
  *  <li> Memory recycling, all memory allocation will be fit to 2^n sized memory
  *      blocks. This option prevents heap memory fragments,
- *      supports memory leak detection and detects memory overflow/underflow
+ *      supports memory leak detection, and detects memory overflow/underflow
  *      corruption while freeing.</li>
  *  <li> Memory recycling with stack information.
- *      This option is same as previous recycling option except all memory
- *      allocation will also create its callstack information,
- *      incredibly slow. Only use for memory leak debugging.</li>
+ *      This option is the same as a previous recycling option,
+ *      except all memory allocation will also create
+ *      its callstack information, incredibly slow.
+ *      Only use for memory leak debugging.</li>
  * </ul>
  */
 
@@ -272,7 +273,7 @@ typedef void (*CMProcCB)(void*);
  */
 typedef enum CMMemOper {
     /**
-     * Use system version malloc, realloc, strdup and free.
+     * Use system version malloc, realloc, strdup, and free.
      */
     CMMemSystem = 0,
     /**
@@ -290,17 +291,17 @@ typedef enum CMMemOper {
  * any function in this library.
  *
  *  <ul>
- *   <li>CMMemSystem: All memory operation will be replaced with
- *         malloc, realloc, strdup and free.
- *         same as direct call system calls.</li>
+ *   <li>CMMemSystem: All memory operations will be replaced with
+ *         malloc, realloc, strdup, and free.
+ *         Same as direct call system calls.</li>
  *   <li>CMMemRecycle: All memory allocation will be managed with pool.
- *         Pool is consist of memory blocks which size is power of 2 bytes.
+ *         Pool is consists of memory blocks whose size is power of 2 bytes.
  *         Recommended for any purpose. This option prevents heap memory
  *         fragments and checks memory leak at termination. But a little
- *         overhead required for recycling and needs much more memory
+ *         overhead is required for recycling and needs much more memory
  *         usage.</li>
  *   <li>CMMemDebug: Option for memory debugging.
- *         Any memory operation will be traced including stack tracing.
+ *         Any memory operation will be traced, including stack tracing.
  *         Recommended only for memory debugging.
  *         Much slower than any other options.</li>
  *  </ul>
@@ -328,7 +329,7 @@ typedef struct CMUTIL_Mem {
      *
      * Allocates <code>size<code> bytes and returns a pointer to the allocated
      * memory. The memory is not initialized. If size is 0, then this function
-     * returns either NULL, or a unique pointer value that can later be
+     * returns either NULL or a unique pointer value that can later be
      * successfully passed to <code>Free</code>.
      *
      * @param size  Count of bytes to be allocated.
@@ -371,7 +372,7 @@ CMUTIL_API CMUTIL_Mem *CMUTIL_GetMem(void);
 #define CMCalloc    CMUTIL_GetMem()->Calloc
 
 /**
- * @brief Reallocate memory with given size preserving previous data.
+ * @brief Reallocate memory with the given size preserving previous data.
  */
 #define CMRealloc   CMUTIL_GetMem()->Realloc
 
@@ -394,7 +395,7 @@ CMUTIL_API CMUTIL_Mem *CMUTIL_GetMem(void);
  * @typedef CMUTIL_Cond Platform independent condition definition for
  * concurrency control.
  *
- * Condition(or Event)
+ * Condition (or Event)
  */
 typedef struct CMUTIL_Cond CMUTIL_Cond;
 struct CMUTIL_Cond {
@@ -427,12 +428,12 @@ struct CMUTIL_Cond {
             long millisec);
 
     /**
-     * @brief Sets this conidtion object.
+     * @brief Sets this condition object.
      *
      * The state of a manual-reset condition object remains set until it is
      * explicitly to the nonsignaled state by the Reset method. Any number
      * of waiting threads, or threads that subsequently begin wait operations
-     * for this condition object by calling one of wait functions, can be
+     * for this condition object by calling one of the wait functions, can be
      * released while this condition state is signaled.
      *
      * The state of an auto-reset condition object remains signaled until a
@@ -440,8 +441,8 @@ struct CMUTIL_Cond {
      * automatically resets this condition state to nonsignaled. If no
      * threads are waiting, this condition object's state remains signaled.
      *
-     * If this condition object set already, calling this method will has no
-     * effect.
+     * If this condition object is set already, calling this method
+     * will have no effect.
      * @param cond this condition object.
      */
     void (*Set)(
@@ -451,11 +452,12 @@ struct CMUTIL_Cond {
      * @brief Unsets this condition object.
      *
      * The state of this condition object remains nonsignaled until it is
-     * explicitly set to signaled by the Set method. This nonsignaled state
-     * blocks the execution of any threads that have specified this condition
-     * object in a call to one of wait methods.
+     * explicitly set to signaled state by the Set method.
+     * This nonsignaled state blocks the execution of any threads
+     * that have specified this condition object in a call to
+     * one of wait methods.
      *
-     * This Reset method is used primarily for manual-reset condition object,
+     * This Reset method is used primarily for a manual-reset condition object,
      * which must be set explicitly to the nonsignaled state. Auto-reset
      * condition objects automatically change from signaled to nonsignaled
      * after a single waiting thread is released.
@@ -465,7 +467,7 @@ struct CMUTIL_Cond {
             CMUTIL_Cond *cond);
 
     /**
-     * @brief Destroys all resources related with this object.
+     * @brief Destroys all resources related to this object.
      * @param cond this condition object.
      */
     void (*Destroy)(
@@ -475,16 +477,16 @@ struct CMUTIL_Cond {
 /**
  * @brief Creates a condition object.
  *
- * Creates a manual or auto resetting condition object.
+ * Creates a manual or auto-resetting condition object.
  *
  * @param manual_reset
  *     If this parameter is CMTrue, the function creates a
  *     manual-reset condition object, which requires the use of the Reset
  *     method to set the event state to nonsignaled. If this parameter is
  *     CMFalse, the function creates an auto-reset condition
- *     object, and system automatically resets the event state to
+ *     object, and the system automatically resets the event state to
  *     nonsignaled after a single waiting thread has been released.
- * @return Created conditional object.
+ * @return Created a conditional object.
  */
 CMUTIL_API CMUTIL_Cond *CMUTIL_CondCreate(CMBool manual_reset);
 
@@ -502,7 +504,7 @@ struct CMUTIL_Mutex {
      * available. This method shall return with this mutex object in the
      * locked state with the calling thread as its owner.
      *
-     * This mutex is recursive lockable object. This mutex shall maintain the
+     * This mutex is a recursive lockable object. This mutex shall maintain the
      * concept of lock count. When a thread successfully acquires a mutex for
      * the first time, the lock count shall be set to one. Every time a thread
      * relocks this mutex, the lock count shall be incremented by one. Each
@@ -516,22 +518,22 @@ struct CMUTIL_Mutex {
     /**
      * @brief Unlock this mutex object.
      *
-     * This mutex object shall be unlocked if lock count reaches zero.
+     * This mutex object shall be unlocked if the lock count reaches zero.
      * @param mutex This mutex object.
      */
     void (*Unlock)(CMUTIL_Mutex *mutex);
 
     /**
-     * @brief Try to lock given mutex object.
+     * @brief Try to lock the given mutex object.
      * @param  mutex   a mutex object to be tested.
      * @return CMTrue if mutex locked successfully,
      *         CMFalse if another thread locked this mutex already,
-     *         so lock failed.
+     *         so the locking is failed.
      */
     CMBool (*TryLock)(CMUTIL_Mutex *mutex);
 
     /**
-     * @brief Destroys all resources related with this object.
+     * @brief Destroys all resources related to this object.
      * @param mutex This mutex object.
      */
     void (*Destroy)(CMUTIL_Mutex *mutex);
@@ -544,15 +546,15 @@ struct CMUTIL_Mutex {
  * to lock methods. When a lock method returns, the waiting thread is
  * released to continue its execution.
  * This function creates a 'recursive lockable' mutex object.
- * @return Created mutex object.
+ * @return Created a mutex object.
  */
 CMUTIL_API CMUTIL_Mutex *CMUTIL_MutexCreate(void);
 
 /**
  * @brief Synchronized block macro.
  *
- * This macro will lock given mutex object, execute given statements,
- * and unlock given mutex object.
+ * This macro will lock the given mutex object, execute given statements,
+ * and unlock the given mutex object.
  *
  * Note that do not use 'return', 'break', 'continue' or "goto" statements
  * inside synchronized block, because these statements will bypass
@@ -579,16 +581,16 @@ struct CMUTIL_Thread {
      * This function creates a new thread which is not detached,
      * so the created thread must be joined by calling Join method.
      * @param thread This thread object.
-     * @return This thread have been started successfully or not.
+     * @return This thread has been started successfully or not.
      */
     CMBool (*Start)(CMUTIL_Thread *thread);
 
     /**
      * @brief Join this thread.
      *
-     * This function joins this thread and clean up it's resources including
-     * this thread object, so these references are must not be used after
-     * calling this method. Every thread which been created by this library
+     * This function joins this thread and cleans up its resources, including
+     * this thread object, so these references must not be used after
+     * calling this method. Every thread that been created by this library
      * must be joined by calling this method.
      * @param thread This thread object.
      * @return Thread return value.
@@ -606,7 +608,7 @@ struct CMUTIL_Thread {
 
     /**
      * @brief Get the ID fo this thread. Returned ID is not system thread ID.
-     *     just internal thread index.
+     *     just an internal thread index.
      * @return ID of this thread.
      */
     uint32_t (*GetId)(const CMUTIL_Thread *thread);
@@ -622,28 +624,28 @@ struct CMUTIL_Thread {
  * @brief Creates a thread object.
  *
  * Created thread does not start automatically.
- * Call <tt>Start</tt> method to start thread.
- * Returned object must be free by calling <tt>Join</tt> method,
- * even if thread not started.
+ * Call the <code>Start</code> method to start this thread.
+ * The returned object must be freed by calling the <tt>Join</tt> method,
+ * even if this thread is not started.
  *
- * @param proc Start routine of the created thread.
+ * @param proc The start routine of the created thread.
  * @param udata This argument is passed as the sole argument of 'proc'
- * @param name Thread name, any name could be assigned,
- *      and can also duplicable. But must not be exceeded 200 bytes.
- * @return Created thread object.
+ * @param name Thread name, any name could be assigned
+ *      and can also duplicable. But must not exceed 200 bytes.
+ * @return Created a thread object.
  */
 CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadCreate(
         void*(*proc)(void*), void *udata, const char *name);
 
 /**
- * @brief Get the ID of current thread. This id is not system thread id,
- *     just internal thread index.
- * @return ID of current thread.
+ * @brief Get the ID of the current thread. This id is not system thread id,
+ *     just an internal thread index.
+ * @return ID of the current thread.
  */
 CMUTIL_API uint32_t CMUTIL_ThreadSelfId(void);
 
 /**
- * @brief Get current thread context.
+ * @brief Get the current thread context.
  * @return Current thread context.
  */
 CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadSelf(void);
@@ -669,7 +671,7 @@ struct CMUTIL_ThreadPool {
      * @param tp This threadpool object.
      * @param runnable A callback function to be executed.
      * @param udata User data object which would be passed to
-     *          <code>runnable</code> callback function.
+     *          the <code>runnable</code> callback function.
      */
     void (*Execute)(CMUTIL_ThreadPool *tp, CMProcCB runnable, void *udata);
 
@@ -690,14 +692,14 @@ struct CMUTIL_ThreadPool {
 /**
  * @brief Creates a new threadpool object.
  *
- * This function will create a new threadpool object with initial size.
+ * This function will create a new threadpool object with the initial size.
  * If <code>pool_size</code> is zero or negative value, this threadpool object's
  * pool size will not be fixed, will be increased one by one if needed.
  *
  * @param pool_size Thread count of this threadpool if positive, otherwise
  *              this object will increase pool size automatically.
- * @param name Name of this threadpool object, any name could be assigned,
- *              and can also duplicable. But must not be exceeded 200 bytes.
+ * @param name Name of this threadpool object, any name could be assigned
+ *              and can also duplicable. But must not exceed 200 bytes.
  * @return A new threadpool object.
  */
 CMUTIL_API CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(
@@ -710,33 +712,33 @@ typedef struct CMUTIL_Semaphore CMUTIL_Semaphore;
 struct CMUTIL_Semaphore {
 
     /**
-     * @brief Acquire an ownership from semaphore.
+     * @brief Acquire ownership from semaphore.
      *
-     * Acquire an ownership in given time or fail with timed out. This method
-     * will be blocked until an ownership acquired successfully in time,
+     * Acquire ownership in the given time or fail with timed out. This method
+     * will be blocked until ownership is acquired successfully in time,
      * or the waiting time expired.
      *
      * @param semaphore This semaphore object.
-     * @param millisec Waiting time to acquire an ownership in millisecond.
-     * @return CMTrue if an ownership acquired successfully in time,
+     * @param millisec Waiting time to acquire ownership, in millisecond.
+     * @return CMTrue if ownership acquired successfully in time,
      *         CMFalse if failed to acquire ownership in time.
      */
     CMBool (*Acquire)(
             CMUTIL_Semaphore *semaphore, long millisec);
 
     /**
-     * @brief Release an ownership to semaphore.
+     * @brief Release ownership to semaphore.
      *
-     * Release an ownership to semaphore, the semaphore value increased
-     * greater than zero consequently, one of the thread which blocked in
-     * Acquire method will get the ownership and be unblocked.
+     * Release ownership to semaphore, the semaphore value increased
+     * greater than zero consequently, one of the threads which is blocked
+     * in the Acquire method will get the ownership and be unblocked.
      * @param semaphore This semaphore object.
      */
     void (*Release)(
             CMUTIL_Semaphore *semaphore);
 
     /**
-     * @brief Destroy all resources related with this object.
+     * @brief Destroy all resources related to this object.
      * @param semaphore This semaphore object.
      */
     void (*Destroy)(CMUTIL_Semaphore *semaphore);
@@ -747,7 +749,7 @@ struct CMUTIL_Semaphore {
  *
  * Create an in-process semaphore object.
  * @param initcnt Initial semaphore ownership count.
- * @return Created semaphore object.
+ * @return Created a semaphore object.
  */
 CMUTIL_API CMUTIL_Semaphore *CMUTIL_SemaphoreCreate(int initcnt);
 
@@ -761,18 +763,18 @@ struct CMUTIL_RWLock {
     /**
      * @brief Read lock for this object.
      *
-     * This method shall apply a read lock to given object. The calling thread
-     * acquires the read lock if a writer does not hold the lock and
-     * there are no writers blocked on the lock.
+     * This method shall apply a read lock to the given object.
+     * The calling thread acquires the read lock if a writer does not hold
+     * the lock and there are no writers blocked on the lock.
      * @param rwlock This read-write lock object.
      */
     void (*ReadLock)(
             CMUTIL_RWLock *rwlock);
 
     /**
-     * @brief Read unlock for this object.
+     * @brief Release read lock for this object.
      *
-     * This method shall release a read lock held on given object.
+     * This method shall release a read lock held on the given object.
      * @param rwlock This read-write lock object.
      */
     void (*ReadUnlock)(
@@ -781,10 +783,11 @@ struct CMUTIL_RWLock {
     /**
      * @brief Write lock for this object.
      *
-     * This method whall apply a write lock to given object. The calling thread
-     * acquires the write lock if no other thread (reader or writer) holds
-     * given object. Otherwise, the thread shall block until it can acquire
-     * the lock. The calling thread may deadlock if at the time
+     * This method shall apply a write lock to the given object.
+     * The calling thread acquires the write lock
+     * if no other thread (reader or writer) holds the given object.
+     * Otherwise, the thread shall block until it can acquire the lock.
+     * The calling thread may deadlock if at the time
      * the call is made it holds the read-write lock
      * (whether a read or write lock).
      * @param rwlock This read-write lock object.
@@ -793,16 +796,16 @@ struct CMUTIL_RWLock {
             CMUTIL_RWLock *rwlock);
 
     /**
-     * @brief Write unlock for this object.
+     * @brief Release write lock for this object.
      *
-     * This method shall release a write lock held on given object.
+     * This method shall release a write lock held on the given object.
      * @param rwlock This read-write lock object.
      */
     void (*WriteUnlock)(
             CMUTIL_RWLock *rwlock);
 
     /**
-     * @brief Destroy all resources related with this object.
+     * @brief Destroy all resources related to this object.
      * @param rwlock This read-write lock object.
      */
     void (*Destroy)(CMUTIL_RWLock *rwlock);
@@ -820,16 +823,16 @@ typedef struct CMUTIL_Iterator CMUTIL_Iterator;
 struct CMUTIL_Iterator {
 
     /**
-     * @brief Check iterator has next element.
+     * @brief Check iterator has the next element.
      * @param iter This iterator object.
-     * @return CMTrue if this iterator has next element.
-     *         CMFalse if there is no more elements.
+     * @return CMTrue if this iterator has the next element.
+     *         CMFalse if there are no more elements.
      */
     CMBool (*HasNext)(
             const CMUTIL_Iterator *iter);
 
     /**
-     * @brief Get next element from this iterator.
+     * @brief Get the next element from this iterator.
      * @param iter This iterator object.
      * @return Next element.
      */
@@ -839,7 +842,7 @@ struct CMUTIL_Iterator {
     /**
      * @brief Destroy this iterator.
      *
-     * This method must be called after use this iterator.
+     * This method must be called after using this iterator.
      * @param iter This iterator object.
      */
     void (*Destroy)(
@@ -854,34 +857,38 @@ typedef struct CMUTIL_Array CMUTIL_Array;
 struct CMUTIL_Array {
 
     /**
-     * @brief Add new element to this array.
+     * @brief Add a new element to this array.
      *
-     * If this array is a sorted array(created including <code>comparator</code>
-     * callback function), this method will add new item to appropriate
-     * location.
-     * Otherwise, this method will add new item to the end of this array.
+     * If this array is a sorted array (created including
+     * <code>comparator</code> callback function), this method will add
+     * a new item to the appropriate location.
+     * Otherwise, this method will add a new item to the end of this array.
+     * If the <code>freecb</code> is supplied at the creation, this array
+     * will take the ownership of the item.
      *
      * @param array This dynamic array object.
      * @param item Item to be added.
-     * @return Previous data at that position if this array is sorted array.
-     *         NULL if this is not sorted array.
+     * @return Previous data at that position if this array is a sorted array.
+     *         NULL if this is not a sorted array.
      */
     void *(*Add)(CMUTIL_Array *array, void *item);
 
     /**
-     * @brief Remove an item from sorted array.
+     * @brief Remove an item from this array.
      *
-     * This method will work both this array is a sorted or not.
+     * This method will work both this array is sorted or not.
      * But if this array is sorted, more efficient binary search will be used,
      * otherwise linear search will be used.
-     * <code>compval</code> will be compared with array elements in
-     * binary search manner.
+     * The <code>compval</code> will be compared with array elements in
+     * a binary search manner if this array is sorted.
+     * If this array is not sorted, the memory address will be compared
+     * to search the item.
+     * The ownership of the item will be moved to caller.
      *
      * @param array This dynamic array object.
-     * @param compval Search key of item to be removed.
-     * @return Removed element if given item found in this array.
-     *         NULL if given key does not exist in this array or
-     *         this array is not a sorted array.
+     * @param compval Search key of an item to be removed.
+     * @return The removed element if given item found in this array.
+     *         NULL if the given key does not exist in this array.
      */
     void *(*Remove)(CMUTIL_Array *array, const void *compval);
 
@@ -889,13 +896,16 @@ struct CMUTIL_Array {
      * @brief Insert a new element to this array.
      *
      * This method will only work if this array is not a sorted array.
-     * New item will be stored at given <code>index</code>.
+     * New item will be stored at the given <code>index</code>.
+     * If the <code>freecb</code> is supplied at the creation, this array
+     * will take the ownership of the item.
      *
      * @param array This dynamic array object.
      * @param item Item to be inserted.
-     * @param index The index of this array where new item will be stored in.
+     * @param index The index of this array where the item will be stored in.
      * @return Inserted item if this array is not a sorted array.
-     *         NULL if this array is a sorted array.
+     *         NULL if this array is a sorted array or
+     *         the index is out of bound.
      */
     void *(*InsertAt)(CMUTIL_Array *array, void *item, uint32_t index);
 
@@ -903,11 +913,11 @@ struct CMUTIL_Array {
      * @brief Remove an item from this array.
      *
      * The item at the index of this array will be removed.
+     * The ownership of the item will be moved to caller.
      *
      * @param array This dynamic array object.
      * @param index The index of this array which item will be removed.
-     * @return Removed item if given index is a valid index.
-     *         NULL if given index is invalid.
+     * @return The removed item. NULL if the index is out of bound.
      */
     void *(*RemoveAt)(CMUTIL_Array *array, uint32_t index);
 
@@ -916,44 +926,47 @@ struct CMUTIL_Array {
      *
      * This method will only work if this array is not a sorted array.
      * The item positioned at the <code>index</code> of this array will be
-     * replaced with given <code>item</code>.
+     * replaced with the given <code>item</code>.
+     * If the <code>freecb</code> is supplied at the creation, this array
+     * will take the ownership of the item.
      *
      * @param array This dynamic array object.
-     * @param item New item which will replace old one.
+     * @param item New item which will replace the old one.
      * @param index The index of this array, the item in which will be replaced.
-     * @return Replaced old item if this array is not a sorted array and
-     *         given index is a valid index.
-     *         NULL if this array is a sorted array or given index is not a
-     *         valid index or the old item is NULL.
+     * @return Replaced old item if this array is not a sorted array.
+     *         NULL if this array is a sorted array or
+     *         the index is out of bound.
      */
     void *(*SetAt)(CMUTIL_Array *array, void *item, uint32_t index);
 
     /**
      * @brief Get an item from this array.
      *
-     * Get an item which stored at given <code>index</code>.
+     * Get an item which is stored at a given <code>index</code>.
+     * The ownership of the item does not be moved to the caller.
      *
      * @param array This dynamic array object.
      * @param index The index of this array,
      *        the item in which will be retreived.
-     * @return An item which positioned at <code>index</code> of this array if
-     *         given index is valid one.
-     *         NULL if given index is invalid.
+     * @return An item which positioned at <code>index</code> of this array.
+     *         NULL if the given index is out of bound.
      */
     void *(*GetAt)(const CMUTIL_Array *array, uint32_t index);
 
     /**
      * @brief Find an item from this array.
      *
-     * This method will only work if this array is a sorted array.
+     * This method will use binary search if this is a sorted array.
+     * Otherwise, linear search is used with memory address comparison.
+     * The ownership of the item does not be moved to the caller.
      *
      * @param array This dynamic array object.
      * @param compval Search key of item which to be found.
      * @param index The index reference of the item which found with
      *        <code>compval</code>.
      *        Where the found item index will be stored in.
-     * @return A found item from this array if the item found. NULL if
-     *         this array is not a sorted array or item not found.
+     * @return A found item from this array if the item found.
+     *         NULL if the item is not found.
      */
     void *(*Find)(const CMUTIL_Array *array, const void *compval, uint32_t *index);
 
@@ -966,10 +979,13 @@ struct CMUTIL_Array {
     size_t  (*GetSize)(const CMUTIL_Array *array);
 
     /**
-     * @brief Push an item to this array like stack operation.
+     * @brief Push an item to the end of this array like a stack operation.
      *
      * This method will only work if this array is not a sorted array.
-     * This operation will add given <code>item</code> at the end of this array.
+     * This operation will add the given <code>item</code>
+     * at the end of this array.
+     * If the <code>freecb</code> is supplied at the creation, this array
+     * will take the ownership of the item.
      *
      * @param array This dynamic array object.
      * @param item A new item to be pushed to this array.
@@ -979,46 +995,47 @@ struct CMUTIL_Array {
     CMBool (*Push)(CMUTIL_Array *array, void *item);
 
     /**
-     * @brief Pop an item from this array like stack operation.
+     * @brief Pop an item from the end of this array like a stack operation.
      *
      * This operation will remove an item at the end of this array.
+     * The ownership of the item will be moved to the caller.
      *
      * @param array This dynamic array object.
-     * @return Removed item if there are elements exists. NULL if there is
+     * @return Removed item if there are elements exists. NULL if there are
      *         no more elements.
      */
     void *(*Pop)(CMUTIL_Array *array);
 
     /**
-     * @brief Get the top element from this array like stack operation.
+     * @brief Get the top element from this array like a stack operation.
      *
      * Get the item at the end of this array.
+     * The ownership of the item does not be moved to the caller.
      *
      * @param array This dynamic array object.
-     * @return An item at the end of this array
-     *         if the size of this array is bigger than zero.
+     * @return An item at the end of this array.
      *         NULL if there is no item in this array.
      */
     void *(*Top)(const CMUTIL_Array *array);
 
     /**
-     * @brief Get the bottom element from this array like stack operation.
+     * @brief Get the bottom element from this array like a stack operation.
      *
-     * Get the item at beginning of this array.
+     * Get the item at the beginning of this array.
+     * The ownership of the item does not be moved to the caller.
      *
      * @param array This dynamic array object.
-     * @return An item at the beginning of this array
-     *         if the size of this array is bigger than zero.
+     * @return An item at the beginning of this array.
      *         NULL if there is no item in this array.
      */
     void *(*Bottom)(const CMUTIL_Array *array);
 
     /**
-     * @brief Get iterator of all item in this array.
+     * @brief Get iterator of all items in this array.
      *
      * @param array This dynamic array object.
      * @return An {@link CMUTIL_Iterator CMUTIL_Iterator} object of
-     *         all item in this array.
+     *         all items in this array.
      * @see {@link CMUTIL_Iterator CMUTIL_Iterator}
      */
     CMUTIL_Iterator *(*Iterator)(const CMUTIL_Array *array);
@@ -1026,9 +1043,9 @@ struct CMUTIL_Array {
     /**
      * @brief Clear this array object.
      *
-     * Clear all item in this array object.
-     * If <code>freecb</code> parameter is supplied, this callback will be
-     * called to all items in this array.
+     * Clear all items in this array object and make its size to zero.
+     * If the <code>freecb</code> parameter is supplied at creation,
+     * this callback will be called to all items in this array.
      *
      * @param array This dynamic array object.
      */
@@ -1037,9 +1054,9 @@ struct CMUTIL_Array {
     /**
      * @brief Destroy this array object.
      *
-     * Destroy this object and it's internal allocations.
-     * If <code>freecb</code> parameter is supplied, this callback will be
-     * called to all items in this array.
+     * Destroy this object and its internal allocations.
+     * If the <code>freecb</code> parameter is supplied at creation,
+     * this callback will be called to all items in this array.
      *
      * @param array This dynamic array object.
      */
@@ -1047,7 +1064,7 @@ struct CMUTIL_Array {
 };
 
 /**
- * Default initial capacity of dynamic array.
+ * Default initial capacity of a dynamic array.
  */
 #define CMUTIL_ARRAY_DEFAULT    10
 
@@ -1064,9 +1081,10 @@ struct CMUTIL_Array {
  *  and free callback.
  *
  * @param initcapacity Initial capacity of this array.
- * @param comparator Comparator callback for sorted array. You must provide
+ * @param comparator Comparator callback for a sorted array. You must provide
  *        this callback if you want to create a sorted array.
- * @param freecb Free callback for each item in this array.
+ * @param freecb Free callback for each item in this array, if this parameter
+ *        is supplied, this array will take the ownership of its items.
  * @return A new dynamic array.
  */
 CMUTIL_API CMUTIL_Array *CMUTIL_ArrayCreateEx(
@@ -1080,12 +1098,12 @@ CMUTIL_API CMUTIL_Array *CMUTIL_ArrayCreateEx(
 typedef struct CMUTIL_String CMUTIL_String;
 struct CMUTIL_String {
     /**
-     * @brief Add string to this string object.
+     * @brief Add a c-style string to this string object.
      *
-     * Append given string to the end of this string object.
+     * Append the given string to the end of this string object.
      *
      * @param string This string object.
-     * @param tobeadded C style null terminated string to be appended.
+     * @param tobeadded C-style null terminated string to be appended.
      * @return New size of this string object.
      */
     size_t (*AddString)(
@@ -1094,12 +1112,12 @@ struct CMUTIL_String {
     /**
      * @brief Add n bytes string to this string object.
      *
-     * Append given string to the end of this string object.
-     * Given string is not need to be null terminated.
+     * Append the given string to the end of this string object.
+     * Given string is not needed to be null terminated.
      *
      * @param string This string object.
      * @param tobeadded C style string to be appended.
-     * @param size Number of bytes to be appended from given string.
+     * @param size Number of bytes to be appended from the given string.
      * @return New size of this string object.
      */
     size_t (*AddNString)(
@@ -1108,7 +1126,7 @@ struct CMUTIL_String {
     /**
      * @brief Add a character to this string object.
      *
-     * Append given character to the end of this string object.
+     * Append the given character to the end of this string object.
      *
      * @param string This string object.
      * @param tobeadded Character to be appended.
@@ -1118,12 +1136,12 @@ struct CMUTIL_String {
             CMUTIL_String *string, char tobeadded);
 
     /**
-     * @brief Add formatted string to this string object.
+     * @brief Add a formatted string to this string object.
      *
-     * Append formatted string to the end of this string object.
+     * Append a ormatted string to the end of this string object.
      *
      * @param string This string object.
-     * @param fmt Format string like printf function.
+     * @param fmt Format string like a printf function.
      * @param ... Arguments for format string.
      * @return New size of this string object.
      */
@@ -1131,12 +1149,12 @@ struct CMUTIL_String {
             CMUTIL_String *string, const char *fmt, ...);
 
     /**
-     * @brief Add formatted string to this string object.
+     * @brief Add a formatted string to this string object.
      *
-     * Append formatted string to the end of this string object.
+     * Append a formatted string to the end of this string object.
      *
      * @param string This string object.
-     * @param fmt Format string like printf function.
+     * @param fmt Format string like a vprintf function.
      * @param args Arguments list for format string.
      * @return New size of this string object.
      */
@@ -1146,7 +1164,7 @@ struct CMUTIL_String {
     /**
      * @brief Add another string object to this string object.
      *
-     * Append given string object to the end of this string object.
+     * Append the given string object to the end of this string object.
      *
      * @param string This string object.
      * @param tobeadded Another string object to be appended.
@@ -1156,13 +1174,13 @@ struct CMUTIL_String {
             CMUTIL_String *string, const CMUTIL_String *tobeadded);
 
     /**
-     * @brief Insert string to this string object.
+     * @brief Insert a c-style string to this string object.
      *
-     * Insert given string to this string object at given index.
+     * Insert the given string to this string object at the index.
      *
      * @param string This string object.
      * @param tobeadded C style null terminated string to be inserted.
-     * @param at Index where given string will be inserted.
+     * @param at Index where the given string will be inserted.
      * @return New size of this string object.
      */
     size_t (*InsertString)(
@@ -1171,13 +1189,14 @@ struct CMUTIL_String {
     /**
      * @brief Insert n bytes string to this string object.
      *
-     * Insert given string to this string object at given index.
-     * Given string is not need to be null terminated.
+     * Insert a substring of the given string to this string object
+     * at the given index.
+     * Given string is not needed to be null terminated.
      *
      * @param string This string object.
      * @param tobeadded C style string to be inserted.
-     * @param at Index where given string will be inserted.
-     * @param size Number of bytes to be inserted from given string.
+     * @param at Index where the given string will be inserted.
+     * @param size Number of bytes to be inserted from the given string.
      * @return New size of this string object.
      */
     size_t (*InsertNString)(
@@ -1185,13 +1204,13 @@ struct CMUTIL_String {
             const char *tobeadded, uint32_t at, size_t size);
 
     /**
-     * Insert formatted string to this string object.
+     * Insert a formatted string to this string object.
      *
-     * Insert formatted string to this string object at given index.
+     * Insert a formatted string to this string object at the index.
      *
      * @param string This string object.
-     * @param idx Index where formatted string will be inserted.
-     * @param fmt Format string like printf function.
+     * @param idx Index where a formatted string will be inserted.
+     * @param fmt Format string like a printf function.
      * @param ... Arguments for format string.
      * @return New size of this string object.
      */
@@ -1199,13 +1218,13 @@ struct CMUTIL_String {
             CMUTIL_String *string, uint32_t idx, const char *fmt, ...);
 
     /**
-     * Insert formatted string to this string object.
+     * Insert a formatted string to this string object.
      *
-     * Insert formatted string to this string object at given index.
+     * Insert a formatted string to this string object at the index.
      *
      * @param string This string object.
-     * @param idx Index where formatted string will be inserted.
-     * @param fmt Format string like printf function.
+     * @param idx Index where a formatted string will be inserted.
+     * @param fmt Format string like a vprintf function.
      * @param args Arguments list for format string.
      * @return New size of this string object.
      */
@@ -1216,7 +1235,7 @@ struct CMUTIL_String {
     /**
      * @brief Insert another string object to this string object.
      *
-     * Insert given string object to this string object at given index.
+     * Insert the given string object to this string object at the index.
      *
      * @param string This string object.
      * @param idx Index where another string object will be inserted.
@@ -1227,10 +1246,11 @@ struct CMUTIL_String {
             CMUTIL_String *string, uint32_t idx, CMUTIL_String *tobeadded);
 
     /**
-     * @brief Cut off given number of characters from tail of this string.
+     * @brief Cut off the given number of characters
+     * from the tail of this string.
      *
      * @param string This string object.
-     * @param length Number of characters to be cut off from tail.
+     * @param length Number of characters to be cut off from the tail.
      */
     void (*CutTailOff)(
             CMUTIL_String *string, size_t length);
@@ -1248,7 +1268,7 @@ struct CMUTIL_String {
             const CMUTIL_String *string, uint32_t offset, size_t length);
 
     /**
-     * @brief Creates lower case version of this string.
+     * @brief Creates a lower-case version of this string.
      *
      * @param string This string object.
      * @return New string object which is the lower case version of this
@@ -1266,7 +1286,7 @@ struct CMUTIL_String {
             CMUTIL_String *string);
 
     /**
-     * @brief Creates upper case version of this string.
+     * @brief Creates an upper-case version of this string.
      *
      * @param string This string object.
      * @return New string object which is the upper case version of this
@@ -1276,7 +1296,7 @@ struct CMUTIL_String {
             const CMUTIL_String *string);
 
     /**
-     * @brief Converts this string to upper case.
+     * @brief Converts this string to the upper case.
      *
      * @param string This string object.
      */
@@ -1284,7 +1304,7 @@ struct CMUTIL_String {
             CMUTIL_String *string);
 
     /**
-     * @brief Replace all occurrences of given substring with another string.
+     * @brief Replace all occurrences of the given substring with another string.
      *
      * @param string This string object.
      * @param needle Substring to be replaced.
@@ -1297,7 +1317,7 @@ struct CMUTIL_String {
             const char *needle, const char *alter);
 
     /**
-     * @brief Get size of this string object.
+     * @brief Get the size of this string object.
      *
      * @param string This string object.
      * @return Size of this string object.
@@ -1306,16 +1326,16 @@ struct CMUTIL_String {
             const CMUTIL_String *string);
 
     /**
-     * @brief Get C style null terminated string from this string object.
+     * @brief Get c-style null terminated string from this string object.
      *
      * @param string This string object.
-     * @return C style null terminated string.
+     * @return C-style null terminated string.
      */
     const char *(*GetCString)(
             const CMUTIL_String *string);
 
     /**
-     * @brief Clear content of this string object.
+     * @brief Clear the content of this string object.
      *
      * @param string This string object.
      */
@@ -1378,13 +1398,13 @@ struct CMUTIL_StringArray {
     /**
      * @brief Add a string object to this array.
      *
-     * Note that ownership of string object will be moved to this array object.
-     * So destroying original string will lead to undefined behavior.
+     * Note that ownership of the string object will be moved to this array object.
+     * So destroying the original string will lead to undefined behavior.
      * Destroying this array object will destroy all owned strings.
      *
      * @param array This string array object.
-     * @param string String object to be added, ownership of string object will
-     *          be moved to this array object.
+     * @param string String object to be added, ownership of the string object
+     *          will be moved to this array object.
      */
     void (*Add)(
             CMUTIL_StringArray *array, CMUTIL_String *string);
@@ -1392,26 +1412,26 @@ struct CMUTIL_StringArray {
     /**
      * @brief Add a new c-style string.
      *
-     * This method will create new <code>CMUTIL_String</code> object which
-     * contents will be same as given <code>string</code>.
+     * This method will create a new <code>CMUTIL_String</code> object whose
+     * contents will be the same as the given <code>string</code>.
      *
      * @param array This string array object.
-     * @param string c-style(NULL-terminated) string to be added.
+     * @param string C-style (NULL-terminated) string to be added.
      */
     void (*AddCString)(
             CMUTIL_StringArray *array, const char *string);
 
     /**
-     * @brief Insert string object to this array at given index.
+     * @brief Insert a string object to this array at the index.
      *
-     * Note that ownership of string object will be moved to this array object.
-     * So destroying original string will lead to undefined behavior.
+     * Note that ownership of the string object will be moved to this array object.
+     * So destroying the original string will lead to undefined behavior.
      * Destroying this array object will destroy all owned strings.
      *
      * @param array This string array object.
-     * @param string String object to be added, ownership of string object will
-     *          be moved to this array object if CMTrue returned.
-     * @param index The index where new string will be inserted.
+     * @param string String object to be added, ownership of the string object
+     *          will be moved to this array object if CMTrue returned.
+     * @param index The index where the new string will be inserted.
      * @return CMTrue if insertion performed successfully.
      *          CMFalse if failed, the ownership of string did not move.
      */
@@ -1419,14 +1439,14 @@ struct CMUTIL_StringArray {
             CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index);
 
     /**
-     * @brief Insert a new c-style string at given index.
+     * @brief Insert a new c-style string at the given index.
      *
-     * This method will create new <code>CMUTIL_String</code> object which
-     * contents will be same as given <code>string</code>.
+     * This method will create a new <code>CMUTIL_String</code> object whose
+     * contents will be the same as given <code>string</code>.
      *
      * @param array This string array object.
-     * @param string c-style(NULL-terminated) string to be added.
-     * @param index The index where new string will be inserted.
+     * @param string C-style (NULL-terminated) string to be added.
+     * @param index The index where the new string will be inserted.
      * @return CMTrue if insertion performed successfully.
      *          CMFalse if failed.
      */
@@ -1436,52 +1456,54 @@ struct CMUTIL_StringArray {
     /**
      * @brief Remove string element at given index, and return it.
      *
-     * Note, this method will transfer ownership of result string to caller.
-     * The caller must receive return value and destroy it after use.
+     * Note, this method will transfer ownership
+     * of the result string to the caller.
+     * The caller must receive the return value and destroy it after use.
      *
      * @param array This string array object.
      * @param index The index where the string wanted to remove.
      * @return String object which removed from this array, ownership of the
      *          string will be transferred to caller.
-     *          NULL if index out of bound.
+     *          NULL if the index is out of bound.
      */
     CMUTIL_String *(*RemoveAt)(
             CMUTIL_StringArray *array, uint32_t index);
 
     /**
-     * @brief Set new string object to this array at given index and old string
-     *          will be returned.
+     * @brief Set the new string object to this array at given index
+     * and old string will be returned.
      *
-     * Note that ownership of string object will be moved to this array object.
-     * So destroying original string will lead to undefined behavior.
+     * Note that ownership of the string object will be moved to this array object.
+     * So destroying the original string will lead to undefined behavior.
      * Destroying this array object will destroy all owned strings.
-     * And this method will transfer ownership of result string to caller.
-     * The caller must receive return value and destroy it after use.
+     * And this method will transfer ownership of the result string to the caller.
+     * The caller must receive the return value and destroy it after use.
      *
      * @param array This string array object.
-     * @param string String object to be added, ownership of string object will
-     *          be moved to this array object if CMTrue returned.
+     * @param string String object to be added, ownership of the
+     *          string object will be moved to this array object
+     *          if CMTrue returned.
      * @param index The index where the string wanted to remove.
      * @return String object which removed from this array, ownership of the
      *          string will be transferred to caller.
-     *          NULL if index out of bound.
+     *          NULL if the index is out of bound.
      */
     CMUTIL_String *(*SetAt)(
             CMUTIL_StringArray *array, CMUTIL_String *string, uint32_t index);
 
     /**
-     * @brief Set new c-style string to this array at given index
+     * @brief Set a new c-style string to this array at given index
      *          and old string will be returned.
      *
-     * Note this method will transfer ownership of result string to caller.
-     * The caller must receive return value and destroy it after use.
+     * Note this method will transfer ownership of the result string to the caller.
+     * The caller must receive the return value and destroy it after use.
      *
      * @param array This string array object.
-     * @param string c-style(NULL-terminated) string to be added.
+     * @param string C-style (NULL-terminated) string to be added.
      * @param index The index where the string wanted to remove.
      * @return String object which removed from this array, ownership of the
      *          string will be transferred to caller.
-     *          NULL if index out of bound.
+     *          NULL if the index is out of bound.
      */
     CMUTIL_String *(*SetAtCString)(
             CMUTIL_StringArray *array, const char *string, uint32_t index);
@@ -1489,28 +1511,29 @@ struct CMUTIL_StringArray {
     /**
      * @brief Get string object at given index.
      *
-     * Note, this method does not transfer ownership of result string to caller.
+     * Note, this method does not transfer ownership of
+     * the result string to the caller.
      * The caller must not destroy the result object.
      *
      * @param array This string array object.
      * @param index The index where the string wanted to get.
-     * @return Result string object. NULL if index out of bound.
+     * @return Result string object. NULL if the index is out of bound.
      */
     const CMUTIL_String *(*GetAt)(
             const CMUTIL_StringArray *array, uint32_t index);
 
     /**
-     * @brief Get c-style string at given index.
+     * @brief Get c-style string at the given index.
      *
      * @param array This string array object.
      * @param index The index where the string wanted to get.
-     * @return Result c-style string object. NULL if index out of bound.
+     * @return Result c-style string object. NULL if the index is out of bound.
      */
     const char *(*GetCString)(
             const CMUTIL_StringArray *array, uint32_t index);
 
     /**
-     * @brief Get number of items in this array.
+     * @brief Get the number of items in this array.
      *
      * @param array This string array object.
      * @return The size of this array.
@@ -1522,7 +1545,7 @@ struct CMUTIL_StringArray {
      * @brief Get the iterator of this array.
      *
      * @param array This string object.
-     * @return Iterator object of this array, must be destroyed after use.
+     * @return Iterator object of this array must be destroyed after use.
      */
     CMUTIL_Iterator *(*Iterator)(
             const CMUTIL_StringArray *array);
@@ -1536,15 +1559,77 @@ struct CMUTIL_StringArray {
             CMUTIL_StringArray *array);
 };
 
+/**
+ * Default initial size of CMUTIL_String object.
+ */
 #define CMUTIL_STRINGARRAY_DEFAULT  32
+
+/**
+ * Creates a new CMUTIL_String object.
+ * @return A new CMUTIL_String object.
+ */
 #define CMUTIL_StringArrayCreate()  \
         CMUTIL_StringArrayCreateEx(CMUTIL_STRINGARRAY_DEFAULT)
+
+/**
+ * Creates a new CMUTIL_String object with initial capacity.
+ *
+ * @param initcapacity Initial capacity of the new CMUTIL_String object.
+ * @return A new CMUTIL_String object.
+ */
 CMUTIL_API CMUTIL_StringArray *CMUTIL_StringArrayCreateEx(
         size_t initcapacity);
 
+/**
+ * @brief Trim the right side of a c-style string.
+ *
+ * Trailing space characters (space, tab, line-feed, carriage-return) are
+ * removed from the input string.
+ * Input string must be null-terminated,
+ * and its contents could be changed after this function call.
+ * The result string reference is pointing to the original input string.
+ *
+ * @param inp Input string to be trimmed.
+ * @return Right "trimmed" input string (pointing same as input).
+ */
 CMUTIL_API char *CMUTIL_StrRTrim(char *inp);
+
+/**
+ * @brief Trim the left side of a c-style string.
+ *
+ * Leading space characters (space, tab, line-feed, carriage-return) are
+ * removed from the input string.
+ * Input string must be null-terminated,
+ * and its contents could be changed after this function call.
+ * The result string reference is pointing to the original input string.
+ *
+ * @param inp Input string to be trimmed.
+ * @return Right "trimmed" input string (pointing same as input).
+ */
 CMUTIL_API char *CMUTIL_StrLTrim(char *inp);
+
+/**
+ * @brief Trim the both side of a c-style string.
+ *
+ * Leading and trailing space characters (space, tab, line-feed, carriage-return)
+ * are removed from the input string.
+ * Input string must be null-terminated,
+ * and its contents could be changed after this function call.
+ * The result string reference is pointing to the original input string.
+ *
+ * @param inp Input string to be trimmed.
+ * @return Left and right "trimmed" input string (pointing same as input).
+ */
 CMUTIL_API char *CMUTIL_StrTrim(char *inp);
+
+/**
+ *
+ * @param dest
+ * @param buflen
+ * @param src
+ * @param delims
+ * @return
+ */
 CMUTIL_API const char *CMUTIL_StrNextToken(
     char *dest, size_t buflen, const char *src, const char *delims);
 CMUTIL_API char *CMUTIL_StrSkipSpaces(char *line, const char *spaces);
@@ -1666,7 +1751,6 @@ typedef enum CMXmlNodeKind {
     CMXmlNodeText,
     CMXmlNodeTag
 } CMXmlNodeKind;
-#define CMXmlNodeKind       CMXmlNodeKind
 
 typedef struct CMUTIL_XmlNode CMUTIL_XmlNode;
 struct CMUTIL_XmlNode {
@@ -2317,7 +2401,7 @@ struct CMUTIL_JsonValue {
             const CMUTIL_JsonValue *jval);
     double (*GetDouble)(
             const CMUTIL_JsonValue *jval);
-    CMUTIL_String *(*GetString)(
+    const CMUTIL_String *(*GetString)(
             const CMUTIL_JsonValue *jval);
     const char *(*GetCString)(
             const CMUTIL_JsonValue *jval);
@@ -2348,7 +2432,7 @@ struct CMUTIL_JsonObject {
             const CMUTIL_JsonObject *jobj, const char *key);
     double (*GetDouble)(
             const CMUTIL_JsonObject *jobj, const char *key);
-    CMUTIL_String *(*GetString)(
+    const CMUTIL_String *(*GetString)(
             const CMUTIL_JsonObject *jobj, const char *key);
     const char *(*GetCString)(
             const CMUTIL_JsonObject *jobj, const char *key);
@@ -2385,7 +2469,7 @@ struct CMUTIL_JsonArray {
             const CMUTIL_JsonArray *jarr, uint32_t index);
     double (*GetDouble)(
             const CMUTIL_JsonArray *jarr, uint32_t index);
-    CMUTIL_String *(*GetString)(
+    const CMUTIL_String *(*GetString)(
             const CMUTIL_JsonArray *jarr, uint32_t index);
     const char *(*GetCString)(
             const CMUTIL_JsonArray *jarr, uint32_t index);

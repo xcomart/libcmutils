@@ -48,8 +48,8 @@ CMUTIL_STATIC void CMUTIL_JsonValueNumberToStr(
 CMUTIL_STATIC void CMUTIL_JsonValueStringToStr(
         const CMUTIL_String *data, CMUTIL_String *buf)
 {
-    const char *p, *sdata = CMCall(data, GetCString);
-    p = sdata;
+    const char *sdata = CMCall(data, GetCString);
+    const char *p = sdata;
     if (p) {
         CMCall(buf, AddChar, '\"');
         while (*p) {
@@ -140,7 +140,11 @@ CMUTIL_STATIC void CMUTIL_JsonObjectToStringInternal(
                 CMUTIL_JsonIndent(buf, depth+1);
             }
             CMUTIL_JsonValueStringToStr(key, buf);
-            CMCall(buf, AddChar, ':');
+            if (pretty) {
+                CMCall(buf, AddString, ": ");
+            } else {
+                CMCall(buf, AddChar, ':');
+            }
             CMUTIL_JsonToStringInternal(item, buf, pretty, depth+1);
         }
         if (pretty) {
@@ -163,7 +167,13 @@ CMUTIL_STATIC void CMUTIL_JsonArrayToStringInternal(
     if (size > 0) {
         for (i=0; i<size; i++) {
             CMUTIL_Json *item = CMCall(jarr, Get, i);
-            if (i) CMCall(buf, AddChar, ',');
+            if (i) {
+                if (pretty) {
+                    CMCall(buf, AddString, ", ");
+                } else {
+                    CMCall(buf, AddChar, ',');
+                }
+            }
             CMUTIL_JsonToStringInternal(item, buf, pretty, depth+1);
         }
     }
@@ -290,7 +300,7 @@ CMUTIL_STATIC double CMUTIL_JsonValueGetDouble(const CMUTIL_JsonValue *jval)
     return strtod(CMCall(ijval->data, GetCString), NULL);
 }
 
-CMUTIL_STATIC CMUTIL_String *CMUTIL_JsonValueGetString(
+CMUTIL_STATIC const CMUTIL_String *CMUTIL_JsonValueGetString(
         const CMUTIL_JsonValue *jval)
 {
     const CMUTIL_JsonValue_Internal *ijval =
@@ -459,7 +469,7 @@ CMUTIL_STATIC double CMUTIL_JsonObjectGetDouble(
     CMUTIL_JsonObjectGetBody(jobj, key, GetDouble, 0.0);
 }
 
-CMUTIL_STATIC CMUTIL_String *CMUTIL_JsonObjectGetString(
+CMUTIL_STATIC const CMUTIL_String *CMUTIL_JsonObjectGetString(
         const CMUTIL_JsonObject *jobj, const char *key)
 {
     CMUTIL_JsonObjectGetBody(jobj, key, GetString, NULL);
@@ -626,18 +636,18 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonArrayGet(
 }
 
 #define CMUTIL_JsonArrayGetBody(jarr, index, method, v) do {        \
-    const CMUTIL_JsonArray_Internal *ijarr =                        \
+    const CMUTIL_JsonArray_Internal *__ijarr =                      \
             (const CMUTIL_JsonArray_Internal*)jarr;                 \
-    if (CMCall(ijarr->arr, GetSize) > index) {                      \
-        CMUTIL_Json* json = CMCall(jarr, Get, index);               \
-        if (CMCall(json, GetType) == CMJsonTypeValue) {             \
-            return CMCall((CMUTIL_JsonValue*)json, method);         \
+    if (CMCall(__ijarr->arr, GetSize) > index) {                    \
+        CMUTIL_Json* __json = CMCall(jarr, Get, index);             \
+        if (CMCall(__json, GetType) == CMJsonTypeValue) {           \
+            return CMCall((CMUTIL_JsonValue*)__json, method);       \
         } else {                                                    \
             CMLogError("item type is not 'Value' type.");           \
         }                                                           \
     } else {                                                        \
         CMLogError("JsonArray index out of bound(%d), total %d.",   \
-                index, CMCall(ijarr->arr, GetSize));                \
+                index, CMCall(__ijarr->arr, GetSize));              \
     } return v;} while(0)
 
 CMUTIL_STATIC int64_t CMUTIL_JsonArrayGetLong(
@@ -652,7 +662,7 @@ CMUTIL_STATIC double CMUTIL_JsonArrayGetDouble(
     CMUTIL_JsonArrayGetBody(jarr, index, GetDouble, 0.0);
 }
 
-CMUTIL_STATIC CMUTIL_String *CMUTIL_JsonArrayGetString(
+CMUTIL_STATIC const CMUTIL_String *CMUTIL_JsonArrayGetString(
         const CMUTIL_JsonArray *jarr, uint32_t index)
 {
     CMUTIL_JsonArrayGetBody(jarr, index, GetString, NULL);
@@ -677,11 +687,11 @@ CMUTIL_STATIC void CMUTIL_JsonArrayAdd(
     CMCall(ijarr->arr, Add, json);
 }
 
-#define CMUTIL_JsonArrayAddBody(jarr, value, method) do{                    \
-    CMUTIL_JsonArray_Internal *ijarr = (CMUTIL_JsonArray_Internal*)jarr;    \
-    CMUTIL_JsonValue *json = CMUTIL_JsonValueCreateInternal(ijarr->memst);  \
-    CMCall(json, method, value);                                            \
-    CMUTIL_JsonArrayAdd(jarr, (CMUTIL_Json*)json); } while(0)
+#define CMUTIL_JsonArrayAddBody(jarr, value, method) do{                      \
+    CMUTIL_JsonArray_Internal *__ijarr = (CMUTIL_JsonArray_Internal*)jarr;    \
+    CMUTIL_JsonValue *__json = CMUTIL_JsonValueCreateInternal(__ijarr->memst);\
+    CMCall(__json, method, value);                                            \
+    CMUTIL_JsonArrayAdd(jarr, (CMUTIL_Json*)__json); } while(0)
 
 CMUTIL_STATIC void CMUTIL_JsonArrayAddLong(
         CMUTIL_JsonArray *jarr, int64_t value)
