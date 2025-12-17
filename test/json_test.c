@@ -51,7 +51,14 @@ int main() {
     jarr = CMUTIL_JsonArrayCreate();
     ASSERT(jarr != NULL, "JsonArrayCreate");
 
-    CMCall(jarr, Add, jsonAware);
+    CMCall(jarr, Add, jsonAware->Clone(jsonAware));
+    CMCall(jarr, Add, jsonAware->Clone(jsonAware));
+    CMCall(jarr, Add, jsonAware->Clone(jsonAware));
+    CMCall(jarr, Add, jsonAware->Clone(jsonAware));
+    CMCall(jarr, AddNull);
+    CMCall(buf, Clear);
+    CMCall((CMUTIL_Json*)jarr, ToString, buf, CMTrue);
+    CMLogInfo("Cloned json: %s", CMCall(buf, GetCString));
 
     ir = 0;
 END_POINT:

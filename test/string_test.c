@@ -20,8 +20,13 @@ int main() {
     int ir = -1;
     CMUTIL_Init(CMMemDebug);
 
-    CMUTIL_String *str = CMUTIL_StringCreate();
+    CMUTIL_StringArray *sarr = NULL;
+
+    //////////////////////////////////////////////////////////////////////
+    // CMUTIL_String tests
+
     CMUTIL_String *another = NULL;
+    CMUTIL_String *str = CMUTIL_StringCreate();
     ASSERT((str != NULL), "CMUTIL_StringCreate");
 
     CMCall(str, AddString, "test");
@@ -100,8 +105,52 @@ int main() {
     ASSERT(strcmp(CMCall(str, GetCString), "test") == 0, "SelfTrim");
 
 
+    //////////////////////////////////////////////////////////////////////
+    // CMUTIL_StringArray tests
+
+    sarr = CMUTIL_StringArrayCreate();
+    ASSERT(sarr != NULL, "CMUTIL_StringArrayCreate");
+    CMCall(sarr, Add, CMUTIL_StringCreateEx(10, "first"));
+    ASSERT(CMCall(sarr, GetSize) == 1, "StringArray Add");
+    ASSERT(strcmp(CMCall(sarr, GetCString, 0), "first") == 0, "StringArray Add/GetCString validation");
+
+    CMCall(sarr, AddCString, "second");
+    ASSERT(CMCall(sarr, GetSize) == 2, "StringArray AddCString");
+    ASSERT(strcmp(CMCall(sarr, GetCString, 1), "second") == 0, "StringArray AddCString/GetCString validation");
+
+    CMCall(sarr, InsertAt, CMUTIL_StringCreateEx(10, "1/2"), 0);
+    ASSERT(CMCall(sarr, GetSize) == 3, "StringArray InsertAt front");
+    ASSERT(strcmp(CMCall(sarr, GetCString, 0), "1/2") == 0, "StringArray InsertAt front validation");
+
+    CMCall(sarr, InsertAt, CMUTIL_StringCreateEx(10, "third"), 3);
+    ASSERT(CMCall(sarr, GetSize) == 4, "StringArray InsertAt last");
+    ASSERT(strcmp(CMCall(sarr, GetCString, 3), "third") == 0, "StringArray InsertAt last validation");
+
+    CMCall(sarr, InsertAtCString, "1/4", 0);
+    ASSERT(CMCall(sarr, GetSize) == 5, "StringArray InsertAtCString front");
+    ASSERT(strcmp(CMCall(sarr, GetCString, 0), "1/4") == 0, "StringArray InsertAtCString front validation");
+
+    CMCall(sarr, InsertAtCString, "fourth", 5);
+    ASSERT(CMCall(sarr, GetSize) == 6, "StringArray InsertAtCString last");
+    ASSERT(strcmp(CMCall(sarr, GetCString, 5), "fourth") == 0, "StringArray InsertAtCString last validation");
+
+    CMCall(str, Destroy); str = NULL;
+    str = CMCall(sarr, RemoveAt, 0);
+    ASSERT(CMCall(sarr, GetSize) == 5, "StringArray RemoveAt");
+    ASSERT(strcmp(CMCall(str, GetCString), "1/4") == 0, "StringArray RemoveAt validation");
+
+    CMCall(another, Destroy); another = NULL;
+    another = CMCall(sarr, SetAt, str, 0); str = NULL;
+    ASSERT(CMCall(sarr, GetSize) == 5, "StringArray SetAt");
+    ASSERT(strcmp(CMCall(another, GetCString), "1/2") == 0, "StringArray SetAt validation");
+
+    str = CMCall(sarr, SetAtCString, "quater", 0);
+    ASSERT(CMCall(sarr, GetSize) == 5, "StringArray SetAtCString");
+    ASSERT(strcmp(CMCall(str, GetCString), "1/4") == 0, "StringArray SetAtCString validation");
+
     ir = 0;
 END_POINT:
+    if (sarr) CMCall(sarr, Destroy);
     if (str) CMCall(str, Destroy);
     if (another) CMCall(another, Destroy);
     if (!CMUTIL_Clear()) ir = -1;
