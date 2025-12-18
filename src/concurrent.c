@@ -965,11 +965,14 @@ CMUTIL_STATIC CMBool CMUTIL_SemaphoreAcquire(
     return dwval == WAIT_OBJECT_0?
             CMTrue:CMFalse;
 #elif defined(APPLE)
-    dispatch_time_t dtime = dispatch_time(
-                DISPATCH_TIME_NOW, NSEC_PER_MSEC * millisec);
-    CMBool res = dispatch_semaphore_wait(isem->semp, dtime) == 0?
+    dispatch_time_t dtime;
+    if (millisec < 0)
+        dtime = DISPATCH_TIME_FOREVER;
+    else
+        dtime = dispatch_time(
+                    DISPATCH_TIME_NOW, NSEC_PER_MSEC * millisec);
+    return dispatch_semaphore_wait(isem->semp, dtime) == 0?
                 CMTrue:CMFalse;
-    return res;
 #else
     if (millisec < 0) {
         return sem_wait(&(isem->semp)) == 0?
