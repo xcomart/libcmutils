@@ -45,7 +45,7 @@ typedef enum CMUTIL_LogFormatItemType {
     LogFormatItem_Stack,
     LogFormatItem_LineSeparator,
 
-    // number of enumeration indicator
+    // number of enumeration indicators
     LogFormatItem_Length
 } CMUTIL_LogFormatItemType;
 
@@ -63,7 +63,7 @@ typedef enum CMUTIL_LogFormatType {
     LogType_Stack,
     LogType_LineSeparator,
 
-    // number of enumeration indicator
+    // number of enumeration indicators
     LogType_Length
 } CMUTIL_LogFormatType;
 
@@ -150,6 +150,19 @@ CMUTIL_STATIC void CMUTIL_LogPathCreate(const char *fpath) {
         strncat(pdir, fpath, (size_t)(p - fpath));
         CMUTIL_PathCreate(pdir, 0755);
     }
+}
+
+CMUTIL_STATIC CMUTIL_String *CMUTIL_LogTokenPillOff(CMUTIL_Mem *memst, CMUTIL_String *src)
+{
+    if (strchr("'\"", CMCall(src, GetChar, 0))) {
+        size_t sz = CMCall(src, GetSize) - 2;
+        CMUTIL_String *tmp = CMUTIL_StringCreateInternal(memst, sz, NULL);
+        const char *p = CMCall(src, GetCString) + 1;
+        CMCall(tmp, AddNString, p, sz);
+        CMCall(src, Destroy);
+        return tmp;
+    }
+    return src;
 }
 
 CMUTIL_STATIC void CMUTIL_LogAppenderFormatItemDestroy(void *data)
@@ -307,13 +320,22 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendThreadId(
 CMUTIL_STATIC void CMUTIL_LogPatternAppendFileName(
     CMUTIL_LogPatternAppendFuncParam *params)
 {
+#if 0
+    const char *p = strrchr(params->fname, '/');
+    if (p == NULL) p = strrchr(params->fname, '\\');
+    if (p == NULL) p = params->fname;
+    else p++;
+    const uint32_t size = (uint32_t)strlen(p);
+#else
     uint32_t tsize = (uint32_t)strlen(params->fname), size = 0;
     const char *p = params->fname + (tsize - 1);
     while (p > params->fname && !strchr("/\\", *p)) {
         p--;
         size++;
     }
-    if (strchr("/\\", *p)) p++;
+    if (strchr("/\\", *p))
+        p++;
+#endif
     CMUTIL_LogPatternAppendPadding(params->item, params->dest, p, size);
 }
 
@@ -663,7 +685,8 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
                         const char *skey = CMCall(v, GetCString);
                         if (CMCall(map, Get, skey) == NULL) {
                             CMUTIL_String *d = CMCall(v, Substring, 0, len);
-                            CMCall(map, Put, skey, d);
+                            CMUTIL_String *prev = CMCall(map, Put, skey, d);
+                            if (prev) CMCall(prev, Destroy);
                         }
                     }
                     CMCall(iter, Destroy);
@@ -677,17 +700,19 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
                     const char *skey = CMCall(v, GetCString);
                     if (CMCall(map, Get, skey) == NULL) {
                         CMUTIL_String *d = CMCall(v, ToLower);
-                        CMCall(map, Put, skey, d);
+                        CMUTIL_String *prev = CMCall(map, Put, skey, d);
+                        if (prev) CMCall(prev, Destroy);
                     }
                 }
                 CMCall(iter, Destroy);
             }
             else {
                 CMUTIL_String *val = CMCall(arr, RemoveAt, 1);
-                CMUTIL_String *prev =
-                        (CMUTIL_String*)CMCall(map, Put, ks, val);
-                if (prev)
-                    CMCall(prev, Destroy);
+                CMUTIL_String *prev = NULL;
+                // pill-off quotations
+                val = CMUTIL_LogTokenPillOff(item->memst, val);
+                prev = (CMUTIL_String*)CMCall(map, Put, ks, val);
+                if (prev) CMCall(prev, Destroy);
             }
         }
         else {
@@ -706,7 +731,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
     const char *p, *q, *r;
     p = pattern;
 
-    // check occurrence of '%'
+    // check the occurrence of '%'
     while ((q = strchr(p, '%')) != NULL) {
         char buf[128] = { 0, };
         char fmt[20];
@@ -718,12 +743,12 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
         CMUTIL_LogAppenderFormatItem *item = NULL;
         void *tvoid = NULL;
 
-        // add former string to pattern list
+        // add a former string to a pattern list
         if (q > p)
             CMCall(list, AddTail,
                 CMUTIL_LogAppenderItemString(memst, p, (uint32_t)(q - p)));
         q++;
-        // check escape charactor
+        // check escape character
         if (*q == '%') {
             CMCall(list, AddTail,
                 CMUTIL_LogAppenderItemString(memst, "%", 1));
