@@ -851,7 +851,7 @@ RETRYPOINT:
 CMUTIL_STATIC CMBool CMUTIL_JsonParseEscape(
         CMUTIL_JsonParser *pctx, CMUTIL_String *sbuf)
 {
-    char buf[3];
+    uint8_t buf[3];
     CMUTIL_JsonParseConsume(pctx, 1);
     if (pctx->remain <= 0) {
         CMUTIL_JSON_PARSE_ERROR(pctx, "unexpected end.");
@@ -862,9 +862,9 @@ CMUTIL_STATIC CMBool CMUTIL_JsonParseEscape(
     case 'r': CMCall(sbuf, AddChar, '\r'); break;
     case 'n': CMCall(sbuf, AddChar, '\n'); break;
     case 'u':
-        // unicodes are converted to 2 byte
+        // unicodes are converted to 2 bytes
         CMUTIL_StringHexToBytes(buf, pctx->curr+1, 4);
-        CMCall(sbuf, AddNString, buf, 2);
+        CMCall(sbuf, AddNString, (char*)buf, 2);
         CMUTIL_JsonParseConsume(pctx, 4);
         break;
     default: CMCall(sbuf, AddChar, *(pctx->curr)); break;

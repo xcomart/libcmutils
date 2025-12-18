@@ -230,32 +230,41 @@ CMUTIL_STATIC void CMUTIL_StringCheckSize(
     }
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringAddString(CMUTIL_String *string,
+CMUTIL_STATIC ssize_t CMUTIL_StringAddString(CMUTIL_String *string,
         const char *tobeadded)
 {
-    CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
-    register const char *p = tobeadded;
+    if (tobeadded) {
+        CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
+        register const char *p = tobeadded;
 
-    while (*p) {
-        CMUTIL_StringCheckSize(istr, 1);
-        istr->data[istr->size++] = *p++;
+        while (*p) {
+            CMUTIL_StringCheckSize(istr, 1);
+            istr->data[istr->size++] = *p++;
+        }
+        istr->data[istr->size] = 0x0;
+        return (ssize_t)istr->size;
     }
-    istr->data[istr->size] = 0x0;
-    return istr->size;
+    CMLogErrorS("invalid argument. %s", tobeadded == NULL ? "NULL" : "");
+    return -1;
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringAddNString(CMUTIL_String *string,
+CMUTIL_STATIC ssize_t CMUTIL_StringAddNString(CMUTIL_String *string,
         const char *tobeadded, size_t size)
 {
-    CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
-    CMUTIL_StringCheckSize(istr, size);
-    memcpy(istr->data + istr->size, tobeadded, size);
-    istr->size += size;
-    istr->data[istr->size] = 0x0;
-    return istr->size;
+    if (tobeadded && size > 0) {
+        CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
+        CMUTIL_StringCheckSize(istr, size);
+        memcpy(istr->data + istr->size, tobeadded, size);
+        istr->size += size;
+        istr->data[istr->size] = 0x0;
+        return (ssize_t)istr->size;
+    }
+    CMLogErrorS("invalid argument. %s, size: %u",
+        tobeadded == NULL ? "NULL" : "", size);
+    return -1;
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringAddChar(CMUTIL_String *string, char tobeadded)
+CMUTIL_STATIC ssize_t CMUTIL_StringAddChar(CMUTIL_String *string, char tobeadded)
 {
     CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
 
@@ -263,80 +272,96 @@ CMUTIL_STATIC size_t CMUTIL_StringAddChar(CMUTIL_String *string, char tobeadded)
     istr->data[istr->size++] = tobeadded;
 
     istr->data[istr->size] = 0x0;
-    return istr->size;
+    return (ssize_t)istr->size;
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringAddPrint(
+CMUTIL_STATIC ssize_t CMUTIL_StringAddPrint(
         CMUTIL_String *string, const char *fmt, ...)
 {
     va_list args;
-    size_t ir;
+    ssize_t ir;
     va_start(args, fmt);
     ir = CMCall(string, AddVPrint, fmt, args);
     va_end(args);
     return ir;
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringAddVPrint(
+CMUTIL_STATIC ssize_t CMUTIL_StringAddVPrint(
         CMUTIL_String *string, const char *fmt, va_list args)
 {
-    char buf[4096];
-    size_t len = (size_t)vsnprintf(buf, sizeof(buf), fmt, args);
-    return CMCall(string, AddNString, buf, len);
+    if (fmt) {
+        char buf[4096];
+        ssize_t len = vsnprintf(buf, sizeof(buf), fmt, args);
+        return CMCall(string, AddNString, buf, len);
+    }
+    CMLogErrorS("invalid argument. %s", fmt == NULL ? "NULL" : "");
+    return -1;
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringAddAnother(
+CMUTIL_STATIC ssize_t CMUTIL_StringAddAnother(
         CMUTIL_String *string, const CMUTIL_String *tobeadded)
 {
-    const char *str = CMCall(tobeadded, GetCString);
-    const size_t len = CMCall(tobeadded, GetSize);
-    return CMCall(string, AddNString, str, len);
+    if (tobeadded) {
+        const char *str = CMCall(tobeadded, GetCString);
+        const size_t len = CMCall(tobeadded, GetSize);
+        return CMCall(string, AddNString, str, len);
+    }
+    CMLogErrorS("invalid argument. %s", tobeadded == NULL ? "NULL" : "");
+    return -1;
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringInsertString(CMUTIL_String *string,
+CMUTIL_STATIC ssize_t CMUTIL_StringInsertString(CMUTIL_String *string,
         const char *tobeadded, uint32_t at)
 {
     size_t size = strlen((const char*)tobeadded);
     return CMCall(string, InsertNString, tobeadded, at, size);
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringInsertNString(CMUTIL_String *string,
+CMUTIL_STATIC ssize_t CMUTIL_StringInsertNString(CMUTIL_String *string,
         const char *tobeadded, uint32_t at, size_t size)
 {
-    CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
-    CMUTIL_StringCheckSize(istr, size);
-    memmove(istr->data+at+size, istr->data+at, istr->size-(size_t)at+1);
-    memcpy(istr->data+at, tobeadded, size);
-    istr->size += size;
-    return istr->size;
+    if (tobeadded && size > 0) {
+        CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
+        CMUTIL_StringCheckSize(istr, size);
+        memmove(istr->data+at+size, istr->data+at, istr->size-(size_t)at+1);
+        memcpy(istr->data+at, tobeadded, size);
+        istr->size += size;
+        return (ssize_t)istr->size;
+    }
+    CMLogErrorS("invalid argument. %s, size: %u",
+        tobeadded == NULL ? "NULL" : "", size);
+    return -1;
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringInsertPrint(
+CMUTIL_STATIC ssize_t CMUTIL_StringInsertPrint(
         CMUTIL_String *string, uint32_t idx, const char *fmt, ...)
 {
     va_list args;
-    size_t ir;
+    ssize_t ir;
     va_start(args, fmt);
     ir = CMCall(string, InsertVPrint, idx, fmt, args);
     va_end(args);
     return ir;
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringInsertVPrint(
+CMUTIL_STATIC ssize_t CMUTIL_StringInsertVPrint(
         CMUTIL_String *string, uint32_t idx, const char *fmt, va_list args)
 {
-    char buf[4096];
-    size_t len, ir;
-    len = (uint32_t)vsnprintf(buf, sizeof(buf), fmt, args);
-    ir = CMCall(string, InsertNString, buf, idx, len);
-    return ir;
+    if (fmt) {
+        char buf[4096];
+        const ssize_t len = vsnprintf(buf, sizeof(buf), fmt, args);
+        const ssize_t ir = CMCall(string, InsertNString, buf, idx, len);
+        return ir;
+    }
+    CMLogErrorS("invalid argument. %s", fmt == NULL ? "NULL" : "");
+    return -1;
 }
 
-CMUTIL_STATIC size_t CMUTIL_StringInsertAnother(
+CMUTIL_STATIC ssize_t CMUTIL_StringInsertAnother(
         CMUTIL_String *string, uint32_t idx, CMUTIL_String *tobeadded)
 {
     const char *str = CMCall(tobeadded, GetCString);
-    size_t len = CMCall(tobeadded, GetSize);
+    const ssize_t len = CMCall(tobeadded, GetSize);
     return CMCall(string, InsertNString, str, idx, len);
 }
 
@@ -373,11 +398,13 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringToLower(
     CMUTIL_String_Internal *res =
             (CMUTIL_String_Internal*)CMUTIL_StringCreateInternal(
                 istr->memst, istr->size, NULL);
-    register char *p = res->data, *q = istr->data;
-    while (*q)
-        *p++ = (char)tolower(*q++);
-    *p = 0x0;
-    res->size = istr->size;
+    if (res) {
+        register char *p = res->data, *q = istr->data;
+        while (*q)
+            *p++ = (char)tolower(*q++);
+        *p = 0x0;
+        res->size = istr->size;
+    }
     return (CMUTIL_String*)res;
 }
 
@@ -398,11 +425,13 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringToUpper(
     CMUTIL_String_Internal *res =
         (CMUTIL_String_Internal*)CMUTIL_StringCreateInternal(
                 istr->memst, istr->size, NULL);
-    register char *p = res->data, *q = istr->data;
-    while (*q)
-        *p++ = (char)toupper(*q++);
-    *p = 0x0;
-    res->size = istr->size;
+    if (res) {
+        register char *p = res->data, *q = istr->data;
+        while (*q)
+            *p++ = (char)toupper(*q++);
+        *p = 0x0;
+        res->size = istr->size;
+    }
     return (CMUTIL_String*)res;
 }
 
@@ -456,6 +485,14 @@ CMUTIL_STATIC const char *CMUTIL_StringGetCString(const CMUTIL_String *string)
 {
     const CMUTIL_String_Internal *istr = (const CMUTIL_String_Internal*)string;
     return istr->data;
+}
+
+CMUTIL_STATIC int CMUTIL_StringGetChar(const CMUTIL_String *string, uint32_t idx)
+{
+    const CMUTIL_String_Internal *istr = (const CMUTIL_String_Internal*)string;
+    if (idx < istr->size)
+        return (int)istr->data[idx];
+    return -1;
 }
 
 CMUTIL_STATIC void CMUTIL_StringClear(CMUTIL_String *string)
@@ -535,6 +572,7 @@ static CMUTIL_String g_cmutil_string = {
     CMUTIL_StringReplace,
     CMUTIL_StringGetSize,
     CMUTIL_StringGetCString,
+    CMUTIL_StringGetChar,
     CMUTIL_StringClear,
     CMUTIL_StringClone,
     CMUTIL_StringDestroy,
@@ -566,7 +604,7 @@ CMUTIL_String *CMUTIL_StringCreateInternal(
     *(istr->data) = 0x0;
     istr->memst = memst;
 
-    if (initcontent)
+    if (initcontent && len > 0)
         CMCall((CMUTIL_String*)istr, AddNString, initcontent, len);
     return (CMUTIL_String*)istr;
 }
@@ -777,11 +815,11 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_CSConvConv(
 #else
         iconv_t icv;
         size_t insz, outsz, osz, ressz;
-        char *obuf, *osave, *src;
+        char *obuf, *src;
 
 
         outsz = ressz = 0;
-        obuf = osave = NULL;
+        obuf = NULL;
         src = (char*)CMCall(instr, GetCString);
         insz = (size_t)CMCall(instr, GetSize);
 
@@ -828,7 +866,8 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_CSConvBackward(
 {
     const CMUTIL_CSConv_Internal *iconv =
             (const CMUTIL_CSConv_Internal*)conv;
-    return CMUTIL_CSConvConv(iconv->memst, instr, iconv->tocs, iconv->frcs);
+    return CMUTIL_CSConvConv(
+        iconv->memst, instr, iconv->tocs, iconv->frcs);
 }
 
 CMUTIL_STATIC void CMUTIL_CSConvDestroy(CMUTIL_CSConv *conv)
@@ -912,7 +951,7 @@ CMUTIL_StringArray *CMUTIL_StringSplitInternal(
     CMUTIL_StringArray *res = NULL;
     if (haystack && needle) {
         register const char *p, *q, *r;
-        int needlelen, nfail = 0;
+        int needlelen;
         res = CMUTIL_StringArrayCreateInternal(memst, 5);
         if (res) {
             CMUTIL_String *str = NULL;
@@ -931,16 +970,11 @@ CMUTIL_StringArray *CMUTIL_StringSplitInternal(
                 /* find next needle */
                 q = strstr(p, needle);
             }
-            if (!nfail) {
-                /* add last one */
-                strcpy(buf, p);
-                r = CMUTIL_StrTrim(buf);
-                str = CMUTIL_StringCreateInternal(memst, strlen(r), r);
-                CMCall(res, Add, str);
-            } else {
-                CMCall(res, Destroy);
-                res = NULL;
-            }
+            /* add last one */
+            strcpy(buf, p);
+            r = CMUTIL_StrTrim(buf);
+            str = CMUTIL_StringCreateInternal(memst, strlen(r), r);
+            CMCall(res, Add, str);
         }
     }
     return res;
@@ -954,17 +988,20 @@ CMUTIL_StringArray *CMUTIL_StringSplit(const char *haystack, const char *needle)
 const char *CMUTIL_StrNextToken(
     char *dest, size_t buflen, const char *src, const char *delim)
 {
-    const register char *p = src;
-    register char *q = dest;
-    const register char *l = dest + buflen;
-    while (*p && !strchr(delim, *p) && q < l) *q++ = *p++;
-    *q = 0x0;
-    return p;
+    if (buflen > 0 && src && dest && delim) {
+        const register char *p = src;
+        register char *q = dest;
+        const register char *l = dest + buflen - 1; // save one for null character
+        while (*p && !strchr(delim, *p) && q < l) *q++ = *p++;
+        *q = 0x0;
+        return p;
+    }
+    return NULL;
 }
 
-char *CMUTIL_StrSkipSpaces(char *line, const char *spaces)
+const char *CMUTIL_StrSkipSpaces(const char *line, const char *spaces)
 {
-    register char *p = line;
+    register const char *p = line;
     while (*p && strchr(spaces, *p)) p++;
     return p;
 }
@@ -979,31 +1016,37 @@ CMUTIL_STATIC int CMUTIL_StringHexChar(const int inp)
     return -1;
 }
 
-int CMUTIL_StringHexToBytes(char *dest, const char *src, int len)
+int CMUTIL_StringHexToBytes(uint8_t *dest, const char *src, int len)
 {
     register const char* hexstr = src;
     int isodd = len % 2;
-    register char* p = dest;
+    register uint8_t* p = dest;
 
     if (isodd) {
-        // pad first byte to zero when given source has odd number.
+        // pad the first byte to zero when the given length is an odd number.
+        int ctob = CMUTIL_StringHexChar(*hexstr++);
+        if (ctob < 0) return -1;
         /* upper 4 bits */
         *p = 0;
         /* lower 4 bits */
-        *p |= (CMUTIL_StringHexChar(*hexstr++) & 0xF);
+        *p |= (ctob & 0xF);
         len -= 1; p++;
         isodd = 0;
     }
     /* every 2 hex characters are converted to one byte */
     while (len > 0) {
         if (*hexstr) {
+            int ctob = CMUTIL_StringHexChar(*hexstr++);
+            if (ctob < 0) return -1;
             /* upper 4 bits */
-            *p = (char)((CMUTIL_StringHexChar(*hexstr++) & 0xF) << 4);
+            *p = ((ctob & 0xF) << 4);
 
+            ctob = CMUTIL_StringHexChar(*hexstr++);
+            if (ctob < 0) return -1;
             /* lower 4 bits */
-            *p |= (CMUTIL_StringHexChar(*hexstr++) & 0xF);
+            *p |= (ctob & 0xF);
         } else {
-            *p = (char)0xFF;    // padding with 0xFF
+            *p = (uint8_t)0xFF;    // padding with 0xFF
         }
         len -= 2; p++;
     }
@@ -1045,11 +1088,16 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytes(
         const uint8_t *bytes,
         uint32_t length)
 {
-    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
-    CMUTIL_ByteBufferCheckSize(bbi, length);
-    memcpy(bbi->buffer + bbi->size, bytes, length);
-    bbi->size += length;
-    return buffer;
+    if (bytes && length > 0) {
+        CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+        CMUTIL_ByteBufferCheckSize(bbi, length);
+        memcpy(bbi->buffer + bbi->size, bytes, length);
+        bbi->size += length;
+        return buffer;
+    }
+    CMLogErrorS("invalid parameter bytes: %s, length: %u",
+        bytes == NULL ? "NULL" : "not NULL", length);
+    return NULL;
 }
 
 CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytesPart(
@@ -1058,11 +1106,16 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytesPart(
         uint32_t offset,
         uint32_t length)
 {
-    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
-    CMUTIL_ByteBufferCheckSize(bbi, length);
-    memcpy(bbi->buffer + bbi->size, bytes + offset, length);
-    bbi->size += length;
-    return buffer;
+    if (bytes && length > 0) {
+        CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+        CMUTIL_ByteBufferCheckSize(bbi, length);
+        memcpy(bbi->buffer + bbi->size, bytes + offset, length);
+        bbi->size += length;
+        return buffer;
+    }
+    CMLogErrorS("invalid parameter bytes: %s, length: %u",
+        bytes == NULL ? "NULL" : "not NULL", length);
+    return NULL;
 }
 
 CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferInsertByteAt(
@@ -1079,28 +1132,38 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferInsertBytesAt(
         const uint8_t *bytes,
         uint32_t length)
 {
-    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
-    if (index > bbi->size) {
-        CMLogErrorS("index out of bounds: size - %u, request - %u",
-                    (uint32_t)bbi->size, index);
-        return NULL;
+    if (bytes && length > 0) {
+        CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+        if (index > bbi->size) {
+            CMLogErrorS("index out of bounds: size - %u, request - %u",
+                        (uint32_t)bbi->size, index);
+            return NULL;
+        }
+        if (index == bbi->size)
+            return CMCall(buffer, AddBytes, bytes, length);
+        CMUTIL_ByteBufferCheckSize(bbi, length);
+        memmove(bbi->buffer + index + length,
+                bbi->buffer + index,
+                bbi->size - index);
+        memcpy(bbi->buffer + index, bytes, length);
+        bbi->size += length;
+        return buffer;
     }
-    if (index == bbi->size)
-        return CMCall(buffer, AddBytes, bytes, length);
-    CMUTIL_ByteBufferCheckSize(bbi, length);
-    memmove(bbi->buffer + index + length,
-            bbi->buffer + index,
-            bbi->size - index);
-    memcpy(bbi->buffer + index, bytes, length);
-    bbi->size += length;
-    return buffer;
+    CMLogErrorS("invalid parameter bytes: %s, length: %u",
+        bytes == NULL ? "NULL" : "not NULL", length);
+    return NULL;
 }
 
-CMUTIL_STATIC uint8_t CMUTIL_ByteBufferGetAt(
+CMUTIL_STATIC int CMUTIL_ByteBufferGetAt(
         const CMUTIL_ByteBuffer *buffer,
         uint32_t index)
 {
     CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    if (index > bbi->size) {
+        CMLogErrorS("index out of bounds: size - %u, request - %u",
+                    (uint32_t)bbi->size, index);
+        return -1;
+    }
     return *(bbi->buffer + index);
 }
 
@@ -1124,13 +1187,12 @@ CMUTIL_STATIC CMBool CMUTIL_ByteBufferShrinkTo(
 {
     CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
     if (bbi->capacity < size) {
-        CMLogErrorS("out of bound(buffer size: %lu, index: %lu)",
+        CMLogErrorS("out of bound(buffer capacity: %lu, size: %lu)",
                 bbi->capacity, size);
         return CMFalse;
-    } else {
-        bbi->size = size;
-        return CMTrue;
     }
+    bbi->size = size;
+    return CMTrue;
 }
 
 CMUTIL_STATIC size_t CMUTIL_ByteBufferGetCapacity(
@@ -1156,9 +1218,7 @@ CMUTIL_STATIC void CMUTIL_ByteBufferClear(
         CMUTIL_ByteBuffer *buffer)
 {
     CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
-    if (bbi) {
-        bbi->size = 0;
-    }
+    bbi->size = 0;
 }
 
 static CMUTIL_ByteBuffer g_cmutil_bytebuffer = {

@@ -1106,7 +1106,7 @@ struct CMUTIL_String {
      * @param tobeadded C-style null terminated string to be appended.
      * @return New size of this string object.
      */
-    size_t (*AddString)(
+    ssize_t (*AddString)(
             CMUTIL_String *string, const char *tobeadded);
 
     /**
@@ -1120,7 +1120,7 @@ struct CMUTIL_String {
      * @param size Number of bytes to be appended from the given string.
      * @return New size of this string object.
      */
-    size_t (*AddNString)(
+    ssize_t (*AddNString)(
             CMUTIL_String *string, const char *tobeadded, size_t size);
 
     /**
@@ -1132,7 +1132,7 @@ struct CMUTIL_String {
      * @param tobeadded Character to be appended.
      * @return New size of this string object.
      */
-    size_t (*AddChar)(
+    ssize_t (*AddChar)(
             CMUTIL_String *string, char tobeadded);
 
     /**
@@ -1145,7 +1145,7 @@ struct CMUTIL_String {
      * @param ... Arguments for format string.
      * @return New size of this string object.
      */
-    size_t (*AddPrint)(
+    ssize_t (*AddPrint)(
             CMUTIL_String *string, const char *fmt, ...);
 
     /**
@@ -1158,7 +1158,7 @@ struct CMUTIL_String {
      * @param args Arguments list for format string.
      * @return New size of this string object.
      */
-    size_t (*AddVPrint)(
+    ssize_t (*AddVPrint)(
             CMUTIL_String *string, const char *fmt, va_list args);
 
     /**
@@ -1170,7 +1170,7 @@ struct CMUTIL_String {
      * @param tobeadded Another string object to be appended.
      * @return New size of this string object.
      */
-    size_t (*AddAnother)(
+    ssize_t (*AddAnother)(
             CMUTIL_String *string, const CMUTIL_String *tobeadded);
 
     /**
@@ -1183,7 +1183,7 @@ struct CMUTIL_String {
      * @param at Index where the given string will be inserted.
      * @return New size of this string object.
      */
-    size_t (*InsertString)(
+    ssize_t (*InsertString)(
             CMUTIL_String *string, const char *tobeadded, uint32_t at);
 
     /**
@@ -1199,7 +1199,7 @@ struct CMUTIL_String {
      * @param size Number of bytes to be inserted from the given string.
      * @return New size of this string object.
      */
-    size_t (*InsertNString)(
+    ssize_t (*InsertNString)(
             CMUTIL_String *string,
             const char *tobeadded, uint32_t at, size_t size);
 
@@ -1214,7 +1214,7 @@ struct CMUTIL_String {
      * @param ... Arguments for format string.
      * @return New size of this string object.
      */
-    size_t (*InsertPrint)(
+    ssize_t (*InsertPrint)(
             CMUTIL_String *string, uint32_t idx, const char *fmt, ...);
 
     /**
@@ -1228,7 +1228,7 @@ struct CMUTIL_String {
      * @param args Arguments list for format string.
      * @return New size of this string object.
      */
-    size_t (*InsertVPrint)(
+    ssize_t (*InsertVPrint)(
             CMUTIL_String *string, uint32_t idx,
             const char *fmt, va_list args);
 
@@ -1242,12 +1242,15 @@ struct CMUTIL_String {
      * @param tobeadded Another string object to be inserted.
      * @return New size of this string object.
      */
-    size_t (*InsertAnother)(
+    ssize_t (*InsertAnother)(
             CMUTIL_String *string, uint32_t idx, CMUTIL_String *tobeadded);
 
     /**
      * @brief Cut off the given number of characters
      * from the tail of this string.
+     *
+     * If the length is bigger than the size of this string,
+     * this string will be cleared.
      *
      * @param string This string object.
      * @param length Number of characters to be cut off from the tail.
@@ -1333,6 +1336,20 @@ struct CMUTIL_String {
      */
     const char *(*GetCString)(
             const CMUTIL_String *string);
+
+    /**
+     * @brief Function pointer to retrieve a character from a specified position in a string.
+     *
+     * This function pointer allows access to a character within a string structure
+     * at the position referenced by the provided index.
+     *
+     * @param string Pointer to a CMUTIL_String structure containing the string data.
+     * @param idx The position of the desired character within the string.
+     * @return The character located at the specified position, or an negative
+     *         value if the index is out of bounds.
+     */
+    int (*GetChar)(
+            const CMUTIL_String *string, uint32_t idx);
 
     /**
      * @brief Clear the content of this string object.
@@ -1623,103 +1640,478 @@ CMUTIL_API char *CMUTIL_StrLTrim(char *inp);
 CMUTIL_API char *CMUTIL_StrTrim(char *inp);
 
 /**
+ * @brief Get the next token from src.
  *
- * @param dest
- * @param buflen
- * @param src
- * @param delims
- * @return
+ * If buflen is less than the length of the next token, the token will be split
+ * into multiple tokens.
+ *
+ * @param dest The next token will be stored in here.
+ * @param buflen Maximum length of <code>dest</code>.
+ * @param src The source string to get the next token.
+ * @param delims Delimiters to determine token.
+ * @return The position of src after the token. NULL if invalid parameter.
  */
 CMUTIL_API const char *CMUTIL_StrNextToken(
     char *dest, size_t buflen, const char *src, const char *delims);
-CMUTIL_API char *CMUTIL_StrSkipSpaces(char *line, const char *spaces);
 
+/**
+ * @brief Skip leading spaces.
+ *
+ * Remove any leading space characters, custom <code>spaces</code>
+ * can be supplied.
+ *
+ * @param src Source string.
+ * @param spaces Any characters in here will be regards to space.
+ * @return The position in <code>src</code> after leading spaces.
+ */
+CMUTIL_API const char *CMUTIL_StrSkipSpaces(
+        const char *src, const char *spaces);
+
+/**
+ * @brief Split the <code>haystack</code> string using the <code>needle</code>.
+ *
+ * Any occurrence of the <code>needle</code> in the <code>haystack</code>
+ * will cause a split.
+ *
+ * @param haystack Source string.
+ * @param needle Split delimiter.
+ * @return Result strings in <code>CMUTIL_StringArray</code> form.
+ */
 CMUTIL_API CMUTIL_StringArray *CMUTIL_StringSplit(
     const char *haystack, const char *needle);
-CMUTIL_API int CMUTIL_StringHexToBytes(char *dest, const char *src, int len);
+
+/**
+ * @brief Convert hex encoded string to bytes.
+ *
+ * If <code>len</code> is an odd number, pad a '0' at the beginning.
+ *
+ * @param dest Byte array where result bytes will be stored in.
+ * @param src Hex encoded source string.
+ * @param len The number of characters to be converted from the source string.
+ * @return Number of bytes of results.
+ */
+CMUTIL_API int CMUTIL_StringHexToBytes(uint8_t *dest, const char *src, int len);
 
 
+/**
+ * @typedef CMUTIL_ByteBuffer Manipulation of bytes.
+ */
 typedef struct CMUTIL_ByteBuffer CMUTIL_ByteBuffer;
 struct CMUTIL_ByteBuffer {
+
+    /**
+     * @brief Append a byte to this buffer.
+     *
+     * @param buffer This buffer object.
+     * @param b A byte to be added.
+     * @return This buffer object. NULL if the addition is failed.
+     */
     CMUTIL_ByteBuffer *(*AddByte)(
             CMUTIL_ByteBuffer *buffer,
             uint8_t b);
+
+    /**
+     * @brief Adds a sequence of bytes to the specified buffer.
+     *
+     * This function appends a provided array of bytes to the end of the given
+     * byte buffer. It also updates the buffer's internal state to include the
+     * newly added bytes.
+     *
+     * @param buffer A pointer to the byte buffer where the bytes will be added.
+     * @param bytes A pointer to the array of bytes to be appended.
+     * @param length The number of bytes to be added from the array.
+     * @return A pointer to the updated buffer if the operation is successful,
+     *         or NULL if the addition fails.
+     */
     CMUTIL_ByteBuffer *(*AddBytes)(
             CMUTIL_ByteBuffer *buffer,
             const uint8_t *bytes,
             uint32_t length);
+
+    /**
+     * @brief Adds a portion of a byte array to the specified buffer.
+     *
+     * This function appends a subset of the provided byte array to the specified
+     * byte buffer. The portion of the array to be appended is determined by the
+     * provided offset and length. The function updates the buffer's state to
+     * reflect the added bytes.
+     *
+     * @param buffer A pointer to the byte buffer where the bytes will be added.
+     * @param bytes A pointer to the source byte array.
+     * @param offset The starting position within the source array from which bytes
+     *               will be copied.
+     * @param length The number of bytes to add from the source array.
+     * @return A pointer to the updated buffer if the operation is successful,
+     *         or NULL if the addition fails.
+     */
     CMUTIL_ByteBuffer *(*AddBytesPart)(
             CMUTIL_ByteBuffer *buffer,
             const uint8_t *bytes,
             uint32_t offset,
             uint32_t length);
+
+    /**
+     * @brief Inserts a byte at a specified index in the byte buffer.
+     *
+     * This function allows placing a single byte at any specified position within
+     * the given byte buffer. The existing data in the buffer is shifted as needed
+     * to make space for the new byte. If the insertion fails, the buffer remains
+     * unmodified.
+     *
+     * @param buffer A pointer to the byte buffer where the byte will be inserted.
+     * @param index The position in the buffer at which the byte should be inserted.
+     * @param b The byte to insert into the buffer.
+     * @return A pointer to the updated byte buffer if the operation is successful,
+     *         or NULL if the insertion fails.
+     */
     CMUTIL_ByteBuffer *(*InsertByteAt)(
             CMUTIL_ByteBuffer *buffer,
             uint32_t index,
             uint8_t b);
+
+    /**
+     * @brief Inserts a sequence of bytes at a specified index in the byte buffer.
+     *
+     * This function allows inserting an array of bytes into a specific position
+     * within the given byte buffer. The existing data in the buffer is shifted
+     * as needed to make space for the new bytes. If the insertion operation fails,
+     * the buffer remains unmodified.
+     *
+     * @param buffer A pointer to the byte buffer where the bytes will be inserted.
+     * @param index The position in the buffer at which the bytes should be inserted.
+     * @param bytes A pointer to the array of bytes to insert into the buffer.
+     * @param length The number of bytes to insert from the array.
+     * @return A pointer to the updated byte buffer if the operation is successful,
+     *         or NULL if the insertion fails.
+     */
     CMUTIL_ByteBuffer *(*InsertBytesAt)(
             CMUTIL_ByteBuffer *buffer,
             uint32_t index,
             const uint8_t *bytes,
             uint32_t length);
-    uint8_t (*GetAt)(
+
+    /**
+     * @brief Retrieves the byte at a specific index in the byte buffer.
+     *
+     * This function provides access to the byte located at a given index within
+     * the specified byte buffer without modifying the buffer. If the index is
+     * out of bounds, it returns a negative value.
+     *
+     * @param buffer A pointer to the byte buffer from which the byte should be retrieved.
+     * @param index The position of the byte to retrieve within the buffer.
+     * @return The byte located at the specified index in the buffer,
+     *         a negative value if failed.
+     */
+    int (*GetAt)(
             const CMUTIL_ByteBuffer *buffer,
             uint32_t index);
+
+    /**
+     * @brief Retrieves the size of the given byte buffer.
+     *
+     * This function returns the total number of bytes currently stored
+     * in the specified byte buffer. It provides a way to determine
+     * the current capacity or length of the buffer's contents.
+     *
+     * @param buffer A pointer to the byte buffer whose size will be retrieved.
+     * @return The size of the byte buffer, in bytes.
+     */
     size_t (*GetSize)(
             const CMUTIL_ByteBuffer *buffer);
+
+    /**
+     * @brief Function pointer to retrieve a byte array from a CMUTIL_ByteBuffer.
+     *
+     * This variable is a function pointer that, when assigned, points to a
+     * function capable of extracting a byte array stored in the specified
+     * CMUTIL_ByteBuffer structure.
+     *
+     * @param buffer Pointer to a CMUTIL_ByteBuffer structure from
+     *               which the byte array is to be retrieved.
+     * @return Pointer to the byte array extracted from the given buffer.
+     */
     uint8_t *(*GetBytes)(
             CMUTIL_ByteBuffer *buffer);
+
+    /**
+     * @brief Function pointer for resizing a CMUTIL_ByteBuffer to a specified size.
+     *
+     * This function reduces the size of the provided byte buffer to the specified
+     * size if possible. Success or failure is indicated through the returned boolean value.
+     *
+     * @param buffer A pointer to the CMUTIL_ByteBuffer to be resized.
+     * @param size The target size to shrink the buffer to.
+     * @return A CMBool indicating whether the operation was successful.
+     */
     CMBool (*ShrinkTo)(
             CMUTIL_ByteBuffer *buffer,
             size_t size);
+
+    /**
+     * @brief Retrieves the total capacity of the specified byte buffer.
+     *
+     * This function pointer returns the maximum number of bytes the given
+     * CMUTIL_ByteBuffer can hold without resize operation.
+     *
+     * @param buffer A pointer to the CMUTIL_ByteBuffer instance.
+     * @return The capacity of the byte buffer in bytes.
+     */
     size_t (*GetCapacity)(
             const CMUTIL_ByteBuffer *buffer);
+
+    /**
+     * @brief Function pointer for destroying a CMUTIL_ByteBuffer instance.
+     *
+     * This function is responsible for releasing and cleaning up resources
+     * associated with a given CMUTIL_ByteBuffer object.
+     *
+     * @param buffer A pointer to the CMUTIL_ByteBuffer instance to be destroyed.
+     */
     void (*Destroy)(
             CMUTIL_ByteBuffer *buffer);
+
+    /**
+     * @brief Function pointer for clearing the contents of a CMUTIL_ByteBuffer.
+     *
+     * This function is used to reset or clear the data in a provided byte buffer,
+     * ensuring that its contents are erased or set back to an initial state.
+     *
+     * @param buffer A pointer to the CMUTIL_ByteBuffer to be cleared.
+     */
     void (*Clear)(
             CMUTIL_ByteBuffer *buffer);
 };
 
+/**
+ * Default bytebuffer initial capacity.
+ */
 #define CMUTIL_BYTEBUFFER_DEFAULT   32
+
+/**
+ * Creates CMUTIL_ByteBuffer object with the default parameter.
+ */
 #define CMUTIL_ByteBufferCreate()   \
         CMUTIL_ByteBufferCreateEx(CMUTIL_BYTEBUFFER_DEFAULT)
+
+/**
+ * @brief Creates CMUTIL_ByteBuffer object with initial capacity.
+ *
+ * @param initcapacity Initial capacity of this bytebuffer.
+ * @return A new bytebuffer object.
+ */
 CMUTIL_API CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateEx(
         size_t initcapacity);
 
 
+/**
+ * @typedef CMUTIL_Map Hashmap type with item order preserved.
+ */
 typedef struct CMUTIL_Map CMUTIL_Map;
 struct CMUTIL_Map {
+    /**
+     * @brief Inserts a key-value pair into the map.
+     *
+     * This function adds a new entry into the map with the specified key and value.
+     * If the key already exists in the map, the associated value is updated to the
+     * new value provided. The function returns a pointer to the previous value
+     * associated with the key if it existed, or NULL if the key was not found in
+     * the map before the operation.
+     * The order of the items in the map is preserved.
+     *
+     * @param map A pointer to the map where the key-value pair should be inserted.
+     * @param key The key associated with the value to insert or update in the map.
+     * @param value A pointer to the value to associate with the specified key.
+     * @return A pointer to the previous value associated with the key, or nullptr
+     *         if the key did not previously exist in the map.
+     */
     void *(*Put)(
             CMUTIL_Map *map, const char* key, void* value);
+
+    /**
+     * @brief Copies all key-value pairs from one map to another.
+     *
+     * This function transfers all key-value pairs from the source map to the
+     * target map. If keys in the source map already exist in the target map,
+     * their values will be replaced with the values from the source map.
+     * The operation does not clear existing entries in the target map that
+     * do not have corresponding keys in the source map.
+     *
+     * @param map A pointer to the target map where the key-value pairs will be copied.
+     * @param src A pointer to the source map containing the key-value pairs to copy.
+     */
     void (*PutAll)(
             CMUTIL_Map *map, const CMUTIL_Map *src);
+
+    /**
+     * @brief Retrieves the value associated with a given key in the map.
+     *
+     * This function searches the map for the specified key and returns the
+     * value associated with it. If the key is not found, the function
+     * returns a null pointer.
+     *
+     * @param map A pointer to the map object to search.
+     * @param key The key whose associated value is to be retrieved.
+     * @return A pointer to the value associated with the given key, or NULL
+     *         if the key is not found.
+     */
     void *(*Get)(
             const CMUTIL_Map *map, const char* key);
+
+    /**
+     * @brief Removes the key-value pair associated with the given key from the map.
+     *
+     * This function searches the map for the specified key and removes the
+     * corresponding key-value pair if found. If the key is not found, the
+     * function does nothing and returns NULL.
+     *
+     * @param map A pointer to the map object from which to remove the key-value pair.
+     * @param key The key to be removed from the map.
+     * @return A pointer to the value associated with the removed key, or NULL
+     *         if the key was not found.
+     */
     void *(*Remove)(
             CMUTIL_Map *map, const char* key);
+
+    /**
+     * @brief Get the keys of the map.
+     *
+     * This function returns a string array containing all the keys present
+     * in the map.
+     * The caller is responsible for freeing the returned string array using
+     * the Destroy method.
+     *
+     * @param map A pointer to the map object from which to retrieve the keys.
+     * @return A pointer to a string array containing the keys
+     *         or nullptr if the map is empty.
+     */
     CMUTIL_StringArray *(*GetKeys)(
             const CMUTIL_Map *map);
+
+    /**
+     * @brief Get the size of the map.
+     *
+     * This function returns the number of key-value pairs currently stored
+     * in the map.
+     *
+     * @param map A pointer to the map object from which to retrieve the size.
+     * @return The number of key-value pairs in the map.
+     */
     size_t (*GetSize)(
             const CMUTIL_Map *map);
+
+    /**
+     * @brief Get iterator for the map.
+     *
+     * This function returns an iterator object that can be used to traverse
+     * the values in the map. The caller is responsible for freeing
+     * the returned iterator using the Destroy method.
+     *
+     * @param map A pointer to the map object from which to retrieve the iterator.
+     * @return A pointer to the iterator object, or NULL if the map is empty.
+     */
     CMUTIL_Iterator *(*Iterator)(
             const CMUTIL_Map *map);
+
+    /**
+     * @brief Clear the map.
+     *
+     * This function removes all key-value pairs from the map, effectively
+     * resetting it to an empty state. The function does not free the memory
+     * associated with the map itself, only the key-value pairs.
+     * If this map is created with freecb, it will be called freecb for each value.
+     * Otherwise, it will not free the values.
+     *
+     * @param map A pointer to the map object to be cleared.
+     */
     void (*Clear)(
             CMUTIL_Map *map);
+
+    /**
+     * @brief Clear the map and free all key-value pairs.
+     *
+     * This function removes all key-value pairs from the map, effectively
+     * resetting it to an empty state. The function will free the memory
+     * associated with the map itself and all key-value pairs.
+     * Whether this map is created with or without freecb,
+     * it will not free the values.
+     *
+     * @param map A pointer to the map object to be cleared.
+     */
     void (*ClearLink)(
             CMUTIL_Map *map);
+
+    /**
+     * @brief Destroy the map object.
+     *
+     * This function frees the memory associated with the map object and
+     * all key-value pairs. If the map was created with a freecb function,
+     * it will be called for each value to free any additional memory.
+     *
+     * @param map A pointer to the map object to be destroyed.
+     */
     void (*Destroy)(
             CMUTIL_Map *map);
+
+    /**
+     * @brief Print the map to a string.
+     *
+     * This function appends a string representation of the map to the
+     * provided CMUTIL_String object. The format of the string is
+     * implementation-dependent.
+     *
+     * @param map A pointer to the map object to be printed.
+     * @param out A pointer to the CMUTIL_String object to append the output.
+     */
     void (*PrintTo)(
             const CMUTIL_Map *map, CMUTIL_String *out);
+
+    /**
+     * @brief Get the value at a specific index in the map.
+     *
+     * This function retrieves the value at the specified index in the map.
+     * The index is zero-based, with 0 being the first element.
+     *
+     * @param map A pointer to the map object from which to retrieve the value.
+     * @param index The index of the value to retrieve.
+     * @return A pointer to the value at the specified index,
+     *         or NULL if the index is out of bounds.
+     */
     void *(*GetAt)(
             const CMUTIL_Map *map, uint32_t index);
+
+    /**
+     * @brief Remove the value at a specific index in the map.
+     *
+     * This function removes the value at the specified index in the map.
+     * The index is zero-based, with 0 being the first element.
+     *
+     * @param map A pointer to the map object from which to remove the value.
+     * @param index The index of the value to remove.
+     * @return A pointer to the removed value,
+     *         or NULL if the index is out of bounds.
+     */
     void *(*RemoveAt)(
             CMUTIL_Map *map, uint32_t index);
 };
 
+/**
+ * The default initial bucket size for the map.
+ */
 #define CMUTIL_MAP_DEFAULT  256
+
+/**
+ * Create a new map with default settings.
+ */
 #define CMUTIL_MapCreate()  CMUTIL_MapCreateEx(\
         CMUTIL_MAP_DEFAULT, CMFalse, NULL)
+
+/**
+ * @brief Create a new map with custom settings.
+ * @param bucketsize The initial number of buckets for the map.
+ * @param isucase Whether the key of the map should be case-insensitive.
+ * @param freecb A callback function to free values when the map is destroyed.
+ * @return A pointer to the newly created map, or NULL on failure.
+ */
 CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
         uint32_t bucketsize, CMBool isucase, CMFreeCB freecb);
 
@@ -2188,11 +2580,11 @@ struct CMUTIL_LogSystem {
     /**
      * @brief Create a new logger object.
      *
-     * This method will create a new logger object with given name, log level
-     * and additivity.
+     * This method will create a new logger object with the given name,
+     * log level, and additivity.
      *
      * @param logsys The log system object.
-     * @param name The name of logger. If NULL or empty string given,
+     * @param name The name of logger. If NULL or empty string is given, a
      *          root logger will be created.
      * @param level The log level of this logger.
      * @param additivity If CMTrue, this logger will also log to parent
@@ -2280,7 +2672,7 @@ struct CMUTIL_Socket {
 };
 
 /**
- * Create a new socket which connected to given endpoint.
+ * Create a new socket which connected to the given endpoint.
  *
  * @param host host where connect to.
  * @param port port where connect to.
