@@ -2893,6 +2893,66 @@ struct CMUTIL_FileList {
             CMUTIL_FileList *flist);
 };
 
+/**
+ * @typedef CMUTIL_FileOpenMode File open mode enumeration.
+ */
+typedef enum CMFileOpenMode {
+    /** Open file for reading. */
+    CMFileOpenRead = 0,
+    /** Open file for writing (overwrite). */
+    CMFileOpenWrite,
+    /** Open file for appending. */
+    CMFileOpenAppend
+} CMFileOpenMode;
+
+/**
+ * @typedef CMUTIL_FileStream File stream object for reading and writing files.
+ */
+typedef struct CMUTIL_FileStream CMUTIL_FileStream;
+struct CMUTIL_FileStream {
+        /**
+         * @brief Read data from the file stream into a buffer.
+         *
+         * This method only available if this object created with
+         * CMFileOpenRead mode, otherwise will return -1.
+         *
+         * @param fs A pointer to the CMUTIL_FileStream object.
+         * @param buffer A pointer to the buffer where the read data will be stored.
+         * @param size The number of bytes to read from the file stream.
+         * @return The number of bytes actually read, or -1 on failure.
+         */
+        ssize_t (*Read)(
+                const CMUTIL_FileStream *fs,
+                CMUTIL_String *buffer,
+                size_t size);
+
+        /**
+         * @brief Write data from a buffer to the file stream.
+         *
+         * This method only available if this object created with
+         * CMFileOpenWrite or CMFileOpenAppend mode, otherwise will return -1.
+         *
+         * @param fs A pointer to the CMUTIL_FileStream object.
+         * @param buffer A pointer to the buffer containing the data to write.
+         * @param offset The offset in the buffer from which to start writing.
+         * @param size The number of bytes to write to the file stream.
+         * @return The number of bytes actually written, or -1 on failure.
+         */
+        ssize_t (*Write)(
+                const CMUTIL_FileStream *fs,
+                const CMUTIL_String *buffer,
+                size_t offset,
+                size_t size);
+
+        /**
+         * @brief Close the file stream and free its resources.
+         *
+         * @param fs A pointer to the CMUTIL_FileStream object to be closed.
+         */
+        void (*Close)(
+                CMUTIL_FileStream *fs);
+};
+
 struct CMUTIL_File {
     /**
      * @brief Get the contents of the file as a string.
@@ -3108,6 +3168,18 @@ struct CMUTIL_File {
     CMUTIL_FileList *(*Find)(
             const CMUTIL_File *file,
             const char *pattern, CMBool recursive);
+
+    /**
+     * @brief Create a file stream for reading or writing the file.
+     *
+     * @param file A pointer to the CMUTIL_File object.
+     * @param mode The file open mode (read, write, append).
+     * @return A pointer to the newly created CMUTIL_FileStream object,
+     *         or NULL on failure.
+     */
+    CMUTIL_FileStream *(*CreateStream)(
+            const CMUTIL_File *file,
+            CMFileOpenMode mode);
 
     /**
      * @brief Destroy the file or directory object and free its resources.
