@@ -164,8 +164,8 @@ typedef struct CMUTIL_MemNode {
     struct CMUTIL_MemNode   *next;
     CMUTIL_String           *stack;
     int                     index;
-    unsigned char           flag;
     char                    dummy_padder[3];
+    unsigned char           flag;
 } CMUTIL_MemNode;
 
 CMUTIL_STATIC void CMUTIL_MemNodeDestroy(void *data)
