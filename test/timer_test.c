@@ -31,23 +31,20 @@ int main() {
 
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    CMLogInfo("current time: %s", get_current_time());
     tv.tv_sec += 1;
     task = CMCall(timer, ScheduleAtTime, &tv, timer_proc, NULL);
+    CMLogInfo("current time: %s", get_current_time());
 
-    // wait 2 seconds
-    usleep(2 * 1000 * 1000);
-
-    gettimeofday(&tv, NULL);
-    tv.tv_sec += 1;
-    task = CMCall(timer, ScheduleAtRepeat, &tv, 500, CMTrue, timer_proc, NULL);
-
-    // wait 2 seconds
-    usleep(2 * 1000 * 1000);
+    // wait 1.1 seconds
+    usleep(1 * 1100 * 1000);
     CMCall(task, Cancel);
 
-    // wait 2 seconds
-    usleep(2 * 1000 * 1000);
+    gettimeofday(&tv, NULL);
+    task = CMCall(timer, ScheduleAtRepeat, &tv, 100, CMTrue, timer_proc, NULL);
+
+    // wait 1 seconds
+    usleep(1 * 1000 * 1000);
+    CMCall(task, Cancel);
 
     ir = 0;
 END_POINT:
