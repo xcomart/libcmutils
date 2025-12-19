@@ -34,7 +34,6 @@ SET ( LIB_SRCS
     src/nanojson.c
     src/nanoxml.c
     src/network.c
-    src/nio.c
     src/pattern.c
     src/pool.c
     src/strings.c
