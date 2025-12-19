@@ -1046,6 +1046,7 @@ CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
         ir = -1;
 #elif defined(APPLE)
     isem->semp = dispatch_semaphore_create(initcnt);
+    ir = isem->semp == NULL? -1:0;
 #else
     ir = sem_init(&(isem->semp), 0, (uint32_t)initcnt);
 #endif
@@ -1267,7 +1268,6 @@ typedef struct CMUTIL_TimerTask_Internal {
     void                    *param;     // procedure parameter
     CMUTIL_Timer            *timer;     // timer reference
     CMUTIL_Mem              *memst;     // memory management context
-    CMBool                  being_destroyed; // task is being destroyed
 } CMUTIL_TimerTask_Internal;
 
 typedef struct CMUTIL_Timer_Internal {
@@ -1314,13 +1314,6 @@ CMUTIL_STATIC void CMUTIL_TimerTaskCancel(CMUTIL_TimerTask *task)
     (void)CMUTIL_TimerTaskCancelPrivate(task);
 }
 
-CMUTIL_STATIC void CMUTIL_TimerTaskDestroy(CMUTIL_TimerTask *task)
-{
-    CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)task;
-    CMCall(task, Cancel);
-    itask->being_destroyed = CMTrue;
-}
-
 CMUTIL_STATIC void CMUTIL_TimerGetDelayed(struct timeval *tv, long delay)
 {
     tv->tv_sec += delay / 1000;
@@ -1350,7 +1343,6 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerTaskCreate(
         res->proc = proc;
         res->type = type;
         res->memst = itimer->memst;
-        res->being_destroyed = CMFalse;
         res->base.Cancel = CMUTIL_TimerTaskCancel;
 
         CMSync(itimer->mutex, {
