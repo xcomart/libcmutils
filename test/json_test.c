@@ -60,6 +60,29 @@ int main() {
     CMCall((CMUTIL_Json*)jarr, ToString, buf, CMTrue);
     CMLogInfo("Cloned json: %s", CMCall(buf, GetCString));
 
+    const char *jsonstr =
+        "{\n"
+        "  \"key1\": \"value1\",\n"
+        "  \"key2\": \"value2\",\n"
+        "  \"key3\": 12345,\n"
+        "  \"key4\": 0.1234,\n"
+        "  \"key5\": true,\n"
+        "  \"key6\": null,\n"
+        "  \"arr\": [1, 2, 3, 4, null],\n"
+        "  \"obj\": {\"key1\": \"value1\", \"key2\": \"value2\"}\n"
+        "}";
+    if (buf) CMCall(buf, Destroy); buf = NULL;
+    buf = CMUTIL_StringCreate();
+    CMCall(buf, AddString, jsonstr);
+
+    if (jobj) CMUTIL_JsonDestroy(jobj); jobj = NULL;
+    jobj = (CMUTIL_JsonObject*)CMUTIL_JsonParse(buf);
+    ASSERT(jobj != NULL, "JsonParse");
+    CMCall(buf, Clear);
+    CMCall((CMUTIL_Json*)jobj, ToString, buf, CMTrue);
+    CMLogInfo("Parsed json: %s", CMCall(buf, GetCString));
+    CMLogInfo("Original json: %s", jsonstr);
+
     ir = 0;
 END_POINT:
     if (buf) CMCall(buf, Destroy);
