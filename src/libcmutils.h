@@ -2576,11 +2576,16 @@ CMUTIL_API CMUTIL_CSConv *CMUTIL_CSConvCreate(
 typedef struct CMUTIL_TimerTask CMUTIL_TimerTask;
 struct CMUTIL_TimerTask {
     /**
-     * @brief Cancel the scheduled timer task.
+     * @brief Cancel the scheduled timer task and destroy.
      *
      * This function cancels the execution of the timer task
      * if it has not yet been executed. Once canceled, the task
      * will not be executed in the future.
+     * This function also frees the resources associated with the timer task.
+     * Do not call this function after Timer destroyed,
+     * may cause undefined behavior.
+     *
+     * @param task The timer task to be canceled and destroyed.
      */
     void (*Cancel)(CMUTIL_TimerTask *task);
 };
@@ -2847,6 +2852,7 @@ struct CMUTIL_Library {
  * functions within the library.
  *
  * @param path The file path to the dynamic library to load.
+ *             The file extension can be excluded.
  * @return A pointer to the newly created CMUTIL_Library object,
  *         or NULL on failure.
  */
