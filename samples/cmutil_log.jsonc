@@ -4,33 +4,33 @@
         "appenders": [
             {
                 "name": "SampleConsoleAppender",
-                "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",
+                "pattern": "%d %P-[%10t] [%-15F:%04L] [%-5p] %c - %m%ex%n",
                 "async": true,
                 "asyncBufferSize": 512,
                 "type": "Console"  // can be one of (console, file, rollingfile, socket)
             },{
                 "name": "SampleFileAppender",
-                "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",
+                "pattern": "%d %P-[%10t] [%-15F:%04L] [%-5p] %c - %m%ex%n",
                 "async": true,
                 "asyncBufferSize": 512,
                 "type": "File",  // can be one of (console, file, rollingfile, socket)
-                "fileName": "log/sample_file_log.log",
+                "fileName": "log/sample_file_log.log"
             },{
                 "name": "SampleRollingFileAppender",
-                "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",
+                "pattern": "%d %P-[%10t] [%-15F:%04L] [%-5p] %c - %m%ex%n",
                 "async": true,
                 "asyncBufferSize": 512,
                 "type": "RollingFile",  // can be one of (console, file, rollingfile, socket)
                 "fileName": "log/sample_rolling_file_log.log",
-                "rollterm": "day"  // can be one of (year, month, day, hour, minute)
+                "rollTerm": "day"  // can be one of (year, month, day, hour, minute)
             },{
                 "name": "SampleSocketAppender",
-                "pattern": "%d %P-%t [%F:%L] [%-5p] %c - %m%ex%n",
+                "pattern": "%d %P-[%10t] [%-15F:%04L] [%-5p] %c - %m%ex%n",
                 "async": true,
                 "asyncBufferSize": 512,
                 "type": "Socket",  // can be one of (console, file, rollingfile, socket)
                 "listenPort": 9123,
-                "acceptHost": "INADDR_ANY"
+                "acceptHost": "0.0.0.0"
             }
         ],
         "loggers": [
@@ -40,7 +40,7 @@
                 "appenderRef":["SampleConsoleAppender","SampleRollingFileAppender"]
             },{
                 "name": "cmutil.network",
-                "additive": false,
+                "additivity": false,
                 "level": "TRACE",
                 "appenderRef": "SampleConsoleAppender"
             }
