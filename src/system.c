@@ -246,7 +246,7 @@ CMUTIL_STATIC long CMUTIL_FileLength(const CMUTIL_File *file)
 {
     struct stat s;
     return (long)(stat(CMCall(file, GetFullPath), &s) == 0?
-            s.st_size:0);
+            s.st_size:-1);
 }
 
 CMUTIL_STATIC const char *CMUTIL_FileGetName(const CMUTIL_File *file)

@@ -1,7 +1,8 @@
 
 CMAKE_MINIMUM_REQUIRED ( VERSION 3.10 )
 
-SET (CMAKE_CXX_STANDARD 11)
+#SET (CMAKE_CXX_STANDARD 11)
+SET (CMAKE_C_STANDARD 99)
 
 PROJECT ( cmutils )
 
@@ -33,7 +34,6 @@ SET ( LIB_SRCS
     src/nanojson.c
     src/nanoxml.c
     src/network.c
-    src/nio.c
     src/pattern.c
     src/pool.c
     src/strings.c

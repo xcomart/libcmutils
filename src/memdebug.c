@@ -164,8 +164,8 @@ typedef struct CMUTIL_MemNode {
     struct CMUTIL_MemNode   *next;
     CMUTIL_String           *stack;
     int                     index;
-    unsigned char           flag;
     char                    dummy_padder[3];
+    unsigned char           flag;
 } CMUTIL_MemNode;
 
 CMUTIL_STATIC void CMUTIL_MemNodeDestroy(void *data)
@@ -421,9 +421,9 @@ CMBool CMUTIL_MemDebugClear()
             CMUTIL_MemRcyList *list = &g_cmutil_memrcyblocks[i];
             // TODO: print used items;
             if (CMCall(list->used, GetSize) > 0) {
-                CMUTIL_MemLog("*** FATAL - index:%d count:%d total:%ld byte "
-                        "memory leak detected.",
-                        i, list->cnt - list->avlcnt, list->usedsize);
+                CMUTIL_MemLog("*** FATAL - index:%d count:%d "
+                              "total:%ld byte memory leak detected.",
+                              i, list->cnt - list->avlcnt, list->usedsize);
                 if (g_cmutil_memoper == CMMemDebug) {
                     uint32_t j;
                     for (j=0; j<CMCall(list->used, GetSize); j++) {

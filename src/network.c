@@ -48,6 +48,15 @@ static WSADATA wsa_data;
 
 CMUTIL_LogDefine("cmutils.network")
 
+// #define FD_CHECK_WITH_SELECT  1
+
+#define LogAddr(m,a) do {\
+    char __host[128]; int __port;\
+    CMUTIL_SocketAddrGet(a, __host, &__port);\
+    CMLogTrace("%s %s:%d", m, __host, __port);\
+    } while(0)
+
+
 #if defined(MSWIN)
 #elif defined(APPLE)
 static CMUTIL_Mutex *g_cmutil_hostbyname_mutex = NULL;
@@ -132,9 +141,9 @@ int CMUTIL_NetworkGetHostByNameR(const char *name,
 #endif
 
 #if defined(CMUTIL_SUPPORT_SSL) && defined(CMUTIL_SSL_USE_OPENSSL)
-static CMUTIL_Array *g_cmutil_openssl_locks = NULL;
+CMUTIL_STATIC CMUTIL_Array *g_cmutil_openssl_locks = NULL;
 
-static void CMUTIL_SSL_InitOpenSSLLocks(void)
+CMUTIL_STATIC void CMUTIL_SSL_InitOpenSSLLocks(void)
 {
     uint32_t i, nl = (uint32_t)CRYPTO_num_locks();
     g_cmutil_openssl_locks = CMUTIL_ArrayCreateEx(nl, NULL, NULL);
@@ -222,20 +231,24 @@ void CMUTIL_NetworkClear()
 CMSocketResult CMUTIL_SocketAddrGet(
         const CMUTIL_SocketAddr *saddr, char *hostbuf, int *port)
 {
+    CMSocketResult res = CMSocketOk;
     if (hostbuf) {
         uint8_t ip[4];
         const uint32_t addr = ntohl(saddr->sin_addr.s_addr);
         memcpy(ip, &addr, sizeof(addr));
-        sprintf(hostbuf, "%u.%u.%u.%u", ip[3], ip[2], ip[1], ip[0]);
+        if (sprintf(hostbuf, "%u.%u.%u.%u", ip[3], ip[2], ip[1], ip[0]) <= 0) {
+            CMLogError("cannot get ip address from %s", hostbuf);
+            res = CMSocketUnknownError;
+        }
     }
     if (port) {
         *port = (int)ntohs(saddr->sin_port);
     }
-    return CMSocketOk;
+    return res;
 }
 
 CMSocketResult CMUTIL_SocketAddrSet(
-        CMUTIL_SocketAddr *saddr, char *host, int port)
+        CMUTIL_SocketAddr *saddr, const char *host, int port)
 {
     int rval;
     struct addrinfo hint, *ainfo;
@@ -273,6 +286,101 @@ typedef struct CMUTIL_Socket_Internal {
     CMUTIL_Mem          *memst;
 } CMUTIL_Socket_Internal;
 
+CMUTIL_STATIC CMBool CMUTIL_SocketNonBlocking(SOCKET *sock, CMBool silent)
+{
+#if 1
+#if defined(SUNOS)
+    const int rc = fcntl(*sock, F_SETFL, fcntl(*sock, F_GETFL, 0) | O_NONBLOCK);
+    if (rc < 0) {
+        if (!res->silent)
+            CMLogErrorS("fnctl failed.(%d:%s)", errno, strerror(errno));
+        return CMFalse;
+    }
+#else
+    int arg = 1;
+    const int rc = ioctlsocket(*sock, FIONBIO, &arg);
+    if (rc < 0) {
+        if (!silent)
+            CMLogErrorS("ioctl failed.(%d:%s)", errno, strerror(errno));
+        return CMFalse;
+    }
+#endif
+#endif
+    return CMTrue;
+}
+
+CMSocketResult CMUTIL_SocketCheckBase(
+        SOCKET sock, long timeout, CMBool isread, CMBool silent)
+{
+    int rc;
+#if defined(FD_CHECK_WITH_SELECT)
+    fd_set fdset;
+    struct timeval tv;
+    FD_ZERO(&fdset);
+    FD_SET(sock, &fdset);
+    tv.tv_sec = timeout / 1000;
+    tv.tv_usec = (int)((timeout % 1000) * 1000);
+
+    if (isread) {
+        rc = select(sock+1, &fdset, NULL, NULL, &tv);
+    } else {
+        rc = select(sock+1, NULL, &fdset, NULL, &tv);
+    }
+    if (rc < 0) {
+        if (!silent)
+            CMLogErrorS("select() failed.(%d:%s)", errno, strerror(errno));
+        return CMSocketPollFailed;
+    }
+    if (rc == 0) {
+        return CMSocketTimeout;
+    }
+    return CMSocketOk;
+#else
+    struct pollfd pfd;
+    const short evt = isread? POLLIN:POLLOUT;
+
+    memset(&pfd, 0x0, sizeof(struct pollfd));
+
+    pfd.fd = sock;
+    pfd.events = (short)(evt | POLLPRI);
+
+    rc = poll(&pfd, 1, (int)timeout);
+    if (rc < 0) {
+        if (!silent)
+            CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
+        return CMSocketPollFailed;
+    }
+    if (pfd.revents & evt) {
+        return CMSocketOk;
+    }
+    if (rc == 0) {
+        return CMSocketTimeout;
+    }
+    // CMLogError("poll failed. unsupported opertation");
+    // return CMSocketUnsupported;
+    return CMSocketOk;
+#endif
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckBuffer(
+        const CMUTIL_Socket *sock, long timeout, CMBool isread)
+{
+    const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
+    return CMUTIL_SocketCheckBase(isock->sock, timeout, isread, isock->silent);
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckReadBuffer(
+        const CMUTIL_Socket *sock, long timeout)
+{
+    return CMUTIL_SocketCheckBuffer(sock, timeout, CMTrue);
+}
+
+CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckWriteBuffer(
+        const CMUTIL_Socket *sock, long timeout)
+{
+    return CMUTIL_SocketCheckBuffer(sock, timeout, CMFalse);
+}
+
 CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
         CMUTIL_Mem *memst, CMBool silent);
 
@@ -282,24 +390,9 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketRead(
         uint32_t size, long timeout)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
-    int tout, rc;
-    uint32_t rsize;
+    int rc;
+    uint32_t rsize = 0;
     char buf[CMUTIL_RBUF_LEN];
-    struct pollfd pfd;
-
-    /*
-      Kernel object handles are process specific.
-      That is, a process must either create the object
-      or open an existing object to obtain a kernel object handle.
-      The per-process limit on kernel handles is 2^24.
-      So SOCKET can be casted to 32bit integer in 64bit windows.
-    */
-    memset(&pfd, 0x0, sizeof(struct pollfd));
-    pfd.fd = isock->sock;
-    pfd.events = POLLIN;
-
-    tout = (int)timeout;
-    rsize = 0;
 
     while (size > rsize) {
         uint32_t toberead = size - rsize;
@@ -307,15 +400,14 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketRead(
         if (toberead > CMUTIL_RBUF_LEN)
             toberead = CMUTIL_RBUF_LEN;
 
-        rc = poll(&pfd, 1, tout);
-        if (rc < 0) {
-            if (!isock->silent)
-                CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
-            return CMSocketPollFailed;
-        } else if (rc == 0) {
+        const CMSocketResult sr = CMCall(sock, CheckReadBuffer, timeout);
+        if (sr == CMSocketTimeout) {
             if (!isock->silent)
                 CMLogError("socket read timeout.");
-            return CMSocketTimeout;
+            return sr;
+        }
+        if (sr != CMSocketOk) {
+            return sr;
         }
 
 #if defined(LINUX)
@@ -327,14 +419,13 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketRead(
             if (!isock->silent)
                 CMLogError("recv failed.(%d:%s)", errno, strerror(errno));
             return CMSocketReceiveFailed;
-        } else if (rc == 0) {
-            if (!isock->silent)
-                CMLogError("socket read timeout.");
-            return CMSocketTimeout;
+        }
+        if (rc > 0) {
+            CMLogTrace("%d bytes received", rc);
+            CMCall(buffer, AddNString, buf, (uint32_t)rc);
+            rsize += (uint32_t)rc;
         }
 
-        CMCall(buffer, AddNString, buf, (uint32_t)rc);
-        rsize += (uint32_t)rc;
     }
     return CMSocketOk;
 }
@@ -452,34 +543,17 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWritePart(
         int offset, uint32_t length, long timeout)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
-    int tout, rc;
+    int rc;
     uint32_t size = length;
-    struct pollfd pfd;
-
-    /*
-    Kernel object handles are process specific.
-    That is, a process must either create the object
-    or open an existing object to obtain a kernel object handle.
-    The per-process limit on kernel handles is 2^24.
-    So SOCKET can be casted to 32bit integer in 64bit windows.
-    */
-    memset(&pfd, 0x0, sizeof(struct pollfd));
-    pfd.fd = isock->sock;
-    pfd.events = POLLOUT;
-    tout = (int)timeout;
 
     while (size > 0) {
-        rc = poll(&pfd, 1, tout);
-        if (rc < 0) {
-            if (!isock->silent)
-                CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
-            return CMSocketPollFailed;
-        }
-        else if (rc == 0) {
+        const CMSocketResult sr = CMCall(sock, CheckWriteBuffer, timeout);
+        if (sr == CMSocketTimeout) {
             if (!isock->silent)
                 CMLogError("socket write timeout");
-            return CMSocketTimeout;
+            return sr;
         }
+        if (sr != CMSocketOk) return sr;
 
 #if defined(LINUX)
         rc = (int)send(isock->sock, CMCall(data, GetCString) + offset,
@@ -500,6 +574,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWritePart(
                            errno, strerror(errno));
             return CMSocketSendFailed;
         }
+        CMLogTrace("%d bytes written", rc);
         offset += rc;
         size -= (uint32_t)rc;
     }
@@ -591,50 +666,6 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteSocket(
     return res;
 }
 
-CMSocketResult CMUTIL_SocketCheckBase(
-        SOCKET sock, long timeout, CMBool isread, CMBool silent)
-{
-    int rc, tout;
-    struct pollfd pfd;
-
-    memset(&pfd, 0x0, sizeof(struct pollfd));
-
-    pfd.fd = sock;
-    pfd.events = isread? POLLIN:POLLOUT;
-
-    tout = (int)timeout;
-
-    rc = poll(&pfd, 1, tout);
-    if (rc < 0) {
-        if (!silent)
-            CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
-        return CMSocketPollFailed;
-    }
-    if (rc == 0) {
-        return CMSocketTimeout;
-    }
-    return CMSocketOk;
-}
-
-CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckBuffer(
-        const CMUTIL_Socket *sock, long timeout, CMBool isread)
-{
-    const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
-    return CMUTIL_SocketCheckBase(isock->sock, timeout, isread, isock->silent);
-}
-
-CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckReadBuffer(
-        const CMUTIL_Socket *sock, long timeout)
-{
-    return CMUTIL_SocketCheckBuffer(sock, timeout, CMTrue);
-}
-
-CMUTIL_STATIC CMSocketResult CMUTIL_SocketCheckWriteBuffer(
-        const CMUTIL_Socket *sock, long timeout)
-{
-    return CMUTIL_SocketCheckBuffer(sock, timeout, CMFalse);
-}
-
 CMUTIL_STATIC void CMUTIL_SocketGetRemoteAddr(
         const CMUTIL_Socket *sock, CMUTIL_SocketAddr *addr)
 {
@@ -653,11 +684,10 @@ CMUTIL_STATIC void CMUTIL_SocketClose(CMUTIL_Socket *sock)
 }
 
 CMUTIL_STATIC CMBool CMUTIL_SocketConnectByIP(
-        unsigned char *ip, int port,
+        const CMUTIL_SocketAddr *addr,
         CMUTIL_Socket_Internal *is, long timeout, int retrycnt,
         CMBool silent)
 {
-    uint32_t addr;
     struct sockaddr_in *serv = &(is->peer);
     SOCKET s;
     int rc;
@@ -674,13 +704,14 @@ CMUTIL_STATIC CMBool CMUTIL_SocketConnectByIP(
 
 CONNECT_RETRY:
 
-    memset(serv, 0x0, sizeof(struct sockaddr_in));
-    serv->sin_family = AF_INET;
-    serv->sin_port = htons((uint16_t) port);
-    addr = (uint32_t)
-        ((uint32_t) ip[0] << 24L) | ((uint32_t) ip[1] << 16L) |
-        ((uint32_t) ip[2] <<  8L) | ((uint32_t) ip[3]);
-    serv->sin_addr.s_addr = htonl(addr);
+    memcpy(serv, addr, sizeof(struct sockaddr_in));
+    // memset(serv, 0x0, sizeof(struct sockaddr_in));
+    // serv->sin_family = AF_INET;
+    // serv->sin_port = htons((uint16_t) port);
+    // addr = (uint32_t)
+    //     ((uint32_t) ip[0] << 24L) | ((uint32_t) ip[1] << 16L) |
+    //     ((uint32_t) ip[2] <<  8L) | ((uint32_t) ip[3]);
+    // serv->sin_addr.s_addr = htonl(addr);
 
     s = socket(AF_INET, SOCK_STREAM, 0);
     if (s == INVALID_SOCKET) {
@@ -705,29 +736,17 @@ CONNECT_RETRY:
                       errno, strerror(errno));
     }
 
-#if defined(SUNOS)
-    rc = fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK);
-    if (rc < 0) {
+    if (!CMUTIL_SocketNonBlocking(&s, silent)) {
         if (!silent)
-            CMLogError("fcntl failed.(%d:%s)", errno, strerror(errno));
-        closesocket(s);
+            CMLogError("CMUTIL_SocketNonBlocking failed");
         return CMFalse;
     }
-#else
-    // set nonblocked-IO
-    arg = 1;
-    rc = ioctlsocket(s, (long)FIONBIO, &arg);
-    if (rc < 0) {
-        if (!silent)
-            CMLogError("ioctl failed.(%d:%s)", errno, strerror(errno));
-        closesocket(s);
-        return CMFalse;
-    }
-#endif
+
     tout = (int)timeout;
 
-    rc = connect(s, (struct sockaddr *) &serv, sizeof(serv));
+    rc = connect(s, (struct sockaddr *) serv, sizeof(struct sockaddr_in));
     if (rc < 0) {
+        is->sock = s;
 
 #if defined(MSWIN)
         if (WSAGetLastError() == WSAEWOULDBLOCK)
@@ -735,25 +754,16 @@ CONNECT_RETRY:
         if (errno == EWOULDBLOCK || errno == EINPROGRESS)
 #endif
         {
-            /*
-            Kernel object handles are process specific.
-            That is, a process must either create the object
-            or open an existing object to obtain a kernel object handle.
-            The per-process limit on kernel handles is 2^24.
-            So SOCKET can be casted to 32bit integer in 64bit windows.
-            */
-            pfd.fd = s;
-            pfd.events = POLLOUT;
+            CMSocketResult sr = CMCall(&is->base, CheckWriteBuffer, timeout);
 
-            rc = poll(&pfd, 1, tout);
-
-            if (rc > 0) {   // OK, connected to server
-                is->sock = s;
+            if (sr == CMSocketOk) {   // OK, connected to server
                 return CMTrue;
-            } else if (rc == 0) {
+            }
+            if (sr == CMSocketTimeout) {
                 if (!silent)
-                    CMLogError("connent timeout.");
+                    CMLogError("connect timeout.");
                 closesocket(s);
+                is->sock = INVALID_SOCKET;
                 // connect timed out
                 return CMFalse;
             }
@@ -761,6 +771,7 @@ CONNECT_RETRY:
         }
 
         closesocket(s);
+        is->sock = INVALID_SOCKET;
 
         if (retrycnt > 0) {
             retrycnt = retrycnt - 1;
@@ -771,7 +782,6 @@ CONNECT_RETRY:
         return CMFalse;
     }
 
-    is->sock = s;
     return CMTrue;
 }
 
@@ -787,30 +797,17 @@ CMUTIL_STATIC int CMUTIL_SocketReadByte(const CMUTIL_Socket *sock)
     int rc;
     uint32_t rsize;
     uint8_t buf = 0;
-    struct pollfd pfd;
-
-    /*
-      Kernel object handles are process specific.
-      That is, a process must either create the object
-      or open an existing object to obtain a kernel object handle.
-      The per-process limit on kernel handles is 2^24.
-      So SOCKET can be casted to 32bit integer in 64bit windows.
-    */
-    memset(&pfd, 0x0, sizeof(struct pollfd));
-    pfd.fd = isock->sock;
-    pfd.events = POLLIN;
 
     rsize = 0;
 
     while (1 > rsize) {
-        rc = poll(&pfd, 1, INT32_MAX);
-        if (rc < 0) {
-            if (!isock->silent)
-                CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
-            return -1;
-        } else if (rc == 0) {
+        CMSocketResult sr = CMCall(sock, CheckReadBuffer, INT32_MAX);
+        if (sr == CMSocketTimeout) {
             if (!isock->silent)
                 CMLogError("socket read timeout.");
+            return -1;
+        }
+        if (sr != CMSocketOk) {
             return -1;
         }
 
@@ -820,6 +817,12 @@ CMUTIL_STATIC int CMUTIL_SocketReadByte(const CMUTIL_Socket *sock)
         rc = (int)recv(isock->sock, &buf, 1, 0);
 #endif
         if (rc == SOCKET_ERROR) {
+            if (errno == EAGAIN
+#if !defined(MSWIN)
+                || errno == EWOULDBLOCK
+#endif
+                )
+                continue;
             if (!isock->silent)
                 CMLogError("recv failed.(%d:%s)", errno, strerror(errno));
             return -1;
@@ -839,31 +842,16 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteByte(
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
     int tout, rc;
-    struct pollfd pfd;
-
-    /*
-    Kernel object handles are process specific.
-    That is, a process must either create the object
-    or open an existing object to obtain a kernel object handle.
-    The per-process limit on kernel handles is 2^24.
-    So SOCKET can be casted to 32bit integer in 64bit windows.
-    */
-    memset(&pfd, 0x0, sizeof(struct pollfd));
-    pfd.fd = isock->sock;
-    pfd.events = POLLOUT;
-    tout = INT32_MAX;
 
     while (CMTrue) {
-        rc = poll(&pfd, 1, tout);
-        if (rc < 0) {
-            if (!isock->silent)
-                CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
-            return CMSocketPollFailed;
-        }
-        else if (rc == 0) {
+        CMSocketResult sr = CMCall(sock, CheckWriteBuffer, INT32_MAX);
+        if (sr == CMSocketTimeout) {
             if (!isock->silent)
                 CMLogError("socket write timeout");
-            return CMSocketTimeout;
+            return sr;
+        }
+        if (sr == CMSocketOk) {
+            return sr;
         }
 
 #if defined(LINUX)
@@ -922,11 +910,8 @@ CMUTIL_STATIC CMBool CMUTIL_SocketConnectByAddr(
         CMUTIL_Socket_Internal *res,
         const CMUTIL_SocketAddr *addr, long timeout, CMBool silent)
 {
-    uint8_t ip[4];
-    uint32_t laddr = ntohl(addr->sin_addr.s_addr);
-    memcpy(ip, &laddr, sizeof(uint32_t));
     return CMUTIL_SocketConnectByIP(
-            ip, addr->sin_port, res, timeout, 0, silent);
+            addr, res, timeout, 0, silent);
 }
 
 CMBool CMUTIL_SocketConnectBase(
@@ -934,17 +919,12 @@ CMBool CMUTIL_SocketConnectBase(
         CMBool silent)
 {
 #if 0
-    uint8_t ip[4];
-    uint32_t in[4];
-    int rc, i;
+    int i;
 
-    rc = sscanf(host, "%u.%u.%u.%u", &(in[0]), &(in[1]), &(in[2]), &(in[3]));
-    if (rc == 4) {
-        for (i=0 ; i<4 ; i++) {
-            if (in[i] > 255) return CMFalse;
-            ip[i] = (uint8_t)in[i];
-        }
-        if (!CMUTIL_SocketConnectByIP(ip, port, res, timeout, 1, silent)) {
+    CMUTIL_SocketAddr addr;
+    CMSocketResult sr = CMUTIL_SocketAddrSet(&addr, host, port);
+    if (sr == CMSocketOk) {
+        if (!CMUTIL_SocketConnectByIP(&addr, res, timeout, 1, silent)) {
             return CMFalse;
         }
 
@@ -961,9 +941,16 @@ CMBool CMUTIL_SocketConnectBase(
 
         for (i=0 ; hp.h_addr_list[i] != NULL ; i++)
         {
+            char hostip[256];
+            uint8_t ip[4];
             memcpy(ip, hp.h_addr_list[i], 4);
+            printf("CMUTIL_SocketConnectBase try %u.%u.%u.%u\n",
+                   ip[0], ip[1], ip[2], ip[3]);
 
-            if (CMUTIL_SocketConnectByIP(ip, port, res, timeout, 0, silent))
+            sprintf(hostip, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+            CMUTIL_SocketAddrSet(&addr, hostip, port);
+
+            if (CMUTIL_SocketConnectByIP(&addr, res, timeout, 0, silent))
                 break;
         }
 
@@ -991,6 +978,7 @@ CMBool CMUTIL_SocketConnectBase(
             sin->sin_port = (unsigned short)port;
             if (CMUTIL_SocketConnectByAddr(res, sin, timeout, issilent))
                 break;
+            curr = curr->ai_next;
         }
         if (ainfo)
             freeaddrinfo(ainfo);
@@ -1000,11 +988,10 @@ CMBool CMUTIL_SocketConnectBase(
             return CMFalse;
         }
         return CMTrue;
-    } else {
-        if (!silent)
-            CMLogErrorS("getaddrinfo() failed: %s", gai_strerror(rval));
-        return CMFalse;
     }
+    if (!silent)
+        CMLogErrorS("getaddrinfo() failed: %s", gai_strerror(rval));
+    return CMFalse;
 #endif
 }
 
@@ -1055,54 +1042,52 @@ typedef struct CMUTIL_ServerSocket_Internal {
     CMUTIL_Mem          *memst;
 } CMUTIL_ServerSocket_Internal;
 
-CMUTIL_STATIC CMBool CMUTIL_ServerSocketAcceptInternal(
+CMUTIL_STATIC CMSocketResult CMUTIL_ServerSocketAcceptInternal(
         const CMUTIL_ServerSocket *ssock, CMUTIL_Socket *sock, long timeout)
 {
     const CMUTIL_ServerSocket_Internal *issock =
             (const CMUTIL_ServerSocket_Internal*)ssock;
-    int tout, rc;
     socklen_t len;
-    struct pollfd pfd;
     CMUTIL_Socket_Internal *res = (CMUTIL_Socket_Internal*)sock;
+    CMSocketResult sr = CMSocketOk;
 
-    memset(&pfd, 0x0, sizeof(struct pollfd));
-
-    pfd.fd = issock->ssock;
-    pfd.events = POLLIN;
-    tout = (int)timeout;
-
-    rc = poll(&pfd, 1, tout);
-    if (rc <= 0) {
-        if (!issock->silent)
-            CMLogErrorS("poll failed.(%d:%s)", errno, strerror(errno));
-        return CMFalse;
+    sr = CMUTIL_SocketCheckBase(issock->ssock, timeout, CMTrue, issock->silent);
+    if (sr != CMSocketOk) {
+        return sr;
     }
 
     len = sizeof(struct sockaddr_in);
     res->sock = accept(issock->ssock, (struct sockaddr*)&res->peer, &len);
     if (res->sock == INVALID_SOCKET) {
-        if (!issock->silent)
+        if (issock->silent)
+            CMLogTrace("accept failed.(%d:%s)", errno, strerror(errno));
+        else
             CMLogErrorS("accept failed.(%d:%s)", errno, strerror(errno));
-        return CMFalse;
+        return CMSocketReceiveFailed;
     }
+    if (CMLogIsEnabled(CMLogLevel_Trace))
+        LogAddr("client connected from", &res->peer);
 
-    return CMTrue;
+    return CMSocketOk;
 }
 
-CMUTIL_STATIC CMUTIL_Socket *CMUTIL_ServerSocketAccept(
-        const CMUTIL_ServerSocket *ssock, long timeout)
+CMUTIL_STATIC CMSocketResult CMUTIL_ServerSocketAccept(
+        const CMUTIL_ServerSocket *ssock, CMUTIL_Socket **res, long timeout)
 {
     const CMUTIL_ServerSocket_Internal *issock =
             (const CMUTIL_ServerSocket_Internal*)ssock;
-    CMUTIL_Socket_Internal *res = CMUTIL_SocketCreate(
-                issock->memst, issock->silent);
+    CMUTIL_Socket *cli = (CMUTIL_Socket*)CMUTIL_SocketCreate(
+        issock->memst, issock->silent);
+    CMSocketResult sr = CMSocketOk;
 
-    if (CMUTIL_ServerSocketAcceptInternal(ssock, (CMUTIL_Socket*)res, timeout))
-        return (CMUTIL_Socket*)res;
-    else {
-        CMCall((CMUTIL_Socket*)res, Close);
-        return NULL;
+    sr = CMUTIL_ServerSocketAcceptInternal(ssock, cli, timeout);
+    if (sr == CMSocketOk) {
+        *res = cli;
+    } else {
+        *res = NULL;
+        CMCall(cli, Close);
     }
+    return sr;
 }
 
 CMUTIL_STATIC void CMUTIL_ServerSocketClose(CMUTIL_ServerSocket *ssock)
@@ -1142,48 +1127,49 @@ CMUTIL_STATIC CMBool CMUTIL_ServerSocketCreateBase(
 
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == INVALID_SOCKET) {
-        if (!res->silent)
+        if (res->silent)
+            CMLogTrace("cannot create socket", errno, strerror(errno));
+        else
             CMLogErrorS("cannot create socket", errno, strerror(errno));
         goto FAILED;
     }
 
     rc = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &one, sizeof(one));
     if (rc == SOCKET_ERROR) {
-        if (!res->silent)
+        if (res->silent)
+            CMLogTrace("setsockopt failed.(%d:%s)", errno, strerror(errno));
+        else
             CMLogErrorS("setsockopt failed.(%d:%s)", errno, strerror(errno));
         goto FAILED;
     }
 
-#if defined(SUNOS)
-    rc = fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK);
-    if (rc < 0) {
-        if (!res->silent)
-            CMLogErrorS("fnctl failed.(%d:%s)", errno, strerror(errno));
+    if (!CMUTIL_SocketNonBlocking(&sock, res->silent)) {
+        if (res->silent)
+            CMLogTrace("CMUTIL_SocketNonBlocking failed");
+        else
+            CMLogError("CMUTIL_SocketNonBlocking failed");
         goto FAILED;
     }
-#else
-    arg = 1;
-    rc = ioctlsocket(sock, FIONBIO, &arg);
-    if (rc < 0) {
-        if (!res->silent)
-            CMLogErrorS("ioctl failed.(%d:%s)", errno, strerror(errno));
-        goto FAILED;
-    }
-#endif
 
     rc = bind(sock, (struct sockaddr *) &addr, sizeof(addr));
     if (rc == SOCKET_ERROR) {
-        if (!res->silent)
+        if (res->silent)
+            CMLogTrace("bind failed.(%d:%s)", errno, strerror(errno));
+        else
             CMLogErrorS("bind failed.(%d:%s)", errno, strerror(errno));
         goto FAILED;
     }
 
     rc = listen(sock, qcnt);
     if (rc == SOCKET_ERROR) {
-        if (!res->silent)
+        if (res->silent)
+            CMLogTrace("listen failed.(%d:%s)", errno, strerror(errno));
+        else
             CMLogErrorS("listen failed.(%d:%s)", errno, strerror(errno));
         goto FAILED;
     }
+    if (CMLogIsEnabled(CMLogLevel_Trace))
+        LogAddr("server socket listening started", &addr);
 
     res->ssock = sock;
     return CMTrue;
@@ -1201,6 +1187,7 @@ CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
     CMUTIL_ServerSocket_Internal *res =
             memst->Alloc(sizeof(CMUTIL_ServerSocket_Internal));
     memset(res, 0x0, sizeof(CMUTIL_ServerSocket_Internal));
+    res->ssock = INVALID_SOCKET;
     res->memst = memst;
     res->silent = silent;
     memcpy(res, &g_cmutil_serversocket, sizeof(CMUTIL_ServerSocket));
@@ -1944,47 +1931,49 @@ FAILED:
     return NULL;
 }
 
-CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLServerSocketAccept(
-        const CMUTIL_ServerSocket *server, long timeout)
+CMUTIL_STATIC CMSocketResult CMUTIL_SSLServerSocketAccept(
+        const CMUTIL_ServerSocket *server, CMUTIL_Socket **res, long timeout)
 {
     const CMUTIL_SSLServerSocket_Internal *issock =
             (const CMUTIL_SSLServerSocket_Internal*)server;
     CMBool silent = issock->base.silent;
-    CMUTIL_SSLSocket_Internal *res = CMUTIL_SSLSocketCreate(
+    CMUTIL_SSLSocket_Internal *cli = CMUTIL_SSLSocketCreate(
                 issock->base.memst, silent);
+    CMSocketResult ret = CMSocketUnknownError;
 
     if (CMUTIL_ServerSocketAcceptInternal(
-                server, (CMUTIL_Socket*)res, timeout)) {
+                server, (CMUTIL_Socket*)cli, timeout)) {
 #if defined(CMUTIL_SSL_USE_OPENSSL)
-        res->session = SSL_new(issock->sslctx);
-        SSL_set_fd(res->session, res->base.sock);
-        SSL_CHECK(SSL_accept(res->session), FAILED);
+        cli->session = SSL_new(issock->sslctx);
+        SSL_set_fd(cli->session, cli->base.sock);
+        SSL_CHECK(SSL_accept(cli->session), FAILED);
 #else
         int handshake_res;
-        SSL_CHECK(gnutls_init(&(res->session), GNUTLS_SERVER), FAILED);
+        SSL_CHECK(gnutls_init(&(cli->session), GNUTLS_SERVER), FAILED);
         SSL_CHECK(gnutls_priority_set(
-                      res->session, issock->priority_cache), FAILED);
+                      cli->session, issock->priority_cache), FAILED);
         SSL_CHECK(gnutls_credentials_set(
-                      res->session, GNUTLS_CRD_CERTIFICATE, issock->cred),
+                      cli->session, GNUTLS_CRD_CERTIFICATE, issock->cred),
                   FAILED);
 
         gnutls_handshake_set_timeout(
-                    res->session, GNUTLS_DEFAULT_HANDSHAKE_TIMEOUT);
-        gnutls_record_set_timeout(res->session, 10000);
-        gnutls_session_enable_compatibility_mode(res->session);
-        gnutls_transport_set_int(res->session, res->base.sock);
+                    cli->session, GNUTLS_DEFAULT_HANDSHAKE_TIMEOUT);
+        gnutls_record_set_timeout(cli->session, 10000);
+        gnutls_session_enable_compatibility_mode(cli->session);
+        gnutls_transport_set_int(cli->session, cli->base.sock);
 
         do {
-            handshake_res = gnutls_handshake(res->session);
+            handshake_res = gnutls_handshake(cli->session);
         } while (handshake_res < 0 &&
                  gnutls_error_is_fatal(handshake_res) == 0);
         SSL_CHECK(handshake_res, FAILED);
 #endif  // !CMUTIL_SSL_USE_OPENSSL
     }
-    return (CMUTIL_Socket*)res;
+    *res = (CMUTIL_Socket*)cli;
+    ret = CMSocketOk;
 FAILED:
-    CMCall((CMUTIL_Socket*)res, Close);
-    return NULL;
+    CMCall((CMUTIL_Socket*)cli, Close);
+    return ret;
 }
 
 CMUTIL_STATIC void CMUTIL_SSLServerSocketClose(CMUTIL_ServerSocket *ssock)

@@ -548,12 +548,6 @@ CMUTIL_STATIC void *CMUTIL_ThreadProc(void *param)
 #endif
 {
     CMUTIL_Thread_Internal *iparam = (CMUTIL_Thread_Internal*)param;
-    // we must create a name for unnamed thread to identify it in the thread list
-    if (iparam->name == NULL) {
-        char namebuf[64];
-        sprintf(namebuf, "Thread-%u", iparam->id);
-        iparam->name = iparam->memst->Strdup(namebuf);
-    }
 
     iparam->isrunning = CMTrue;
     iparam->retval = iparam->proc(iparam->udata);
@@ -673,15 +667,22 @@ CMUTIL_Thread *CMUTIL_ThreadCreateInternal(
     ithread->proc = proc;
     ithread->udata = udata;
     ithread->memst = memst;
-    if (name) {
-        ithread->name = memst->Strdup(name);
-    }
 
     CMCall(g_cmutil_thread_context->mutex, Lock);
     if (g_cmutil_thread_context->threadIndex == UINT32_MAX)
         g_cmutil_thread_context->threadIndex = 0;
     ithread->id = ++(g_cmutil_thread_context->threadIndex);
     CMCall(g_cmutil_thread_context->mutex, Unlock);
+
+    if (name) {
+        ithread->name = memst->Strdup(name);
+    } else {
+        // we must create a name for the unnamed thread
+        // to identify it in the thread list
+        char namebuf[64];
+        sprintf(namebuf, "Thread-%u", ithread->id);
+        ithread->name = memst->Strdup(namebuf);
+    }
 
     return (CMUTIL_Thread*)ithread;
 }
@@ -700,8 +701,8 @@ uint32_t CMUTIL_ThreadSelfId()
     CMCall(g_cmutil_thread_context->mutex, Lock);
     r = (CMUTIL_Thread_Internal*)CMCall(
         g_cmutil_thread_context->threads, Find, &q, NULL);
-    if (r != NULL) res = r->id;
     CMCall(g_cmutil_thread_context->mutex, Unlock);
+    if (r != NULL) res = r->id;
 
     return res;
 }
@@ -965,11 +966,14 @@ CMUTIL_STATIC CMBool CMUTIL_SemaphoreAcquire(
     return dwval == WAIT_OBJECT_0?
             CMTrue:CMFalse;
 #elif defined(APPLE)
-    dispatch_time_t dtime = dispatch_time(
-                DISPATCH_TIME_NOW, NSEC_PER_MSEC * millisec);
-    CMBool res = dispatch_semaphore_wait(isem->semp, dtime) == 0?
+    dispatch_time_t dtime;
+    if (millisec < 0)
+        dtime = DISPATCH_TIME_FOREVER;
+    else
+        dtime = dispatch_time(
+                    DISPATCH_TIME_NOW, NSEC_PER_MSEC * millisec);
+    return dispatch_semaphore_wait(isem->semp, dtime) == 0?
                 CMTrue:CMFalse;
-    return res;
 #else
     if (millisec < 0) {
         return sem_wait(&(isem->semp)) == 0?
@@ -1243,6 +1247,10 @@ CMUTIL_RWLock *CMUTIL_RWLockCreate()
 }
 
 
+//*****************************************************************************
+// CMUTIL_Timer implements
+//*****************************************************************************
+
 typedef enum CMUTIL_TimerTaskType {
     TimerTask_OneTime,
     TimerTask_Repeat
@@ -1271,7 +1279,7 @@ typedef struct CMUTIL_Timer_Internal {
     CMUTIL_Thread           *mainloop;  // timer scheduling main loop thread
     long                    precision;  // timer precision
     CMBool                  running;    // timer running indicator
-    int                     numthrs;    // number of worker thread
+    int                     numthrs;    // amount of worker thread
     CMUTIL_Mem              *memst;     // memory manger
 } CMUTIL_Timer_Internal;
 
@@ -1593,7 +1601,7 @@ CMUTIL_Timer *CMUTIL_TimerCreateInternal(
     res->alltasks = CMUTIL_ArrayCreateInternal(
                 memst, 5, CMUTIL_TimerAddrComp, NULL, CMTrue);
 
-    // create worker thread pool
+    // create a worker thread pool
     res->threads = CMUTIL_ListCreateInternal(memst, NULL);
     for (i = 0; i < threads; i++) {
         CMUTIL_Thread *thr = CMUTIL_ThreadCreateInternal(

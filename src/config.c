@@ -47,10 +47,10 @@ typedef struct CMUTIL_Config_Internal {
     int             dummy_padder;
 } CMUTIL_Config_Internal;
 
-CMUTIL_STATIC char *CMUTIL_NextTermBefore(
-        char *dest, char *line, const char *delim, char escapechar, int maxlen)
+CMUTIL_STATIC const char *CMUTIL_NextTermBefore(
+        char *dest, const char *line, const char *delim, char escapechar, int maxlen)
 {
-    register char *p = line;
+    register const char *p = line;
     register char *q = dest;
     while (*p && (!strchr(delim, *p) || *(p - 1) == escapechar) && maxlen-- > 0)
         *q++ = *p++;
@@ -81,13 +81,15 @@ CMUTIL_STATIC int CMUTIL_AppendTrimmedLine(
             last = p + 1;
         p++;
     }
-    if (*(last - 1) == '\\') {
-        iscont = 1;
-        last--;
+    if (last) {
+        if (*(last - 1) == '\\') {
+            iscont = 1;
+            last--;
+        }
+        *last = 0x0;
+        if (last > in)
+            CMCall(rstr, AddNString, in, (size_t)(last - in));
     }
-    *last = 0x0;
-    if (last > in)
-        CMCall(rstr, AddNString, in, (size_t)(last - in));
     return iscont;
 
 }
@@ -191,7 +193,7 @@ void CMUTIL_ConfigSet(CMUTIL_Config *conf, const char *key, const char *value)
 
 long CMUTIL_ConfigGetLong(const CMUTIL_Config *conf, const char *key)
 {
-    return atol(CMCall(conf, Get, key));
+    return strtol(CMCall(conf, Get, key), NULL, 10);
 }
 
 void CMUTIL_ConfigSetLong(CMUTIL_Config *conf, const char *key, long value)
@@ -203,7 +205,7 @@ void CMUTIL_ConfigSetLong(CMUTIL_Config *conf, const char *key, long value)
 
 double CMUTIL_ConfigGetDouble(const CMUTIL_Config *conf, const char *key)
 {
-    return atof(CMCall(conf, Get, key));
+    return strtod(CMCall(conf, Get, key), NULL);
 }
 
 void CMUTIL_ConfigSetDouble(CMUTIL_Config *conf, const char *key, double value)
@@ -273,7 +275,7 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
 
         while (fgets(line, 4096, f)) {
             CMUTIL_ConfItem *item = NULL;
-            char *p = NULL;
+            const char *p = NULL;
 
             if (CMUTIL_AppendTrimmedLine(str, line, " \r\t\n"))
                 continue;
@@ -288,12 +290,12 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
             case '#': case '\0':
                 item->type = ConfItem_Comment;
                 if (*p)
-                    item->comment = memst->Strdup(CMUTIL_StrRTrim(p));
+                    item->comment = memst->Strdup(CMUTIL_StrRTrim((char*)p));
                 break;
             default:
             {
                 int keylen = 0;
-                char *v = NULL;
+                const char *v = NULL;
                 char name[1025], value[2049];
                 p = CMUTIL_NextTermBefore(name, p, " =\t", '\\', 1024);
                 DOFAILED;
@@ -302,7 +304,7 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
                 p = CMUTIL_NextTermBefore(value, p, "#\n", '\\', 2048);
                 v = CMUTIL_StrTrim(value);
                 if (*p == '#')
-                    item->comment = memst->Strdup(CMUTIL_StrRTrim(p));
+                    item->comment = memst->Strdup(CMUTIL_StrRTrim((char*)p));
                 CMCall(res->confs, Put, name, memst->Strdup(v));
                 item->key = memst->Strdup(name);
                 keylen = (int)strlen(item->key);
