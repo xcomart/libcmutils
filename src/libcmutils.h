@@ -2871,11 +2871,9 @@ struct CMUTIL_File {
             const CMUTIL_File *file);
 
     /**
-     * @brief Write the specified string contents to the file.
+     * @brief Delete the file.
      *
      * @param file A pointer to the CMUTIL_File object.
-     * @param contents A pointer to the CMUTIL_String object containing
-     *                 the contents to write to the file.
      * @return CMTrue on success, CMFalse on failure.
      */
     CMBool (*Delete)(
@@ -2951,13 +2949,14 @@ struct CMUTIL_File {
      *
      * @param file A pointer to the CMUTIL_File object representing a directory.
      * @return A pointer to a CMUTIL_FileList object containing all children
-     *         files and directories.
+     *         files and directories. The caller is responsible for freeing the
+     *         returned object.
      */
     CMUTIL_FileList *(*Children)(
             const CMUTIL_File *file);
 
     /**
-     * @brief Find all children which name is matched with given pattern.
+     * @brief Find all children whose name is matched with the given pattern.
      *
      *  Filename patterns are composed of regular (printable) characters which
      *  may comprise a filename as well as special pattern matching characters:
@@ -4194,7 +4193,7 @@ CMUTIL_API CMUTIL_ServerSocket *CMUTIL_ServerSocketCreate(
  * @param host Host address to listen on.(0.0.0.0 for any address)
  * @param port Port number to listen on.
  * @param qcnt The maximum length of the queue of pending connections.
- * @return AN SSL server socket if succeeded it must be closed after use.
+ * @return AN SSL server socket if succeeded, it must be closed after use.
  *      NULL if failed.
  */
 CMUTIL_API CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreate(
@@ -4431,6 +4430,16 @@ struct CMUTIL_Json {
 };
 
 /**
+ * @brief Destroy the JSON object.
+ *
+ * This macro provides a convenient way to call the Destroy method
+ * of a CMUTIL_Json variant.
+ *
+ * @param a A pointer to the CMUTIL_Json variant to be destroyed.
+ */
+#define CMUTIL_JsonDestroy(a)   CMCall((CMUTIL_Json*)(a), Destroy)
+
+/**
  * @typedef CMJsonValueType JSON value types.
  */
 typedef enum CMJsonValueType {
@@ -4448,6 +4457,8 @@ typedef enum CMJsonValueType {
 
 /**
  * @typedef CMUTIL_JsonValue JSON value object.
+ *
+ * Must be destroyed with <code>CMUTIL_JsonDestroy</code>.
  */
 typedef struct CMUTIL_JsonValue CMUTIL_JsonValue;
 struct CMUTIL_JsonValue {
@@ -4586,6 +4597,8 @@ CMUTIL_API CMUTIL_JsonValue *CMUTIL_JsonValueCreate(void);
 
 /**
  * @typedef CMUTIL_JsonObject JSON object.
+ *
+ * Must be destroyed with <code>CMUTIL_JsonDestroy</code>.
  */
 typedef struct CMUTIL_JsonObject CMUTIL_JsonObject;
 struct CMUTIL_JsonObject {
@@ -4596,7 +4609,7 @@ struct CMUTIL_JsonObject {
      * @brief Get the keys of the JSON object.
      *
      * This method retrieves the keys of the JSON object as a string array.
-     * The returned CMUTIL_StringArray must be destroyed by the caller after use.
+     * The caller must destroy the returned CMUTIL_StringArray after use.
      *
      * @param jobj The JSON object to get the keys from.
      * @return A pointer to a CMUTIL_StringArray containing the keys.
@@ -4668,68 +4681,348 @@ struct CMUTIL_JsonObject {
      */
     const char *(*GetCString)(
             const CMUTIL_JsonObject *jobj, const char *key);
+
+    /**
+     * @brief Get the boolean value associated with a key in the JSON object.
+     *
+     * This method retrieves the boolean value associated with the specified key
+     * in the JSON object.
+     *
+     * @param jobj The JSON object to get the boolean value from.
+     * @param key The key whose associated boolean value is to be retrieved.
+     * @return CMTrue if the value is true, CMFalse otherwise.
+     */
     CMBool (*GetBoolean)(
             const CMUTIL_JsonObject *jobj, const char *key);
+
+    /**
+     * @brief Put a JSON object into the JSON object with a key.
+     *
+     * This method adds or updates a JSON object with the specified key in the
+     * JSON object. If the key already exists, the existing value is replaced.
+     *
+     * @param jobj The JSON object to put the JSON value into.
+     * @param key The key to associate with the JSON value.
+     * @param json The JSON value to be put.
+     */
     void (*Put)(
             CMUTIL_JsonObject *jobj, const char *key, CMUTIL_Json *json);
+
+    /**
+     * @brief Put a long integer value into the JSON object with a key.
+     *
+     * This method adds or updates a long integer value with the specified key
+     * in the JSON object. If the key already exists, the existing value is replaced.
+     *
+     * @param jobj The JSON object to put the long integer value into.
+     * @param key The key to associate with the long integer value.
+     * @param value The long integer value to be put.
+     */
     void (*PutLong)(
             CMUTIL_JsonObject *jobj, const char *key, int64_t value);
+
+    /**
+     * @brief Put a double value into the JSON object with a key.
+     *
+     * This method adds or updates a double value with the specified key
+     * in the JSON object. If the key already exists, the existing value is replaced.
+     *
+     * @param jobj The JSON object to put the double value into.
+     * @param key The key to associate with the double value.
+     * @param value The double value to be put.
+     */
     void (*PutDouble)(
             CMUTIL_JsonObject *jobj, const char *key, double value);
+
+    /**
+     * @brief Put a string value into the JSON object with a key.
+     *
+     * This method adds or updates a string value with the specified key
+     * in the JSON object. If the key already exists, the existing value is replaced.
+     *
+     * @param jobj The JSON object to put the string value into.
+     * @param key The key to associate with the string value.
+     * @param value The string value to be put.
+     */
     void (*PutString)(
             CMUTIL_JsonObject *jobj, const char *key, const char *value);
+
+    /**
+     * @brief Put a boolean value into the JSON object with a key.
+     *
+     * This method adds or updates a boolean value with the specified key
+     * in the JSON object. If the key already exists, the existing value is replaced.
+     *
+     * @param jobj The JSON object to put the boolean value into.
+     * @param key The key to associate with the boolean value.
+     * @param value The boolean value to be put.
+     */
     void (*PutBoolean)(
             CMUTIL_JsonObject *jobj, const char *key, CMBool value);
+
+    /**
+     * @brief Put a null value into the JSON object with a key.
+     *
+     * This method adds or updates a null value with the specified key
+     * in the JSON object. If the key already exists, the existing value is replaced.
+     *
+     * @param jobj The JSON object to put the null value into.
+     * @param key The key to associate with the null value.
+     */
     void (*PutNull)(
             CMUTIL_JsonObject *jobj, const char *key);
+
+    /**
+     * @brief Remove a key-value pair from the JSON object.
+     *
+     * This method removes the key-value pair associated with the specified key
+     * from the JSON object. If the key does not exist, no action is taken.
+     * Ownership of the removed JSON value is transferred to the caller.
+     *
+     * @param jobj The JSON object to remove the key-value pair from.
+     * @param key The key to remove.
+     * @return The removed JSON value, or NULL if the key does not exist.
+     */
     CMUTIL_Json *(*Remove)(
             CMUTIL_JsonObject *jobj, const char *key);
+
+    /**
+     * @brief Delete a key-value pair from the JSON object.
+     *
+     * This method deletes the key-value pair associated with the specified key
+     * from the JSON object. If the key does not exist, no action is taken.
+     *
+     * @param jobj The JSON object to delete the key-value pair from.
+     * @param key The key to delete.
+     */
     void (*Delete)(
             CMUTIL_JsonObject *jobj, const char *key);
 };
 
+/**
+ * @brief Create a new JSON object.
+ *
+ * This function creates a new JSON object and returns a pointer to it.
+ *
+ * @return A pointer to the newly created JSON object, or NULL on failure.
+ */
 CMUTIL_API CMUTIL_JsonObject *CMUTIL_JsonObjectCreate(void);
 
+/**
+ * @typedef CMUTIL_JsonArray JSON array type.
+ *
+ * Must be destroyed with <code>CMUTIL_JsonDestroy</code>.
+ */
 typedef struct CMUTIL_JsonArray CMUTIL_JsonArray;
 struct CMUTIL_JsonArray {
+    /** JSON base object */
     CMUTIL_Json parent;
+
+    /**
+     * @brief Get the size of the JSON array.
+     *
+     * This method returns the number of elements in the JSON array.
+     *
+     * @param jarr The JSON array to get the size from.
+     * @return The size of the JSON array.
+     */
     size_t (*GetSize)(
             const CMUTIL_JsonArray *jarr);
+
+    /**
+     * @brief Get a JSON value from the JSON array by index.
+     *
+     * This method retrieves the JSON value at the specified index in the JSON array.
+     *
+     * @param jarr The JSON array to get the JSON value from.
+     * @param index The index of the JSON value to retrieve.
+     * @return A pointer to the JSON value at the specified index,
+     *         or NULL if the index is out of bounds.
+     */
     CMUTIL_Json *(*Get)(
             const CMUTIL_JsonArray *jarr, uint32_t index);
+
+    /**
+     * @brief Get a long integer value from the JSON array by index.
+     *
+     * This method retrieves the long integer value at the specified index in the JSON array.
+     *
+     * @param jarr The JSON array to get the long integer value from.
+     * @param index The index of the long integer value to retrieve.
+     * @return The long integer value at the specified index,
+     *         or 0 if the index is out of bounds or the value is not a long integer.
+     */
     int64_t (*GetLong)(
             const CMUTIL_JsonArray *jarr, uint32_t index);
+
+    /**
+     * @brief Get a double value from the JSON array by index.
+     *
+     * This method retrieves the double value at the specified index in the JSON array.
+     *
+     * @param jarr The JSON array to get the double value from.
+     * @param index The index of the double value to retrieve.
+     * @return The double value at the specified index,
+     *         or 0.0 if the index is out of bounds or the value is not a double.
+     */
     double (*GetDouble)(
             const CMUTIL_JsonArray *jarr, uint32_t index);
+
+    /**
+     * @brief Get a string value from the JSON array by index.
+     *
+     * This method retrieves the string value at the specified index in the JSON array.
+     * Ownership of the returned string is not transferred to the caller.
+     *
+     * @param jarr The JSON array to get the string value from.
+     * @param index The index of the string value to retrieve.
+     * @return A pointer to the string value at the specified index,
+     *         or NULL if the index is out of bounds or the value is not a string.
+     */
     const CMUTIL_String *(*GetString)(
             const CMUTIL_JsonArray *jarr, uint32_t index);
+
+    /**
+     * @brief Get a C-style string value from the JSON array by index.
+     *
+     * This method retrieves the C-style string value at the specified index in the JSON array.
+     * Ownership of the returned string is not transferred to the caller.
+     *
+     * @param jarr The JSON array to get the C-style string value from.
+     * @param index The index of the C-style string value to retrieve.
+     * @return A pointer to the C-style string value at the specified index,
+     *         or NULL if the index is out of bounds or the value is not a C-style string.
+     */
     const char *(*GetCString)(
             const CMUTIL_JsonArray *jarr, uint32_t index);
+
+    /**
+     * @brief Get a boolean value from the JSON array by index.
+     *
+     * This method retrieves the boolean value at the specified index in the JSON array.
+     *
+     * @param jarr The JSON array to get the boolean value from.
+     * @param index The index of the boolean value to retrieve.
+     * @return The boolean value at the specified index,
+     *         or CMFalse if the index is out of bounds or the value is not a boolean.
+     */
     CMBool (*GetBoolean)(
             const CMUTIL_JsonArray *jarr, uint32_t index);
+
+    /**
+     * @brief Add a JSON value to the JSON array.
+     *
+     * This method appends a JSON value to the end of the JSON array.
+     * Ownership of the JSON value is transferred to the JSON array.
+     *
+     * @param jarr The JSON array to add the JSON value to.
+     * @param json The JSON value to add.
+     */
     void (*Add)(
             CMUTIL_JsonArray *jarr, CMUTIL_Json *json);
+
+    /**
+     * @brief Add a long integer value to the JSON array.
+     *
+     * This method appends a long integer value to the end of the JSON array.
+     *
+     * @param jarr The JSON array to add the long integer value to.
+     * @param value The long integer value to add.
+     */
     void (*AddLong)(
             CMUTIL_JsonArray *jarr, int64_t value);
+
+    /**
+     * @brief Add a double value to the JSON array.
+     *
+     * This method appends a double value to the end of the JSON array.
+     *
+     * @param jarr The JSON array to add the double value to.
+     * @param value The double value to add.
+     */
     void (*AddDouble)(
             CMUTIL_JsonArray *jarr, double value);
+
+    /**
+     * @brief Add a string value to the JSON array.
+     *
+     * This method appends a string value to the end of the JSON array.
+     * Ownership of the string value is not transferred to the JSON array.
+     *
+     * @param jarr The JSON array to add the string value to.
+     * @param value The string value to add.
+     */
     void (*AddString)(
             CMUTIL_JsonArray *jarr, const char *value);
+
+    /**
+     * @brief Add a boolean value to the JSON array.
+     *
+     * This method appends a boolean value to the end of the JSON array.
+     *
+     * @param jarr The JSON array to add the boolean value to.
+     * @param value The boolean value to add.
+     */
     void (*AddBoolean)(
             CMUTIL_JsonArray *jarr, CMBool value);
+
+    /**
+     * @brief Add a null value to the JSON array.
+     *
+     * This method appends a null value to the end of the JSON array.
+     *
+     * @param jarr The JSON array to add the null value to.
+     */
     void (*AddNull)(
             CMUTIL_JsonArray *jarr);
+
+    /**
+     * @brief Remove a JSON value from the JSON array by index.
+     *
+     * This method removes the JSON value at the specified index from the JSON array.
+     * Ownership of the removed JSON value is transferred to the caller.
+     *
+     * @param jarr The JSON array to remove the JSON value from.
+     * @param index The index of the JSON value to remove.
+     * @return The removed JSON value, or NULL if the index is out of bounds.
+     */
     CMUTIL_Json *(*Remove)(
             CMUTIL_JsonArray *jarr, uint32_t index);
+
+    /**
+     * @brief Delete a JSON value from the JSON array by index.
+     *
+     * This method removes the JSON value at the specified index from the JSON array.
+     * Ownership of the removed JSON value is not transferred to the caller.
+     *
+     * @param jarr The JSON array to delete the JSON value from.
+     * @param index The index of the JSON value to delete.
+     */
     void (*Delete)(
             CMUTIL_JsonArray *jarr, uint32_t index);
 };
 
+/**
+ * @brief Create a new JSON array.
+ *
+ * @return A new JSON array, or NULL if memory allocation fails.
+ */
 CMUTIL_API CMUTIL_JsonArray *CMUTIL_JsonArrayCreate(void);
 
+/**
+ * @brief Parse a JSON string into a JSON object.
+ *
+ * @param jsonstr The JSON string to parse.
+ * @return A new JSON object, or NULL if parsing fails.
+ */
 CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
-#define CMUTIL_JsonDestroy(a)   CMCall((CMUTIL_Json*)(a), Destroy)
 
+/**
+ * @brief Convert an XML node to a JSON object.
+ *
+ * @param node The XML node to convert.
+ * @return A new JSON object, or NULL if conversion fails.
+ */
 CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
 
