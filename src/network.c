@@ -212,6 +212,7 @@ void CMUTIL_NetworkClear()
     WSACleanup();
 #elif defined(APPLE)
     CMCall(g_cmutil_hostbyname_mutex, Destroy);
+    g_cmutil_hostbyname_mutex = NULL;
 #endif
 #if defined(CMUTIL_SUPPORT_SSL)
 # if defined(CMUTIL_SSL_USE_OPENSSL)
