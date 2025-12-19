@@ -201,8 +201,6 @@ CMUTIL_Library *CMUTIL_LibraryCreateInternal(
         CMUTIL_Mem *memst, const char *path);
 CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path);
 
-CMUTIL_NIOBuffer *CMUTIL_NIOBufferCreateInternal(
-        CMUTIL_Mem *mem, int capacity);
 
 #endif // FUNCTIONS_H__
 
