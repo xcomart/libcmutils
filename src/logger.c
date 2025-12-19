@@ -75,6 +75,7 @@ struct CMUTIL_LogAppenderFormatItem {
     uint32_t                    precisioncnt;
     CMBool                      hasext;
     size_t                      length;
+    ssize_t                     limit;
     CMUTIL_String               *data;
     CMUTIL_String               *data2;
     void                        *anything;
@@ -210,8 +211,14 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendPadding(
             CMCall(dest, AddNString,
                         g_cmutil_spaces, item->length - length);
         }
-    }
-    else {
+    } else if (item->limit > 0 && item->limit < length) {
+        if (item->padleft) {
+            const int skip = (int)(length - item->limit);
+            CMCall(dest, AddNString, data+skip, item->limit);
+        } else {
+            CMCall(dest, AddNString, data, item->limit);
+        }
+    } else {
         CMCall(dest, AddNString, data, length);
     }
 }
@@ -736,6 +743,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
         char buf[128] = { 0, };
         char fmt[20];
         uint32_t length = 0;
+        int limit = -1;
         CMBool padleft = CMFalse;
         CMBool hasext = CMFalse;
         CMBool zero = CMFalse;
@@ -763,9 +771,14 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
                     padleft = CMTrue;
                 q++;
             }
-            while (strchr("0123456789", *q))
+            while (strchr("0123456789.", *q))
                 *br++ = *q++;
             *br = 0x0;
+            br = strchr(buf, '.');
+            if (br) {
+                *br = 0x0;
+                limit = (int)strtol(br + 1, NULL, 10);
+            }
             length = strtol(buf, NULL, 10);
             zero = *buf == '0'? CMTrue : CMFalse;
         }
@@ -960,6 +973,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
         }
         if (item) {
             item->length = length;
+            item->limit = limit;
             item->padleft = padleft;
             item->hasext = hasext;
             item->zero = zero;
@@ -1865,7 +1879,7 @@ CMUTIL_STATIC void CMUTIL_LogConfigClean(CMUTIL_Json *json)
     }
 }
 
-#define CMUITL_LOG_PATTERN_DEFAULT	"%d %P-[%10t] (%-15F:%04L) [%-5p] %c - %m%ex%n"
+#define CMUITL_LOG_PATTERN_DEFAULT	"%d %P-[%-10.10t] (%-15.15F:%04L) [%-5p] %c - %m%ex%n"
 
 static const char *g_cmutil_log_term_format[] = {
     "%s.%%Y",
