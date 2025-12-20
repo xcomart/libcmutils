@@ -48,14 +48,14 @@ int main() {
 
     CMUTIL_LogSystemSet(lsys); lsys = NULL;
 
-    // You can view logs via the command "telnet localhost 9999"
+    // You can view logs via the command "telnet localhost 9999" within 5 seconds
 
-    for (int i=0; i<50; i++) {
+    for (int i=0; i<10; i++) {
         CMLogInfo("test log %d", i);
         usleep(500000);
     }
 
-    for (int i=0; i<1000; i++) {
+    for (int i=0; i<100; i++) {
         CMLogInfo("test fast log %d", i);
     }
 
