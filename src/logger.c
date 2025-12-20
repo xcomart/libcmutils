@@ -211,7 +211,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendPadding(
             CMCall(dest, AddNString,
                         g_cmutil_spaces, item->length - length);
         }
-    } else if (item->limit > 0 && item->limit < length) {
+    } else if (item->limit > 0 && item->limit < (ssize_t)length) {
         if (item->padleft) {
             const int skip = (int)(length - item->limit);
             CMCall(dest, AddNString, data+skip, item->limit);
@@ -320,7 +320,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendThreadId(
             CMUTIL_ThreadSystemSelfId());
         name = "unknown";
     }
-    const uint32_t size = strlen(name);
+    const uint32_t size = (uint32_t)strlen(name);
     CMUTIL_LogPatternAppendPadding(params->item, params->dest, name, size);
 }
 
@@ -1229,7 +1229,7 @@ CMUTIL_STATIC void CMUTIL_LogRollingFileAppenderRolling(
 
     f = CMUTIL_FileCreateInternal(appender->base.memst, tfname);
     while (CMCall(f, IsExists)) {
-        char buf[1024];
+        char buf[2048];
         sprintf(buf, "%s-%d", tfname, i++);
         CMCall(f, Destroy);
         f = CMUTIL_FileCreateInternal(appender->base.memst, buf);
