@@ -150,6 +150,18 @@ extern "C" {
 # define ui64(x)    CMUTIL_APPEND(x, ULL)
 #endif
 
+#if defined(_MSC_VER)
+# include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
+#if defined(_MSC_VER)
+CMUTIL_API int __gettimeofday(struct timeval *tv, void *tz);
+
+#define gettimeofday(tv, tz) __gettimeofday(tv, tz)
+#endif
+
+
 /**
  * @brief Boolean definition for this library.
  */
