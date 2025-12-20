@@ -692,13 +692,10 @@ CMUTIL_STATIC CMBool CMUTIL_SocketConnectByIP(
     struct sockaddr_in *serv = &(is->peer);
     SOCKET s;
     int rc;
-#if defined(MSWIN)
-    u_long arg;
-#else
+#if !defined(MSWIN)
     uint64_t arg;
 #endif
     int iarg;
-    int tout;
     struct pollfd pfd;
 
     memset(&pfd, 0x0, sizeof(struct pollfd));
@@ -742,8 +739,6 @@ CONNECT_RETRY:
             CMLogError("CMUTIL_SocketNonBlocking failed");
         return CMFalse;
     }
-
-    tout = (int)timeout;
 
     rc = connect(s, (struct sockaddr *) serv, sizeof(struct sockaddr_in));
     if (rc < 0) {
@@ -842,7 +837,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteByte(
         const CMUTIL_Socket *sock, uint8_t c)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
-    int tout, rc;
+    int rc;
 
     while (CMTrue) {
         CMSocketResult sr = CMCall(sock, CheckWriteBuffer, INT32_MAX);
@@ -856,9 +851,9 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteByte(
         }
 
 #if defined(LINUX)
-        rc = (int)send(isock->sock, &c, 1, MSG_NOSIGNAL);
+        rc = (int)send(isock->sock, (char*)&c, 1, MSG_NOSIGNAL);
 #else
-        rc = (int)send(isock->sock, &c, 1, 0);
+        rc = (int)send(isock->sock, (char*)&c, 1, 0);
 #endif
         if (rc == SOCKET_ERROR) {
             if (errno == EAGAIN
@@ -1113,7 +1108,6 @@ CMUTIL_STATIC CMBool CMUTIL_ServerSocketCreateBase(
     unsigned short s_port = (unsigned short)port;
     SOCKET sock = INVALID_SOCKET;
     int rc, one=1;
-    unsigned long arg;
 
     addr.sin_family = AF_INET;
     addr.sin_port = htons(s_port);
@@ -1889,7 +1883,7 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
                 (CMUTIL_Socket_Internal*)res, host, port, timeout, silent)) {
         // handshake
 #if defined(CMUTIL_SSL_USE_OPENSSL)
-        SSL_set_fd(res->session, res->base.sock);
+        SSL_set_fd(res->session, (int)res->base.sock);
         SSL_CHECK(SSL_connect(res->session), FAILED);
 #else
         int ir;
@@ -1946,7 +1940,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLServerSocketAccept(
                 server, (CMUTIL_Socket*)cli, timeout)) {
 #if defined(CMUTIL_SSL_USE_OPENSSL)
         cli->session = SSL_new(issock->sslctx);
-        SSL_set_fd(cli->session, cli->base.sock);
+        SSL_set_fd(cli->session, (int)cli->base.sock);
         SSL_CHECK(SSL_accept(cli->session), FAILED);
 #else
         int handshake_res;
