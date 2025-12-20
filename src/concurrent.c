@@ -550,6 +550,14 @@ CMUTIL_STATIC void *CMUTIL_ThreadProc(void *param)
     CMUTIL_Thread_Internal *iparam = (CMUTIL_Thread_Internal*)param;
 
     iparam->isrunning = CMTrue;
+
+    iparam->sysid = CMUTIL_ThreadSystemSelfId();
+
+    // we must add this thread in the global pool before start user callback.
+    CMCall(g_cmutil_thread_context->mutex, Lock);
+    CMCall(g_cmutil_thread_context->threads, Add, iparam);
+    CMCall(g_cmutil_thread_context->mutex, Unlock);
+
     iparam->retval = iparam->proc(iparam->udata);
 
     CMCall(g_cmutil_thread_context->mutex, Lock);
@@ -624,10 +632,6 @@ CMUTIL_STATIC CMBool CMUTIL_ThreadStart(CMUTIL_Thread *thread)
 # endif
     ithread->sysid = (uint64_t)ithread->thread;
 #endif
-
-    CMCall(g_cmutil_thread_context->mutex, Lock);
-    CMCall(g_cmutil_thread_context->threads, Add, ithread);
-    CMCall(g_cmutil_thread_context->mutex, Unlock);
 
     return ir == 0? CMTrue:CMFalse;
 }
