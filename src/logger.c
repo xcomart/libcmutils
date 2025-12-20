@@ -1220,9 +1220,11 @@ CMUTIL_STATIC void CMUTIL_LogRollingFileAppenderRolling(
         struct tm *curr)
 {
     CMUTIL_File *f = NULL;
-    char tfname[1024];
+    char tfname[1024] = {0,};
     int i = 0;
-    strftime(tfname, 1024, appender->rollpath, &(appender->lasttm));
+    const size_t sz = strftime(
+        tfname, 1024, appender->rollpath, &(appender->lasttm));
+    tfname[sz] = '\0';
     CMUTIL_LogPathCreate(tfname);
 
     f = CMUTIL_FileCreateInternal(appender->base.memst, tfname);
