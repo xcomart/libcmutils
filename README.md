@@ -1,7 +1,6 @@
 # libcmutils
 
 ![Build](https://github.com/xcomart/libcmutils/actions/workflows/build-and-test.yml/badge.svg)
-![Tests](https://img.shields.io/github/actions/workflow/status/xcomart/libcmutils/build-and-test.yml?label=Tests)
 
 `libcmutils` is a collection of C utility functions implemented with an object-oriented approach. It aims to simplify C development by providing intuitive, well-structured APIs for common tasks, avoiding the confusion often caused by traditional C libraries with long, inconsistent function names.
 
