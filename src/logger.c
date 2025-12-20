@@ -1044,21 +1044,25 @@ CMUTIL_STATIC void CMUTIL_LogConsoleAppenderWriter(
     CMUTIL_UNUSED(appender);
     CMUTIL_UNUSED(logtm);
     CMSync(iap->mutex, printf("%s", CMCall(logmsg, GetCString)););
+    CMCall((CMUTIL_LogAppender*)appender, Flush);
 }
 
 CMUTIL_STATIC void CMUTIL_LogConsoleAppenderFlush(
         CMUTIL_LogAppender *appender)
 {
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)appender;
-    CMSync(iap->mutex, {
-        CMUTIL_List *list = iap->flush_buffer;
-        while (CMCall(list, GetSize) > 0) {
-            CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
-                    CMCall(list, RemoveFront);
-            printf("%s", CMCall(log->log, GetCString));
-            CMUTIL_LogAppderAsyncItemDestroy(log);
-        }
-    });
+    if (iap->isasync) {
+        CMSync(iap->mutex, {
+            CMUTIL_List *list = iap->flush_buffer;
+            while (CMCall(list, GetSize) > 0) {
+                CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
+                        CMCall(list, RemoveFront);
+                printf("%s", CMCall(log->log, GetCString));
+                CMUTIL_LogAppderAsyncItemDestroy(log);
+            }
+        });
+    }
+    fflush(stdout);
 }
 
 CMUTIL_STATIC void CMUTIL_LogConsoleAppenderDestroy(
@@ -1900,7 +1904,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureDefault(CMUTIL_Mem *memst)
         CMCall(res, CreateLogger, NULL, CMLogLevel_Debug, CMTrue);
     CMUTIL_LogAppender *conapndr = CMUTIL_LogConsoleAppenderCreateInternal(
                 memst, "__CONSOL", CMUITL_LOG_PATTERN_DEFAULT);
-    CMCall(conapndr, SetAsync, 64);
+    //CMCall(conapndr, SetAsync, 64);
     CMCall(res, AddAppender, conapndr);
     CMCall(root_logger, AddAppender, conapndr, CMLogLevel_Debug);
     __cmutil_logsystem = (CMUTIL_LogSystem*)res;
