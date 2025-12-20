@@ -343,12 +343,24 @@ CMSocketResult CMUTIL_SocketCheckBase(
     memset(&pfd, 0x0, sizeof(struct pollfd));
 
     pfd.fd = sock;
-    pfd.events = (short)(evt | POLLPRI);
+    pfd.events = (short)evt;
 
     rc = poll(&pfd, 1, (int)timeout);
     if (rc < 0) {
         if (!silent)
+#if defined(MSWIN)
+        {
+            TCHAR buf[1024] = {0,};
+            int err = WSAGetLastError();
+            FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+               NULL, err,
+               MAKELANGID(LANG_ENGLISH, LANG_ENGLISH),
+               buf, 1024, NULL);
+            CMLogError("poll failed.(%d:%s)", err, buf);
+        }
+#else
             CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
+#endif
         return CMSocketPollFailed;
     }
     if (pfd.revents & evt) {
@@ -774,7 +786,19 @@ CONNECT_RETRY:
             goto CONNECT_RETRY;
         }
         if (!silent)
+#if defined(MSWIN)
+        {
+            TCHAR buf[1024] = {0,};
+            int err = WSAGetLastError();
+            FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+               NULL, err,
+               MAKELANGID(LANG_ENGLISH, LANG_ENGLISH),
+               buf, 1024, NULL);
+            CMLogError("poll failed.(%d:%s)", err, buf);
+        }
+#else
             CMLogError("connect failed.(%d:%s)", errno, strerror(errno));
+#endif
         return CMFalse;
     }
 
