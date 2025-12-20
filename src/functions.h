@@ -44,10 +44,6 @@ typedef uint32_t    CMPtrDiff;
 typedef uint64_t    CMPtrDiff;
 #endif
 
-#if defined(_MSC_VER)
-int gettimeofday(struct timeval *tv, struct timezone *tz);
-#endif
-
 void CMUTIL_XmlInit(void);
 void CMUTIL_XmlClear(void);
 void CMUTIL_LogInit(void);
