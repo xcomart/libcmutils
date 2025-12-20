@@ -4,6 +4,7 @@
 
 #include "libcmutils.h"
 #include "test.h"
+#include <time.h>
 
 CMUTIL_LogDefine("test.timer")
 
