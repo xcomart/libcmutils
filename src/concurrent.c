@@ -28,8 +28,6 @@ SOFTWARE.
 
 #if defined(MSWIN)
 # include <process.h>
-// usleep implementation for windows
-# define usleep(x)  Sleep((x)/1000)
 #else
 # include <sys/time.h>
 # include <unistd.h>
