@@ -157,7 +157,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketSend(
                     idsock->sock, timeout, CMFalse, CMFalse);
         if (sr == CMSocketOk) {
             const ssize_t sent = send(
-                idsock->sock, CMCall(buf, GetBytes), CMCall(buf, GetSize), 0);
+                idsock->sock, (const char*)CMCall(buf, GetBytes), (int)CMCall(buf, GetSize), 0);
             if (sent < (ssize_t)CMCall(buf, GetSize)) {
                 CMLogErrorS("sendto() failed: %s", strerror(errno));
                 return CMSocketSendFailed;
@@ -183,7 +183,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketSendTo(
                 idsock->sock, timeout, CMFalse, CMFalse);
     if (sr == CMSocketOk) {
         size = sendto(idsock->sock,
-                CMCall(buf, GetBytes), CMCall(buf, GetSize),
+                (const char*)CMCall(buf, GetBytes), (int)CMCall(buf, GetSize),
                 0, (struct sockaddr*)saddr,
                 sizeof(CMUTIL_SocketAddr));
         if (size < (ssize_t)CMCall(buf, GetSize)) {
@@ -201,7 +201,6 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketRecv(
 {
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
     if (idsock->connected) {
-        CMUTIL_SocketAddr raddr;
         CMSocketResult sr;
         ssize_t size;
 
@@ -209,13 +208,13 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketRecv(
                 idsock->sock, timeout, CMTrue, CMFalse);
         if (sr != CMSocketOk)
             return sr;
-        size = recv(idsock->sock, CMCall(buf, GetBytes),
-            CMCall(buf, GetCapacity), 0);
+        size = recv(idsock->sock, (char*)CMCall(buf, GetBytes),
+            (int)CMCall(buf, GetCapacity), 0);
         if (size < 0) {
             CMLogErrorS("recv() failed: %s", strerror(errno));
             return CMSocketReceiveFailed;
         }
-        CMCall(buf, ShrinkTo, size);
+        CMCall(buf, ShrinkTo, (size_t)size);
         return CMSocketOk;
     }
     CMLogErrorS("socket not connected");
@@ -238,7 +237,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketRecvFrom(
     if (sr != CMSocketOk)
         return sr;
     size = recvfrom(idsock->sock,
-            CMCall(buf, GetBytes), CMCall(buf, GetCapacity),
+            (char*)CMCall(buf, GetBytes), (int)CMCall(buf, GetCapacity),
             0, (struct sockaddr*)saddr, &addrsize);
     if (size < 0) {
         CMLogErrorS("recvfrom() failed: %s", strerror(errno));
