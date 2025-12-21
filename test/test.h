@@ -8,7 +8,7 @@
 #include "libcmutils.h"
 
 
-#define CMUTIL_MEM_TYPE CMMemSystem
+#define CMUTIL_MEM_TYPE CMMemRecycle
 
 
 #define ASSERT(assert, msg) do {        \
