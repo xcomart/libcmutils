@@ -16,7 +16,7 @@ void destructor(void *data) {
 int main()
 {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMUTIL_MEM_TYPE);
 
     int a[] = {1, 2, 3};
 

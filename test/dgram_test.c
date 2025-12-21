@@ -51,7 +51,7 @@ void *dgram_server(void *udata) {
 
 int main() {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMUTIL_MEM_TYPE);
 
     CMUTIL_Thread *server = NULL;
     CMUTIL_DGramSocket *client = NULL;
