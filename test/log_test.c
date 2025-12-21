@@ -11,7 +11,7 @@ CMUTIL_LogDefine("test.log")
 
 int main() {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMUTIL_MEM_TYPE);
     CMUTIL_LogAppender *apndr = NULL;
     CMUTIL_ConfLogger *logger = NULL;
     const char *pattern = "%d{%F %T.%Q} %P-[%-10t] (%-15F:%04L) [%p{TRACE=_,DEBUG=D,INFO=' ',WARN=W,FATAL=F}] %c : %m%n%ex";

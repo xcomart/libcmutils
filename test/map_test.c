@@ -11,7 +11,7 @@ CMUTIL_LogDefine("test.map")
 
 int main() {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMUTIL_MEM_TYPE);
 
     CMUTIL_Map *map = CMUTIL_MapCreate();
 

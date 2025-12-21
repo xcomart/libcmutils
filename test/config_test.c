@@ -12,7 +12,7 @@ CMUTIL_LogDefine("test.config")
 
 int main(void) {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMUTIL_MEM_TYPE);
 
     CMUTIL_Config *conf = CMUTIL_ConfigCreate();
     CMUTIL_File *file = NULL;

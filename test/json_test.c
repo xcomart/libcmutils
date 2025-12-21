@@ -11,7 +11,7 @@ CMUTIL_LogDefine("test.json")
 
 int main() {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMUTIL_MEM_TYPE);
     CMUTIL_JsonObject *jobj = NULL;
     CMUTIL_Json *jsonAware = NULL;
     CMUTIL_JsonArray *jarr = NULL;
