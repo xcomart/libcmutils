@@ -95,7 +95,7 @@ static char *g_cmutil_xml_escape_str[] = {
 static struct CMUTIL_EscapePair {
     char *key;
     char *val;
-} g_cmutil_xml_escapes[] = {
+} const g_cmutil_xml_escapes[] = {
         {"quot", "\""},
         {"amp", "&"},
         {"apos", "\'"},
@@ -121,7 +121,7 @@ static CMUTIL_Map *g_cmutil_xml_escape_map = NULL;
 
 void CMUTIL_XmlInit()
 {
-    struct CMUTIL_EscapePair *pair = g_cmutil_xml_escapes;
+    const struct CMUTIL_EscapePair *pair = g_cmutil_xml_escapes;
     g_cmutil_xml_escape_map = CMUTIL_MapCreateInternal(
                 CMUTIL_GetMem(), 10, CMFalse, NULL);
 

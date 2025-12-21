@@ -28,8 +28,6 @@ SOFTWARE.
 
 #if defined(MSWIN)
 # include <process.h>
-// usleep implementation for windows
-# define usleep(x)  Sleep((x)/1000)
 #else
 # include <sys/time.h>
 # include <unistd.h>
@@ -72,50 +70,6 @@ SOFTWARE.
 #endif
 
 CMUTIL_LogDefine("cmutil.concurrent")
-
-#if defined(_MSC_VER)
-const int64_t DELTA_EPOCH_IN_MICROSECS = 11644473600000000;
-
-/* IN UNIX the use of the timezone struct is obsolete;
-I don't know why you use it.
-See http://linux.about.com/od/commands/l/blcmdl2_gettime.htm
-But if you want to use this structure to know about GMT(UTC) diffrence from
-your local time it will be next: tz_minuteswest is the real diffrence in minutes from
-GMT(UTC) and a tz_dsttime is a flag indicates whether daylight is now in use
-*/
-
-int gettimeofday(struct timeval *tv/*in*/, struct timezone *tz/*in*/)
-{
-    FILETIME ft;
-    int64_t tmpres = 0;
-    TIME_ZONE_INFORMATION tz_winapi;
-    int rez = 0;
-
-    ZeroMemory(&ft, sizeof(ft));
-    ZeroMemory(&tz_winapi, sizeof(tz_winapi));
-
-    GetSystemTimeAsFileTime(&ft);
-
-    tmpres = ft.dwHighDateTime;
-    tmpres <<= 32;
-    tmpres |= ft.dwLowDateTime;
-
-    /*converting file time to unix epoch*/
-    tmpres /= 10;  /*convert into microseconds*/
-    tmpres -= DELTA_EPOCH_IN_MICROSECS;
-    tv->tv_sec = (int32_t)(tmpres*0.000001);
-    tv->tv_usec = (tmpres % 1000000);
-
-    CMUTIL_UNUSED(tz);
-    //_tzset(),don't work properly, so we use GetTimeZoneInformation
-    //rez = GetTimeZoneInformation(&tz_winapi);
-    //tz->tz_dsttime = (rez == 2) ? true : false;
-    //tz->tz_minuteswest = tz_winapi.Bias +
-    //        ((rez == 2) ? tz_winapi.DaylightBias : 0);
-
-    return 0;
-}
-#endif
 
 //*****************************************************************************
 // CMUTIL_Cond implements
@@ -550,6 +504,14 @@ CMUTIL_STATIC void *CMUTIL_ThreadProc(void *param)
     CMUTIL_Thread_Internal *iparam = (CMUTIL_Thread_Internal*)param;
 
     iparam->isrunning = CMTrue;
+
+    iparam->sysid = CMUTIL_ThreadSystemSelfId();
+
+    // we must add this thread in the global pool before start user callback.
+    CMCall(g_cmutil_thread_context->mutex, Lock);
+    CMCall(g_cmutil_thread_context->threads, Add, iparam);
+    CMCall(g_cmutil_thread_context->mutex, Unlock);
+
     iparam->retval = iparam->proc(iparam->udata);
 
     CMCall(g_cmutil_thread_context->mutex, Lock);
@@ -624,10 +586,6 @@ CMUTIL_STATIC CMBool CMUTIL_ThreadStart(CMUTIL_Thread *thread)
 # endif
     ithread->sysid = (uint64_t)ithread->thread;
 #endif
-
-    CMCall(g_cmutil_thread_context->mutex, Lock);
-    CMCall(g_cmutil_thread_context->threads, Add, ithread);
-    CMCall(g_cmutil_thread_context->mutex, Unlock);
 
     return ir == 0? CMTrue:CMFalse;
 }
@@ -1046,6 +1004,7 @@ CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
         ir = -1;
 #elif defined(APPLE)
     isem->semp = dispatch_semaphore_create(initcnt);
+    ir = isem->semp == NULL? -1:0;
 #else
     ir = sem_init(&(isem->semp), 0, (uint32_t)initcnt);
 #endif
@@ -1262,24 +1221,24 @@ typedef struct CMUTIL_TimerTask_Internal {
     CMBool                  canceled;   // task canceled or not
     struct timeval          nextrun;    // next run time for repeating tasks
     long                    period;     // repeating period
+    CMBool                  elapse_skip;// skip elapsed time intervals when delayed
     CMProcCB                proc;       // task procedure
     void                    *param;     // procedure parameter
     CMUTIL_Timer            *timer;     // timer reference
+    CMUTIL_Mem              *memst;     // memory management context
 } CMUTIL_TimerTask_Internal;
 
 typedef struct CMUTIL_Timer_Internal {
     CMUTIL_Timer            base;       // timer API interface
     CMUTIL_Mutex            *mutex;     // timer task add/remove synchronization
     CMUTIL_Array            *scheduled; // tasks in scheduled to run
-    CMUTIL_List             *threads;   // worker thread pool
+    CMUTIL_ThreadPool       *tpool;      // worker thread pool
     CMUTIL_Array            *finished;  // finished tasks
     CMUTIL_Array            *alltasks;  // all tasks
-    CMUTIL_List             *jqueue;    // queue of jobs to run
-    CMUTIL_Semaphore        *jsemp;     // job queue semaphore
     CMUTIL_Thread           *mainloop;  // timer scheduling main loop thread
     long                    precision;  // timer precision
     CMBool                  running;    // timer running indicator
-    int                     numthrs;    // amount of worker thread
+    int                     numthrs;    // number of worker threads
     CMUTIL_Mem              *memst;     // memory manger
 } CMUTIL_Timer_Internal;
 
@@ -1325,28 +1284,34 @@ CMUTIL_STATIC void CMUTIL_TimerGetDelayed(struct timeval *tv, long delay)
 
 CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerTaskCreate(
         CMUTIL_Timer *timer, CMUTIL_TimerTaskType type,
-        struct timeval *first, long period, void *param,
-        CMProcCB proc)
+        struct timeval *first, long period, CMBool elapse_skip,
+        void *param, CMProcCB proc)
 {
-    CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)timer;
-    CMUTIL_TimerTask_Internal *res =
-            itimer->memst->Alloc(sizeof(CMUTIL_TimerTask_Internal));
-    memset(res, 0x0, sizeof(CMUTIL_TimerTask_Internal));
+    if (proc != NULL && first != NULL && (type == TimerTask_OneTime || period > 0)) {
+        CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)timer;
+        CMUTIL_TimerTask_Internal *res =
+                itimer->memst->Alloc(sizeof(CMUTIL_TimerTask_Internal));
+        memset(res, 0x0, sizeof(CMUTIL_TimerTask_Internal));
 
-    res->timer = timer;
-    memcpy(&(res->nextrun), first, sizeof(struct timeval));
-    res->period = period;
-    res->param = param;
-    res->proc = proc;
-    res->type = type;
-    res->base.Cancel = CMUTIL_TimerTaskCancel;
+        res->timer = timer;
+        memcpy(&(res->nextrun), first, sizeof(struct timeval));
+        res->period = period;
+        res->elapse_skip = elapse_skip;
+        res->param = param;
+        res->proc = proc;
+        res->type = type;
+        res->memst = itimer->memst;
+        res->base.Cancel = CMUTIL_TimerTaskCancel;
 
-    CMSync(itimer->mutex, {
-        CMCall(itimer->scheduled, Add, res);
-        CMCall(itimer->alltasks, Add, res);
-    });
+        CMSync(itimer->mutex, {
+            CMCall(itimer->scheduled, Add, res);
+            CMCall(itimer->alltasks, Add, res);
+        });
 
-    return (CMUTIL_TimerTask*)res;
+        return (CMUTIL_TimerTask*)res;
+    }
+    CMLogErrorS("Invalid parameters for timer task creation");
+    return NULL;
 }
 
 CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleAtTime(
@@ -1354,7 +1319,7 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleAtTime(
         CMProcCB proc, void *param)
 {
     return CMUTIL_TimerTaskCreate(
-            timer, TimerTask_OneTime, attime, 0, param, proc);
+            timer, TimerTask_OneTime, attime, 0, CMFalse, param, proc);
 }
 
 CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleDelay(
@@ -1365,26 +1330,26 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleDelay(
     gettimeofday(&tv, NULL);
     CMUTIL_TimerGetDelayed(&tv, delay);
     return CMUTIL_TimerTaskCreate(
-            timer, TimerTask_OneTime, &tv, 0, param, proc);
+            timer, TimerTask_OneTime, &tv, 0, CMFalse, param, proc);
 }
 
 CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleAtRepeat(
         CMUTIL_Timer *timer, struct timeval *first, long period,
-        CMProcCB proc, void *param)
+        CMBool elapse_skip, CMProcCB proc, void *param)
 {
     return CMUTIL_TimerTaskCreate(
-            timer, TimerTask_Repeat, first, period, param, proc);
+            timer, TimerTask_Repeat, first, period, elapse_skip, param, proc);
 }
 
 CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleDelayRepeat(
         CMUTIL_Timer *timer, long delay, long period,
-        CMProcCB proc, void *param)
+        CMBool elapse_skip, CMProcCB proc, void *param)
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     CMUTIL_TimerGetDelayed(&tv, delay);
     return CMUTIL_TimerTaskCreate(
-            timer, TimerTask_Repeat, &tv, period, param, proc);
+            timer, TimerTask_Repeat, &tv, period, elapse_skip, param, proc);
 }
 
 CMUTIL_STATIC void CMUTIL_TimerPurge(CMUTIL_Timer *timer)
@@ -1419,18 +1384,8 @@ CMUTIL_STATIC void CMUTIL_TimerDestroy(CMUTIL_Timer *timer)
         CMCall(itimer->mainloop, Join);
 
     // destroy worker thread pool
-    if (itimer->threads) {
-        int i;
-        for (i = 0; i < itimer->numthrs; i++)
-            CMCall(itimer->jsemp, Release);
-        for (i = 0; i < itimer->numthrs; i++) {
-            CMUTIL_Thread *thr = (CMUTIL_Thread*)CMCall(
-                    itimer->threads, RemoveFront);
-            CMCall(thr, Join);
-        }
-
-        CMCall(itimer->threads, Destroy);
-    }
+    if (itimer->tpool)
+        CMCall(itimer->tpool, Destroy);
 
     // remove scheduled tasks
     if (itimer->alltasks) {
@@ -1439,17 +1394,11 @@ CMUTIL_STATIC void CMUTIL_TimerDestroy(CMUTIL_Timer *timer)
         CMCall(itimer->alltasks, Destroy);
     }
 
-    if (itimer->jqueue)
-        CMCall(itimer->jqueue, Destroy);
-
     if (itimer->finished)
         CMCall(itimer->finished, Destroy);
 
     if (itimer->scheduled)
         CMCall(itimer->scheduled, Destroy);
-
-    if (itimer->jsemp)
-        CMCall(itimer->jsemp, Destroy);
 
     if (itimer->mutex)
         CMCall(itimer->mutex, Destroy);
@@ -1478,6 +1427,53 @@ CMUTIL_STATIC CMBool CMUTIL_TimerIsElapsed(
         return CMTrue;
 }
 
+CMUTIL_STATIC void CMUTIL_TimerWorker(void *param)
+{
+    CMUTIL_Array *addedto = NULL;
+    CMBool isfree = CMFalse;
+    CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)param;
+    CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)itask->timer;
+
+    if (itask == NULL) return;
+
+    if (!itask->canceled) {
+        itask->proc(itask->param);
+
+        if (itask->type == TimerTask_Repeat && !itask->canceled) {
+            struct timeval current;
+            addedto = itimer->scheduled;
+
+            gettimeofday(&current, NULL);
+
+            // calculate next run time.
+            CMUTIL_TimerGetDelayed(&(itask->nextrun), itask->period);
+
+            // check if the next run time is elapsed already,
+            // get the next run time, until the next run time is in the future.
+            while (itask->elapse_skip &&
+                CMUTIL_TimerTVCompare(&current, &(itask->nextrun)) > 0) {
+                CMUTIL_TimerGetDelayed(&(itask->nextrun), itask->period);
+            }
+        }
+        else {
+            addedto = itimer->finished;
+        }
+    }
+
+    CMCall(itimer->mutex, Lock);
+    if (itask->canceled) {
+        CMCall(itimer->alltasks, Remove, itask);
+        isfree = CMTrue;
+    }
+    else if (addedto) {
+        CMCall(addedto, Add, itask);
+    }
+    CMCall(itimer->mutex, Unlock);
+
+    if (isfree)
+        itimer->memst->Free(itask);
+}
+
 CMUTIL_STATIC void *CMUTIL_TimerMainLoop(void *param)
 {
     struct timeval curr;
@@ -1489,64 +1485,18 @@ CMUTIL_STATIC void *CMUTIL_TimerMainLoop(void *param)
         CMUTIL_TimerTask *task = NULL;
 
         CMSync(itimer->mutex, {
-            while (CMUTIL_TimerIsElapsed(
+            while (CMCall(itimer->scheduled, GetSize) > 0 &&
+                CMUTIL_TimerIsElapsed(
                     CMCall(itimer->scheduled, Bottom), &curr)) {
                 task = (CMUTIL_TimerTask*)
                         CMCall(itimer->scheduled, RemoveAt, 0);
-                CMCall(itimer->jqueue, AddTail, task);
-                CMCall(itimer->jsemp, Release);
+
+                CMCall(itimer->tpool, Execute, CMUTIL_TimerWorker, task);
             }
         });
 
         USLEEP((uint32_t)itimer->precision);
         gettimeofday(&curr, NULL);
-    }
-    return NULL;
-}
-
-CMUTIL_STATIC void *CMUTIL_TimerWorker(void *param)
-{
-    CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)param;
-    while (itimer->running) {
-        if (CMCall(itimer->jsemp, Acquire, 1000)) {
-            CMUTIL_Array *addedto = NULL;
-            CMBool isfree = CMFalse;
-            CMUTIL_TimerTask_Internal *itask;
-
-            CMCall(itimer->mutex, Lock);
-            itask = (CMUTIL_TimerTask_Internal*)CMCall(
-                    itimer->jqueue, RemoveFront);
-            CMCall(itimer->mutex, Unlock);
-
-            if (itask == NULL) break;
-
-            if (!itask->canceled) {
-                itask->proc(itask->param);
-
-                if (itask->type == TimerTask_Repeat) {
-                    addedto = itimer->scheduled;
-
-                    // calculate next run time.
-                    CMUTIL_TimerGetDelayed(&(itask->nextrun), itask->period);
-                }
-                else {
-                    addedto = itimer->finished;
-                }
-            }
-
-            CMCall(itimer->mutex, Lock);
-            if (itask->canceled) {
-                CMCall(itimer->alltasks, Remove, itask);
-                isfree = CMTrue;
-            }
-            else if (addedto) {
-                CMCall(addedto, Add, itask);
-            }
-            CMCall(itimer->mutex, Unlock);
-
-            if (isfree)
-                itimer->memst->Free(itask);
-        }
     }
     return NULL;
 }
@@ -1572,10 +1522,13 @@ static CMUTIL_Timer g_cmutil_timer = {
     CMUTIL_TimerDestroy
 };
 
+static int g_cmutil_timer_seq = 0;
+
 CMUTIL_Timer *CMUTIL_TimerCreateInternal(
         CMUTIL_Mem *memst, long precision, int threads)
 {
     int i;
+    char namebuf[128];
     CMUTIL_Timer_Internal *res = memst->Alloc(sizeof(CMUTIL_Timer_Internal));
 
     memset(res, 0x0, sizeof(CMUTIL_Timer_Internal));
@@ -1585,13 +1538,11 @@ CMUTIL_Timer *CMUTIL_TimerCreateInternal(
 
     res->memst = memst;
     res->running = CMTrue;
-    res->precision = precision;
+    res->precision = precision * 1000;  // milliseconds to microseconds
     res->numthrs = threads;
     res->mutex = CMUTIL_MutexCreateInternal(memst);
-    res->jsemp = CMUTIL_SemaphoreCreateInternal(memst, 0);
-    res->jqueue = CMUTIL_ListCreateInternal(memst, NULL);
 
-    // create timer task array which sorted by it's schedule time.
+    // create a timer task array which sorted by its schedule time.
     res->scheduled = CMUTIL_ArrayCreateInternal(
                 memst, 5, CMUTIL_TimerTaskComp, NULL, CMTrue);
 
@@ -1602,17 +1553,16 @@ CMUTIL_Timer *CMUTIL_TimerCreateInternal(
                 memst, 5, CMUTIL_TimerAddrComp, NULL, CMTrue);
 
     // create a worker thread pool
-    res->threads = CMUTIL_ListCreateInternal(memst, NULL);
-    for (i = 0; i < threads; i++) {
-        CMUTIL_Thread *thr = CMUTIL_ThreadCreateInternal(
-                    memst, CMUTIL_TimerWorker, res, "TimerPool");
-        CMCall(thr, Start);
-        CMCall(res->threads, AddTail, thr);
-    }
+    i = ++g_cmutil_timer_seq;
+    sprintf(namebuf, "TimerPool-%d", i);
+    res->tpool = CMUTIL_ThreadPoolCreateInternal(memst, threads, namebuf);
 
-    // Create main loop thread.
+    // Create a main loop thread.
+    sprintf(namebuf, "TimerMain-%d", i);
     res->mainloop = CMUTIL_ThreadCreateInternal(
-                memst, CMUTIL_TimerMainLoop, res, "TimerMain");
+                memst, CMUTIL_TimerMainLoop, res, namebuf);
+
+    CMCall(res->mainloop, Start);
 
     return (CMUTIL_Timer*)res;
 }

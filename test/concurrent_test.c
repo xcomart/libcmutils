@@ -35,7 +35,7 @@ void thread_func2(void *param) {
 
 int main() {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMUTIL_MEM_TYPE);
 
     CMUTIL_ThreadPool *tpool = NULL;
     CMUTIL_Mutex *mtx = NULL;

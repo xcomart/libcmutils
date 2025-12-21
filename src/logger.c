@@ -75,6 +75,7 @@ struct CMUTIL_LogAppenderFormatItem {
     uint32_t                    precisioncnt;
     CMBool                      hasext;
     size_t                      length;
+    ssize_t                     limit;
     CMUTIL_String               *data;
     CMUTIL_String               *data2;
     void                        *anything;
@@ -210,8 +211,14 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendPadding(
             CMCall(dest, AddNString,
                         g_cmutil_spaces, item->length - length);
         }
-    }
-    else {
+    } else if (item->limit > 0 && item->limit < (ssize_t)length) {
+        if (item->padleft) {
+            const int skip = (int)(length - item->limit);
+            CMCall(dest, AddNString, data+skip, item->limit);
+        } else {
+            CMCall(dest, AddNString, data, item->limit);
+        }
+    } else {
         CMCall(dest, AddNString, data, length);
     }
 }
@@ -313,7 +320,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendThreadId(
             CMUTIL_ThreadSystemSelfId());
         name = "unknown";
     }
-    const uint32_t size = strlen(name);
+    const uint32_t size = (uint32_t)strlen(name);
     CMUTIL_LogPatternAppendPadding(params->item, params->dest, name, size);
 }
 
@@ -736,6 +743,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
         char buf[128] = { 0, };
         char fmt[20];
         uint32_t length = 0;
+        int limit = -1;
         CMBool padleft = CMFalse;
         CMBool hasext = CMFalse;
         CMBool zero = CMFalse;
@@ -763,9 +771,14 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
                     padleft = CMTrue;
                 q++;
             }
-            while (strchr("0123456789", *q))
+            while (strchr("0123456789.", *q))
                 *br++ = *q++;
             *br = 0x0;
+            br = strchr(buf, '.');
+            if (br) {
+                *br = 0x0;
+                limit = (int)strtol(br + 1, NULL, 10);
+            }
             length = strtol(buf, NULL, 10);
             zero = *buf == '0'? CMTrue : CMFalse;
         }
@@ -960,6 +973,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
         }
         if (item) {
             item->length = length;
+            item->limit = limit;
             item->padleft = padleft;
             item->hasext = hasext;
             item->zero = zero;
@@ -1030,21 +1044,25 @@ CMUTIL_STATIC void CMUTIL_LogConsoleAppenderWriter(
     CMUTIL_UNUSED(appender);
     CMUTIL_UNUSED(logtm);
     CMSync(iap->mutex, printf("%s", CMCall(logmsg, GetCString)););
+    CMCall((CMUTIL_LogAppender*)appender, Flush);
 }
 
 CMUTIL_STATIC void CMUTIL_LogConsoleAppenderFlush(
         CMUTIL_LogAppender *appender)
 {
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)appender;
-    CMSync(iap->mutex, {
-        CMUTIL_List *list = iap->flush_buffer;
-        while (CMCall(list, GetSize) > 0) {
-            CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
-                    CMCall(list, RemoveFront);
-            printf("%s", CMCall(log->log, GetCString));
-            CMUTIL_LogAppderAsyncItemDestroy(log);
-        }
-    });
+    if (iap->isasync) {
+        CMSync(iap->mutex, {
+            CMUTIL_List *list = iap->flush_buffer;
+            while (CMCall(list, GetSize) > 0) {
+                CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
+                        CMCall(list, RemoveFront);
+                printf("%s", CMCall(log->log, GetCString));
+                CMUTIL_LogAppderAsyncItemDestroy(log);
+            }
+        });
+    }
+    fflush(stdout);
 }
 
 CMUTIL_STATIC void CMUTIL_LogConsoleAppenderDestroy(
@@ -1206,14 +1224,16 @@ CMUTIL_STATIC void CMUTIL_LogRollingFileAppenderRolling(
         struct tm *curr)
 {
     CMUTIL_File *f = NULL;
-    char tfname[1024];
+    char tfname[1024] = {0,};
     int i = 0;
-    strftime(tfname, 1024, appender->rollpath, &(appender->lasttm));
+    const size_t sz = strftime(
+        tfname, 1024, appender->rollpath, &(appender->lasttm));
+    tfname[sz] = '\0';
     CMUTIL_LogPathCreate(tfname);
 
     f = CMUTIL_FileCreateInternal(appender->base.memst, tfname);
     while (CMCall(f, IsExists)) {
-        char buf[1024];
+        char buf[2048];
         sprintf(buf, "%s-%d", tfname, i++);
         CMCall(f, Destroy);
         f = CMUTIL_FileCreateInternal(appender->base.memst, buf);
@@ -1865,7 +1885,7 @@ CMUTIL_STATIC void CMUTIL_LogConfigClean(CMUTIL_Json *json)
     }
 }
 
-#define CMUITL_LOG_PATTERN_DEFAULT	"%d %P-[%10t] (%-15F:%04L) [%-5p] %c - %m%ex%n"
+#define CMUITL_LOG_PATTERN_DEFAULT	"%d %P-[%-10.10t] (%-15.15F:%04L) [%-5p] %c - %m%ex%n"
 
 static const char *g_cmutil_log_term_format[] = {
     "%s.%%Y",
@@ -1884,7 +1904,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureDefault(CMUTIL_Mem *memst)
         CMCall(res, CreateLogger, NULL, CMLogLevel_Debug, CMTrue);
     CMUTIL_LogAppender *conapndr = CMUTIL_LogConsoleAppenderCreateInternal(
                 memst, "__CONSOL", CMUITL_LOG_PATTERN_DEFAULT);
-    CMCall(conapndr, SetAsync, 64);
+    //CMCall(conapndr, SetAsync, 64);
     CMCall(res, AddAppender, conapndr);
     CMCall(root_logger, AddAppender, conapndr, CMLogLevel_Debug);
     __cmutil_logsystem = (CMUTIL_LogSystem*)res;

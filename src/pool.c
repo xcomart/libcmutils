@@ -171,7 +171,8 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
         CMPoolItemTestCB testproc,
         long pinginterval,
         CMBool testonborrow,
-        void *udata, CMUTIL_Timer *timer)
+        void *udata,
+        CMUTIL_Timer *timer)
 {
     int i;
     CMUTIL_Pool_Internal *res = memst->Alloc(sizeof(CMUTIL_Pool_Internal));
@@ -197,7 +198,7 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
     }
     res->pingtester = CMCall(
                 res->timer, ScheduleDelayRepeat, pinginterval, pinginterval,
-                CMUTIL_PoolPingTester, res);
+                CMTrue, CMUTIL_PoolPingTester, res);
     return (CMUTIL_Pool*)res;
 }
 
