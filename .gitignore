@@ -72,7 +72,7 @@ Thumbs.db
 *.exe
 
 # CMake build directory
-build
+build*
 
 # CLion
 .idea

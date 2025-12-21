@@ -40,6 +40,53 @@ SOFTWARE.
 #endif
 
 
+CMUTIL_LogDefine("cmutil.system")
+
+
+#if defined(_MSC_VER)
+const int64_t DELTA_EPOCH_IN_MICROSECS = 11644473600000000;
+
+/* IN UNIX the use of the timezone struct is obsolete;
+I don't know why you use it.
+See http://linux.about.com/od/commands/l/blcmdl2_gettime.htm
+But if you want to use this structure to know about GMT(UTC) difference from
+your local time it will be next: tz_minuteswest is the real difference in minutes from
+GMT(UTC) and a tz_dsttime is a flag indicates whether daylight is now in use
+*/
+
+int __gettimeofday(struct timeval *tv/*in*/, void *tz/*in*/)
+{
+    FILETIME ft;
+    int64_t tmpres = 0;
+    TIME_ZONE_INFORMATION tz_winapi;
+    int rez = 0;
+
+    ZeroMemory(&ft, sizeof(ft));
+    ZeroMemory(&tz_winapi, sizeof(tz_winapi));
+
+    GetSystemTimeAsFileTime(&ft);
+
+    tmpres = ft.dwHighDateTime;
+    tmpres <<= 32;
+    tmpres |= ft.dwLowDateTime;
+
+    /*converting file time to unix epoch*/
+    tmpres /= 10;  /*convert into microseconds*/
+    tmpres -= DELTA_EPOCH_IN_MICROSECS;
+    tv->tv_sec = (int32_t)(tmpres*0.000001);
+    tv->tv_usec = (tmpres % 1000000);
+
+    CMUTIL_UNUSED(tz);
+    //_tzset(),don't work properly, so we use GetTimeZoneInformation
+    //rez = GetTimeZoneInformation(&tz_winapi);
+    //tz->tz_dsttime = (rez == 2) ? true : false;
+    //tz->tz_minuteswest = tz_winapi.Bias +
+    //        ((rez == 2) ? tz_winapi.DaylightBias : 0);
+
+    return 0;
+}
+#endif
+
 typedef struct CMUTIL_Library_Internal {
     CMUTIL_Library      base;
     void                *library;
@@ -99,11 +146,16 @@ CMUTIL_Library *CMUTIL_LibraryCreateInternal(
     char slib[1024];
     CMUTIL_Library_Internal *res =
             memst->Alloc(sizeof(CMUTIL_Library_Internal));
+    const char *ext;
 
     memset(res, 0x0, sizeof(CMUTIL_Library_Internal));
     memcpy(res, &g_cmutil_library, sizeof(CMUTIL_Library));
 
-    sprintf(slib, "%s.%s", path, CMUTIL_SO_EXT);
+    ext = strrchr(path, '.');
+    if (ext && strcasecmp(ext + 1, CMUTIL_SO_EXT) == 0)
+        sprintf(slib, "%s", path);
+    else
+        sprintf(slib, "%s.%s", path, CMUTIL_SO_EXT);
 
     res->memst = memst;
 
@@ -139,6 +191,13 @@ typedef struct CMUTIL_File_Internal {
     int                 dummy_padder;
 } CMUTIL_File_Internal;
 
+typedef struct CMUTIL_FileStream_Internal {
+    CMUTIL_FileStream   base;
+    FILE                *fp;
+    CMFileOpenMode      mode;
+    CMUTIL_Mem          *memst;
+} CMUTIL_FileStream_Internal;
+
 CMUTIL_STATIC size_t CMUTIL_FileListCount(const CMUTIL_FileList *flist)
 {
     const CMUTIL_FileList_Internal *iflist =
@@ -172,6 +231,85 @@ CMUTIL_STATIC void CMUTIL_FileListDestroy(CMUTIL_FileList *flist)
         iflist->memst->Free(iflist);
     }
 }
+
+CMUTIL_STATIC ssize_t CMUTIL_FileStreamRead(
+    const CMUTIL_FileStream *stream, CMUTIL_String *buffer, size_t size)
+{
+    const CMUTIL_FileStream_Internal *is =
+            (CMUTIL_FileStream_Internal*)stream;
+    if (is->mode == CMFileOpenRead) {
+        char readbuf[1024];
+        size_t totalread = 0;
+        while (totalread < size) {
+            size_t toread = size - totalread;
+            size_t rdsz;
+            if (toread > 1024)
+                toread = 1024;
+            rdsz = fread(readbuf, 1, toread, is->fp);
+            if (rdsz > 0) {
+                CMCall(buffer, AddNString, readbuf, rdsz);
+                totalread += rdsz;
+            } else {
+                if (feof(is->fp))
+                    break;
+                return -1;
+            }
+        }
+        return (ssize_t)totalread;
+    }
+    CMLogErrorS("File not opened in read mode");
+    return -1;
+}
+
+CMUTIL_STATIC ssize_t CMUTIL_FileStreamWrite(
+    const CMUTIL_FileStream *stream,
+    const CMUTIL_String *buffer,
+    size_t offset,
+    size_t size)
+{
+    CMUTIL_FileStream_Internal *is =
+            (CMUTIL_FileStream_Internal*)stream;
+    if (is->mode == CMFileOpenRead)
+        CMLogErrorS("File not opened in write mode");
+    else if (CMCall(buffer, GetSize) >= offset + size) {
+        size_t totalwrite = 0;
+        const char *bufptr = CMCall(buffer, GetCString);
+        while (totalwrite < size) {
+            size_t towrite = size - totalwrite;
+            size_t wrsz;
+            if (towrite > 1024)
+                towrite = 1024;
+            wrsz = fwrite(bufptr + totalwrite, 1, towrite, is->fp);
+            if (wrsz > 0) {
+                totalwrite += wrsz;
+            } else {
+                return -1;
+            }
+        }
+        return (ssize_t)totalwrite;
+    } else {
+        CMLogErrorS("Buffer size is smaller than write size");
+    }
+    return -1;
+}
+
+CMUTIL_STATIC void CMUTIL_FileStreamClose(
+    CMUTIL_FileStream *stream)
+{
+    CMUTIL_FileStream_Internal *istream =
+            (CMUTIL_FileStream_Internal*)stream;
+    if (istream) {
+        if (istream->fp)
+            fclose(istream->fp);
+        istream->memst->Free(istream);
+    }
+}
+
+static CMUTIL_FileStream g_cmutil_filestream = {
+    CMUTIL_FileStreamRead,      // Read
+    CMUTIL_FileStreamWrite,     // Write
+    CMUTIL_FileStreamClose      // Close
+};
 
 static CMUTIL_FileList g_cmutil_filelist = {
         CMUTIL_FileListCount,
@@ -334,8 +472,12 @@ CMUTIL_STATIC void CMUTIL_FileFindFileOper(
         if (CMUTIL_PatternMatch(pattern, fname)) {
             CMUTIL_File *f = CMUTIL_FileCreateInternal(
                         flist->memst, filepath);
-            ((CMUTIL_File_Internal*)f)->isref = CMTrue;
-            CMCall(flist->files, Add, f);
+            if (f) {
+                ((CMUTIL_File_Internal*)f)->isref = CMTrue;
+                CMCall(flist->files, Add, f);
+            } else {
+                CMLogError("file creation failed for %s", filepath);
+            }
         }
     }
 }
@@ -370,7 +512,7 @@ CMUTIL_STATIC void CMUTIL_FileFindInternal(
     if (dirp) {
         while ((entry=readdir(dirp)) != NULL) {
             char *fname = entry->d_name;
-            if (strcmp(fname, ".") && strcmp(fname, "..")) {
+            if (strcmp(fname, ".") != 0 && strcmp(fname, "..") != 0) {
                 sprintf(pathbuf, "%s/%s", dpath, fname);
                 CMUTIL_FileFindFileOper(
                             flist, pattern, recursive, pathbuf, fname);
@@ -389,6 +531,40 @@ CMUTIL_STATIC CMUTIL_FileList *CMUTIL_FileFind(
     CMUTIL_FileFindInternal(
                 flist, CMCall(file, GetFullPath), pattern, recursive);
     return (CMUTIL_FileList*)flist;
+}
+
+CMUTIL_STATIC CMUTIL_FileStream *CMUTIL_FileCreateStream(
+        const CMUTIL_File *file, CMFileOpenMode mode)
+{
+    const CMUTIL_File_Internal *ifile = (const CMUTIL_File_Internal*)file;
+    const char *mode_str = NULL;
+    FILE *f = NULL;
+    switch (mode) {
+        case CMFileOpenRead:
+            mode_str = "rb";
+            break;
+        case CMFileOpenWrite:
+            mode_str = "wb";
+            break;
+        case CMFileOpenAppend:
+            mode_str = "ab";
+            break;
+        default:
+            mode_str = "rb";
+            break;
+    }
+    f = fopen(CMCall(file, GetFullPath), mode_str);
+    if (f) {
+        CMUTIL_FileStream_Internal *res =
+                ifile->memst->Alloc(sizeof(CMUTIL_FileStream_Internal));
+        memset(res, 0x0, sizeof(CMUTIL_FileStream_Internal));
+        memcpy(res, &g_cmutil_filestream, sizeof(CMUTIL_FileStream));
+        res->fp = f;
+        res->mode = mode;
+        res->memst = ifile->memst;
+        return (CMUTIL_FileStream*)res;
+    }
+    return NULL;
 }
 
 CMUTIL_STATIC void CMUTIL_FileDestroy(CMUTIL_File *file)
@@ -415,21 +591,25 @@ static CMUTIL_File g_cmutil_file = {
     CMUTIL_FileModifiedTime,
     CMUTIL_FileChildren,
     CMUTIL_FileFind,
+    CMUTIL_FileCreateStream,
     CMUTIL_FileDestroy
 };
 
 CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path)
 {
     if (path) {
-        char rpath[2048] = {0,};
         const char *p;
         CMUTIL_File_Internal *res = memst->Alloc(sizeof(CMUTIL_File_Internal));
 
 #if defined(MSWIN)
-        GetFullPathName(path, 2048, rpath, NULL);
+        char rpath[2048] = {0,};
+        GetFullPathName(path, sizeof(rpath), rpath, NULL);
 #else
+        char rpath[PATH_MAX] = {0,};
+        // in some system needs the result buffer size is PATH_MAX,
+        // otherwise buffer overflow raised.
         if (realpath(path, rpath) == NULL)
-            strncpy(rpath, path, 2047);
+            strcpy(rpath, path);
 #endif
 
         memset(res, 0x0, sizeof(CMUTIL_File_Internal));

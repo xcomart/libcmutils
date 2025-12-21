@@ -75,7 +75,7 @@ void client_proc(void* udata) {
         char host[128]; int port;
         CMUTIL_SocketAddrGet(addr, host, &port);
         CMLogInfo("connected to server: %s:%d", host, port);
-        for (int i=0; i<100; i++) {
+        for (int i=0; i<10; i++) {
             CMCall(buf, AddPrint, "%s: %d", tname, i);
             int len = CMCall(buf, GetSize);
             CMCall(buf, InsertPrint, 0, "%04d", len);
@@ -105,7 +105,7 @@ void client_proc(void* udata) {
 
 int main() {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMUTIL_MEM_TYPE);
     CMUTIL_ServerSocket *ssock = NULL;
     CMUTIL_Thread *svr_thread = NULL;
     CMUTIL_ThreadPool *pool = CMUTIL_ThreadPoolCreate(-1, NULL);

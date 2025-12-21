@@ -204,6 +204,7 @@ void CMUTIL_StringBaseClear()
 {
 #if defined(_MSC_VER)
     CMCall(g_cmutil_csmap, Destroy);
+    g_cmutil_csmap = NULL;
 #endif
 }
 

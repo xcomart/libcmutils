@@ -8,6 +8,9 @@
 #include "libcmutils.h"
 
 
+#define CMUTIL_MEM_TYPE CMMemSystem
+
+
 #define ASSERT(assert, msg) do {        \
     if (assert) {                       \
         CMLogInfo("%s - passed", msg);  \

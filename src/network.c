@@ -212,6 +212,7 @@ void CMUTIL_NetworkClear()
     WSACleanup();
 #elif defined(APPLE)
     CMCall(g_cmutil_hostbyname_mutex, Destroy);
+    g_cmutil_hostbyname_mutex = NULL;
 #endif
 #if defined(CMUTIL_SUPPORT_SSL)
 # if defined(CMUTIL_SSL_USE_OPENSSL)
@@ -342,12 +343,24 @@ CMSocketResult CMUTIL_SocketCheckBase(
     memset(&pfd, 0x0, sizeof(struct pollfd));
 
     pfd.fd = sock;
-    pfd.events = (short)(evt | POLLPRI);
+    pfd.events = (short)evt;
 
     rc = poll(&pfd, 1, (int)timeout);
     if (rc < 0) {
         if (!silent)
+#if defined(MSWIN)
+        {
+            TCHAR buf[1024] = {0,};
+            int err = WSAGetLastError();
+            FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+               NULL, err,
+               MAKELANGID(LANG_ENGLISH, LANG_ENGLISH),
+               buf, 1024, NULL);
+            CMLogError("poll failed.(%d:%s)", err, buf);
+        }
+#else
             CMLogError("poll failed.(%d:%s)", errno, strerror(errno));
+#endif
         return CMSocketPollFailed;
     }
     if (pfd.revents & evt) {
@@ -691,13 +704,10 @@ CMUTIL_STATIC CMBool CMUTIL_SocketConnectByIP(
     struct sockaddr_in *serv = &(is->peer);
     SOCKET s;
     int rc;
-#if defined(MSWIN)
-    u_long arg;
-#else
+#if !defined(MSWIN)
     uint64_t arg;
 #endif
     int iarg;
-    int tout;
     struct pollfd pfd;
 
     memset(&pfd, 0x0, sizeof(struct pollfd));
@@ -742,8 +752,6 @@ CONNECT_RETRY:
         return CMFalse;
     }
 
-    tout = (int)timeout;
-
     rc = connect(s, (struct sockaddr *) serv, sizeof(struct sockaddr_in));
     if (rc < 0) {
         is->sock = s;
@@ -778,7 +786,19 @@ CONNECT_RETRY:
             goto CONNECT_RETRY;
         }
         if (!silent)
+#if defined(MSWIN)
+        {
+            TCHAR buf[1024] = {0,};
+            int err = WSAGetLastError();
+            FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+               NULL, err,
+               MAKELANGID(LANG_ENGLISH, LANG_ENGLISH),
+               buf, 1024, NULL);
+            CMLogError("poll failed.(%d:%s)", err, buf);
+        }
+#else
             CMLogError("connect failed.(%d:%s)", errno, strerror(errno));
+#endif
         return CMFalse;
     }
 
@@ -841,7 +861,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteByte(
         const CMUTIL_Socket *sock, uint8_t c)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
-    int tout, rc;
+    int rc;
 
     while (CMTrue) {
         CMSocketResult sr = CMCall(sock, CheckWriteBuffer, INT32_MAX);
@@ -855,9 +875,9 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteByte(
         }
 
 #if defined(LINUX)
-        rc = (int)send(isock->sock, &c, 1, MSG_NOSIGNAL);
+        rc = (int)send(isock->sock, (char*)&c, 1, MSG_NOSIGNAL);
 #else
-        rc = (int)send(isock->sock, &c, 1, 0);
+        rc = (int)send(isock->sock, (char*)&c, 1, 0);
 #endif
         if (rc == SOCKET_ERROR) {
             if (errno == EAGAIN
@@ -1112,7 +1132,6 @@ CMUTIL_STATIC CMBool CMUTIL_ServerSocketCreateBase(
     unsigned short s_port = (unsigned short)port;
     SOCKET sock = INVALID_SOCKET;
     int rc, one=1;
-    unsigned long arg;
 
     addr.sin_family = AF_INET;
     addr.sin_port = htons(s_port);
@@ -1888,7 +1907,7 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
                 (CMUTIL_Socket_Internal*)res, host, port, timeout, silent)) {
         // handshake
 #if defined(CMUTIL_SSL_USE_OPENSSL)
-        SSL_set_fd(res->session, res->base.sock);
+        SSL_set_fd(res->session, (int)res->base.sock);
         SSL_CHECK(SSL_connect(res->session), FAILED);
 #else
         int ir;
@@ -1945,7 +1964,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLServerSocketAccept(
                 server, (CMUTIL_Socket*)cli, timeout)) {
 #if defined(CMUTIL_SSL_USE_OPENSSL)
         cli->session = SSL_new(issock->sslctx);
-        SSL_set_fd(cli->session, cli->base.sock);
+        SSL_set_fd(cli->session, (int)cli->base.sock);
         SSL_CHECK(SSL_accept(cli->session), FAILED);
 #else
         int handshake_res;

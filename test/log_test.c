@@ -11,7 +11,7 @@ CMUTIL_LogDefine("test.log")
 
 int main() {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMUTIL_MEM_TYPE);
     CMUTIL_LogAppender *apndr = NULL;
     CMUTIL_ConfLogger *logger = NULL;
     const char *pattern = "%d{%F %T.%Q} %P-[%-10t] (%-15F:%04L) [%p{TRACE=_,DEBUG=D,INFO=' ',WARN=W,FATAL=F}] %c : %m%n%ex";
@@ -48,14 +48,14 @@ int main() {
 
     CMUTIL_LogSystemSet(lsys); lsys = NULL;
 
-    // You can view logs via the command "telnet localhost 9999"
+    // You can view logs via the command "telnet localhost 9999" within 5 seconds
 
-    for (int i=0; i<50; i++) {
+    for (int i=0; i<10; i++) {
         CMLogInfo("test log %d", i);
         usleep(500000);
     }
 
-    for (int i=0; i<1000; i++) {
+    for (int i=0; i<100; i++) {
         CMLogInfo("test fast log %d", i);
     }
 

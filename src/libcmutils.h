@@ -68,7 +68,7 @@ extern "C" {
 #include <stdarg.h>
 #include <stdint.h>
 
-#define __STDC_FORMAT_MACROS 1 /* for 64bit integer related macros */
+#define __STDC_FORMAT_MACROS 1 /* for 64bit integer-related macros */
 #include <inttypes.h>
 #include <sys/types.h>
 
@@ -103,7 +103,7 @@ extern "C" {
 #endif
 
 /*
- * to remove anoying warning in qtcreator
+ * to remove a noisy warning in qtcreator
  */
 #ifndef __null
 # define __null (void*)0
@@ -124,7 +124,7 @@ extern "C" {
  * @defgroup CMUTIL Types.
  * @{
  *
- * CMUTIL library uses platform independent data types for multi-platform
+ * CMUTIL library uses platform-independent data types for multi-platform
  * support.
  */
 
@@ -139,7 +139,7 @@ extern "C" {
 #endif
 
 /**
- * 64 bit signed / unsigned integer constant suffix.
+ * 64-bit signed / unsigned integer constant suffix.
  */
 #define CMUTIL_APPEND(a,b)  a ## b
 #if defined(_MSC_VER)
@@ -150,11 +150,25 @@ extern "C" {
 # define ui64(x)    CMUTIL_APPEND(x, ULL)
 #endif
 
+#if defined(_MSC_VER)
+# include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
+#if defined(_MSC_VER)
+CMUTIL_API int __gettimeofday(struct timeval *tv, void *tz);
+
+#define gettimeofday(tv, tz) __gettimeofday(tv, tz)
+#endif
+
+
 /**
  * @brief Boolean definition for this library.
  */
 typedef enum CMBool {
+    /** true */
     CMTrue         = 1,
+    /** false */
     CMFalse        = 0
 } CMBool;
 
@@ -270,17 +284,11 @@ typedef void (*CMProcCB)(void*);
  * Refer CMUTIL_Init function for details.
  */
 typedef enum CMMemOper {
-    /**
-     * Use system version malloc, realloc, strdup, and free.
-     */
+    /** Use system version malloc, realloc, strdup, and free. */
     CMMemSystem = 0,
-    /**
-     * Use memory recycle technique.
-     */
+    /** Use memory recycle technique. */
     CMMemRecycle,
-    /**
-     * Use memory operation with debugging information.
-     */
+    /** Use memory operation with debugging information. */
     CMMemDebug
 } CMMemOper;
 
@@ -313,6 +321,10 @@ CMUTIL_API void CMUTIL_Init(CMMemOper memoper);
 /**
  * @brief Clear allocated resource for this library.
  *
+ * After clearing, all allocated resources are freed, and this library is
+ * ready to be initialized again. If any resource is leaked,
+ * it will be reported and CMFalse will be returned.
+ *
  * @return CMTrue if all resources are cleared successfully or inited with CMMemSystem,
  *      CMFalse if some resources are leaked, when inited with CMMemRecycle or CMMemDebug.
  */
@@ -338,14 +350,52 @@ typedef struct CMUTIL_Mem {
      */
     void *(*Alloc)(
             size_t size);
+
+    /**
+     * @brief Allocate memory with zero filled.
+     *
+     * @param nmem  Count of memory elements to be allocated.
+     * @param size  Size of each memory element.
+     * @return A pointer to the allocated memory, which is suitably aligned for
+     *  any built-in type. On error this function returns NULL. NULL may also
+     *  be returned by a successful call to this function with a
+     *  <code>size</code> of zero.
+     */
     void *(*Calloc)(
             size_t nmem,
             size_t size);
+
+    /**
+     * @brief Reallocate memory.
+     *
+     * @param ptr   Pointer to the memory block to be reallocated.
+     * @param size  New size of the memory block.
+     * @return A pointer to the reallocated memory, which is suitably aligned for
+     *  any built-in type. On error this function returns NULL. NULL may also
+     *  be returned by a successful call to this function with a
+     *  <code>size</code> of zero.
+     */
     void *(*Realloc)(
             void *ptr,
             size_t size);
+
+    /**
+     * @brief Duplicate a string.
+     *
+     * @param str   Pointer to the string to be duplicated.
+     * @return A pointer to the duplicated string, which is suitably aligned for
+     *  any built-in type. On error this function returns NULL. NULL may also
+     *  be returned by a successful call to this function with a
+     *  <code>str</code> of NULL.
+     */
     char *(*Strdup)(
             const char *str);
+
+    /**
+     * @brief Free memory.
+     *
+     * @param ptr   Pointer to the memory block to be freed.
+     */
     void (*Free)(
             void *ptr);
 } CMUTIL_Mem;
@@ -2259,19 +2309,11 @@ CMUTIL_API CMUTIL_List *CMUTIL_ListCreateEx(CMFreeCB freecb);
  * @typedef CMXmlNodeKind The kind of XML node.
  */
 typedef enum CMXmlNodeKind {
-    /**
-     * @brief Unknown node type.
-     */
+    /** Unknown node type. */
     CMXmlNodeUnknown = 0,
-
-    /**
-     * @brief Text node type.
-     */
+    /** Text node type. */
     CMXmlNodeText,
-
-    /**
-     * @brief XML tag node type.
-     */
+    /** XML tag node type. */
     CMXmlNodeTag
 } CMXmlNodeKind;
 
@@ -2470,7 +2512,7 @@ CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlNodeCreate(
         CMXmlNodeKind type, const char *tagname);
 
 /**
- * @brief Create a new XML node with the specified type and tag name of given length.
+ * @brief Create a new XML node with the specified type and tag name of the given length.
  *
  * The caller is responsible for destroying the returned XML node
  * using the Destroy method of CMUTIL_XmlNode.
@@ -2546,11 +2588,16 @@ CMUTIL_API CMUTIL_CSConv *CMUTIL_CSConvCreate(
 typedef struct CMUTIL_TimerTask CMUTIL_TimerTask;
 struct CMUTIL_TimerTask {
     /**
-     * @brief Cancel the scheduled timer task.
+     * @brief Cancel the scheduled timer task and destroy.
      *
      * This function cancels the execution of the timer task
      * if it has not yet been executed. Once canceled, the task
      * will not be executed in the future.
+     * This function also frees the resources associated with the timer task.
+     * Do not call this function after Timer destroyed,
+     * may cause undefined behavior.
+     *
+     * @param task The timer task to be canceled and destroyed.
      */
     void (*Cancel)(CMUTIL_TimerTask *task);
 };
@@ -2593,13 +2640,14 @@ struct CMUTIL_Timer {
      * @param timer The timer object used to schedule the task.
      * @param first The absolute time at which to run the first execution of the task.
      * @param period The interval in milliseconds between subsequent executions of the task.
+     * @param elapse_skip If CMTrue, the task will skip elapsed time intervals when it is delayed.
      * @param proc The callback function to execute when the task is run.
      * @param param A user-defined parameter to pass to the callback function.
      * @return A handle to the scheduled timer task.
      */
     CMUTIL_TimerTask *(*ScheduleAtRepeat)(
             CMUTIL_Timer *timer, struct timeval *first, long period,
-            CMProcCB proc, void *param);
+            CMBool elapse_skip, CMProcCB proc, void *param);
 
     /**
      * @brief Schedule a task to run repeatedly at fixed intervals,
@@ -2608,13 +2656,14 @@ struct CMUTIL_Timer {
      * @param timer The timer object used to schedule the task.
      * @param delay The delay in milliseconds before the first execution of the task.
      * @param period The interval in milliseconds between subsequent executions of the task.
+     * @param elapse_skip If CMTrue, the task will skip elapsed time intervals when it is delayed.
      * @param proc The callback function to execute when the task is run.
      * @param param A user-defined parameter to pass to the callback function.
      * @return A handle to the scheduled timer task.
      */
     CMUTIL_TimerTask *(*ScheduleDelayRepeat)(
             CMUTIL_Timer *timer, long delay, long period,
-            CMProcCB proc, void *param);
+            CMBool elapse_skip, CMProcCB proc, void *param);
 
     /**
      * @brief Purge all scheduled tasks from the timer.
@@ -2641,12 +2690,12 @@ struct CMUTIL_Timer {
 /**
  * Default timer precision in milliseconds.
  */
-#define CMUTIL_TIMER_PRECISION  100
+#define CMUTIL_TIMER_PRECISION  1
 
 /**
  * Default number of threads for the timer.
  */
-#define CMUTIL_TIMER_THREAD     10
+#define CMUTIL_TIMER_THREAD     2
 
 /**
  * @brief Create a timer object with default settings.
@@ -2753,6 +2802,8 @@ typedef CMBool (*CMPoolItemTestCB)(void *resource, void *udata);
  * @param testonborrow Whether to test resources when they are checked out.
  * @param udata User-defined data to be passed to callback functions.
  * @param timer A timer object for scheduling resource pings.
+ *         Ownership of the timer object is not transferred to the pool.
+ *         If NULL, creates an internal default timer.
  * @return A pointer to the newly created resource pool,
  *         or NULL on failure.
  */
@@ -2813,6 +2864,7 @@ struct CMUTIL_Library {
  * functions within the library.
  *
  * @param path The file path to the dynamic library to load.
+ *             The file extension can be excluded.
  * @return A pointer to the newly created CMUTIL_Library object,
  *         or NULL on failure.
  */
@@ -2857,6 +2909,66 @@ struct CMUTIL_FileList {
      */
     void (*Destroy)(
             CMUTIL_FileList *flist);
+};
+
+/**
+ * @typedef CMUTIL_FileOpenMode File open mode enumeration.
+ */
+typedef enum CMFileOpenMode {
+    /** Open file for reading. */
+    CMFileOpenRead = 0,
+    /** Open file for writing (overwrite). */
+    CMFileOpenWrite,
+    /** Open file for appending. */
+    CMFileOpenAppend
+} CMFileOpenMode;
+
+/**
+ * @typedef CMUTIL_FileStream File stream object for reading and writing files.
+ */
+typedef struct CMUTIL_FileStream CMUTIL_FileStream;
+struct CMUTIL_FileStream {
+        /**
+         * @brief Read data from the file stream into a buffer.
+         *
+         * This method only available if this object created with
+         * CMFileOpenRead mode, otherwise will return -1.
+         *
+         * @param fs A pointer to the CMUTIL_FileStream object.
+         * @param buffer A pointer to the buffer where the read data will be stored.
+         * @param size The number of bytes to read from the file stream.
+         * @return The number of bytes actually read, or -1 on failure.
+         */
+        ssize_t (*Read)(
+                const CMUTIL_FileStream *fs,
+                CMUTIL_String *buffer,
+                size_t size);
+
+        /**
+         * @brief Write data from a buffer to the file stream.
+         *
+         * This method only available if this object created with
+         * CMFileOpenWrite or CMFileOpenAppend mode, otherwise will return -1.
+         *
+         * @param fs A pointer to the CMUTIL_FileStream object.
+         * @param buffer A pointer to the buffer containing the data to write.
+         * @param offset The offset in the buffer from which to start writing.
+         * @param size The number of bytes to write to the file stream.
+         * @return The number of bytes actually written, or -1 on failure.
+         */
+        ssize_t (*Write)(
+                const CMUTIL_FileStream *fs,
+                const CMUTIL_String *buffer,
+                size_t offset,
+                size_t size);
+
+        /**
+         * @brief Close the file stream and free its resources.
+         *
+         * @param fs A pointer to the CMUTIL_FileStream object to be closed.
+         */
+        void (*Close)(
+                CMUTIL_FileStream *fs);
 };
 
 struct CMUTIL_File {
@@ -3074,6 +3186,18 @@ struct CMUTIL_File {
     CMUTIL_FileList *(*Find)(
             const CMUTIL_File *file,
             const char *pattern, CMBool recursive);
+
+    /**
+     * @brief Create a file stream for reading or writing the file.
+     *
+     * @param file A pointer to the CMUTIL_File object.
+     * @param mode The file open mode (read, write, append).
+     * @return A pointer to the newly created CMUTIL_FileStream object,
+     *         or NULL on failure.
+     */
+    CMUTIL_FileStream *(*CreateStream)(
+            const CMUTIL_File *file,
+            CMFileOpenMode mode);
 
     /**
      * @brief Destroy the file or directory object and free its resources.
@@ -5024,8 +5148,6 @@ CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
  * @return A new JSON object, or NULL if conversion fails.
  */
 CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
-
-
 
 
 #ifdef __cplusplus
