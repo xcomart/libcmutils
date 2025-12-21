@@ -26,6 +26,7 @@ SOFTWARE.
 
 #include <sys/stat.h>
 #include <errno.h>
+#include <sys/syslimits.h>
 
 #if !defined(MSWIN)
 # include <dirent.h>
