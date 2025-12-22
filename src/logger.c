@@ -521,24 +521,11 @@ typedef struct CMUTIL_LogAppderAsyncItem {
 
 CMUTIL_STATIC void *CMUTIL_LogAppenderAsyncWriter(void *udata)
 {
-    CMUTIL_List *temp;
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)udata;
     while (iap->isasync) {
-        temp = iap->flush_buffer;
-        // swap buffer
-        CMSync(iap->mutex, {
-            iap->flush_buffer = iap->buffer;
-            iap->buffer = temp;
-        });
         CMCall((CMUTIL_LogAppender*)iap, Flush);
         USLEEP(100000);	// sleep 100 milliseconds
     }
-    CMCall((CMUTIL_LogAppender*)iap, Flush);
-    temp = iap->flush_buffer;
-    CMSync(iap->mutex, {
-        iap->flush_buffer = iap->buffer;
-        iap->buffer = temp;
-    });
     CMCall((CMUTIL_LogAppender*)iap, Flush);
     return NULL;
 }
@@ -1041,9 +1028,8 @@ CMUTIL_STATIC void CMUTIL_LogConsoleAppenderWriter(
         CMUTIL_String *logmsg, struct tm *logtm)
 {
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)appender;
-    CMUTIL_UNUSED(appender);
     CMUTIL_UNUSED(logtm);
-    CMSync(iap->mutex, printf("%s", CMCall(logmsg, GetCString)););
+    CMSync(iap->mutex, fprintf(stdout, "%s", CMCall(logmsg, GetCString)););
     CMCall((CMUTIL_LogAppender*)appender, Flush);
 }
 
@@ -1053,11 +1039,13 @@ CMUTIL_STATIC void CMUTIL_LogConsoleAppenderFlush(
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)appender;
     if (iap->isasync) {
         CMSync(iap->mutex, {
+            CMCall(iap->flush_buffer, MoveAll, iap->buffer);
             CMUTIL_List *list = iap->flush_buffer;
+
             while (CMCall(list, GetSize) > 0) {
                 CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
                         CMCall(list, RemoveFront);
-                printf("%s", CMCall(log->log, GetCString));
+                fprintf(stdout, "%s", CMCall(log->log, GetCString));
                 CMUTIL_LogAppderAsyncItemDestroy(log);
             }
         });
@@ -1145,6 +1133,7 @@ CMUTIL_STATIC void CMUTIL_LogFileAppenderFlush(
     CMSync(iap->base.mutex, {
         fp = fopen(iap->fpath, "ab");
         if (fp) {
+            CMCall(iap->base.flush_buffer, MoveAll, iap->base.buffer);
             CMUTIL_List *list = iap->base.flush_buffer;
             while (CMCall(list, GetSize) > 0) {
                 CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
@@ -1268,22 +1257,30 @@ CMUTIL_STATIC void CMUTIL_LogRollingFileAppenderFlush(
 {
     CMUTIL_LogRollingFileAppender *iap =
             (CMUTIL_LogRollingFileAppender*)appender;
-    CMUTIL_List *list = iap->base.flush_buffer;
     CMSync(iap->base.mutex, {
+        CMCall(iap->base.flush_buffer, MoveAll, iap->base.buffer);
+        CMUTIL_List *list = iap->base.flush_buffer;
         if (CMCall(list, GetSize) > 0) {
+            CMUTIL_LogAppderAsyncItem *item =
+                    (CMUTIL_LogAppderAsyncItem*)CMCall(list, GetFront);
+            if (CMUTIL_LogRollingFileAppenderIsChanged(iap, &item->logtm))
+                CMUTIL_LogRollingFileAppenderRolling(iap, &item->logtm);
             FILE *fp = fopen(iap->fpath, "ab");
-            while (CMCall(list, GetSize) > 0) {
-                CMUTIL_LogAppderAsyncItem *item =
-                        (CMUTIL_LogAppderAsyncItem*)CMCall(list, RemoveFront);
-                if (CMUTIL_LogRollingFileAppenderIsChanged(iap, &item->logtm)) {
-                    fclose(fp);
-                    CMUTIL_LogRollingFileAppenderRolling(iap, &item->logtm);
-                    fp = fopen(iap->fpath, "ab");
+            if (fp) {
+                if (CMCall(list, GetSize) > 0) {
+                    while (CMCall(list, GetSize) > 0) {
+                        item = (CMUTIL_LogAppderAsyncItem*)CMCall(list, RemoveFront);
+                        if (CMUTIL_LogRollingFileAppenderIsChanged(iap, &item->logtm)) {
+                            fclose(fp);
+                            CMUTIL_LogRollingFileAppenderRolling(iap, &item->logtm);
+                            fp = fopen(iap->fpath, "ab");
+                        }
+                        fprintf(fp, "%s", CMCall(item->log, GetCString));
+                        CMUTIL_LogAppderAsyncItemDestroy(item);
+                    }
                 }
-                fprintf(fp, "%s", CMCall(item->log, GetCString));
-                CMUTIL_LogAppderAsyncItemDestroy(item);
+                fclose(fp);
             }
-            fclose(fp);
         }
     });
 }
@@ -1402,8 +1399,9 @@ CMUTIL_STATIC void CMUTIL_LogSocketAppenderWrite(
 CMUTIL_STATIC void CMUTIL_LogSocketAppenderFlush(CMUTIL_LogAppender *appender)
 {
     CMUTIL_LogSocketAppender *iap = (CMUTIL_LogSocketAppender*)appender;
-    CMUTIL_List *list = iap->base.flush_buffer;
     CMSync(iap->base.mutex, {
+        CMCall(iap->base.flush_buffer, MoveAll, iap->base.buffer);
+        CMUTIL_List *list = iap->base.flush_buffer;
         if (CMCall(list, GetSize) > 0) {
             CMUTIL_String *logbuf =
                     CMUTIL_StringCreateInternal(iap->base.memst, 1024, NULL);
