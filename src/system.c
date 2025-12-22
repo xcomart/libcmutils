@@ -26,6 +26,9 @@ SOFTWARE.
 
 #include <sys/stat.h>
 #include <errno.h>
+#if defined(APPLE) || defined(BSD)
+#include <sys/syslimits.h>
+#endif
 
 #if !defined(MSWIN)
 # include <dirent.h>
