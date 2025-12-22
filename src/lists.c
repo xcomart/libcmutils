@@ -216,6 +216,25 @@ CMUTIL_STATIC void CMUTIL_ListDestroy(CMUTIL_List *list)
     ilist->memst->Free(ilist);
 }
 
+CMUTIL_STATIC void CMUTIL_ListMoveAll(CMUTIL_List *dest, CMUTIL_List *src)
+{
+    CMUTIL_List_Internal *isrc = (CMUTIL_List_Internal*)src;
+    CMUTIL_List_Internal *idest = (CMUTIL_List_Internal*)dest;
+
+    if (idest->tail) {
+        idest->tail->next = isrc->head;
+        isrc->head->prev = idest->tail;
+        idest->tail = isrc->tail;
+    } else {
+        idest->head = isrc->head;
+        idest->tail = isrc->tail;
+    }
+    idest->size += isrc->size;
+    isrc->head = NULL;
+    isrc->tail = NULL;
+    isrc->size = 0;
+}
+
 static CMUTIL_List g_cmutil_list = {
     CMUTIL_ListAddFront,
     CMUTIL_ListAddTail,
@@ -226,7 +245,8 @@ static CMUTIL_List g_cmutil_list = {
     CMUTIL_ListRemove,
     CMUTIL_ListGetSize,
     CMUTIL_ListIterator,
-    CMUTIL_ListDestroy
+    CMUTIL_ListDestroy,
+    CMUTIL_ListMoveAll
 };
 
 CMUTIL_List *CMUTIL_ListCreateInternal(

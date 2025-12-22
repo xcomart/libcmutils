@@ -2279,6 +2279,17 @@ struct CMUTIL_List {
      * @param list The list to be destroyed.
      */
     void (*Destroy)(CMUTIL_List *list);
+
+    /**
+     * @brief Move all items from one list to another.
+     *
+     * This function moves all items from the source list to the destination list.
+     * The source list will be empty after the operation.
+     *
+     * @param dst The destination list to which items will be moved.
+     * @param src The source list from which items will be moved.
+     */
+    void (*MoveAll)(CMUTIL_List *dst, CMUTIL_List *src);
 };
 
 /**
