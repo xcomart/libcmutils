@@ -24,7 +24,7 @@ void timer_proc(void *udata) {
 
 int main() {
     int ir = -1;
-    CMUTIL_Init(CMMemRecycle);
+    CMUTIL_Init(CMUTIL_MEM_TYPE);
 
     CMUTIL_TimerTask *task = NULL;
     CMUTIL_Timer *timer = CMUTIL_TimerCreate();
@@ -41,6 +41,7 @@ int main() {
     CMCall(task, Cancel);
 
     gettimeofday(&tv, NULL);
+    CMLogInfo("executing now: %s", get_current_time());
     task = CMCall(timer, ScheduleAtRepeat, &tv, 100, CMTrue, timer_proc, NULL);
 
     // wait 1 seconds
