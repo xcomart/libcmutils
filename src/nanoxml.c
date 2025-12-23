@@ -234,7 +234,7 @@ CMUTIL_STATIC void CMUTIL_XmlEscape(
             p++;
         }
     }
-    if (stpos > p)
+    if (stpos < p)
         CMCall(dest, AddNString, (const char*)stpos, (uint32_t)(p - stpos));
 }
 
@@ -269,15 +269,17 @@ CMUTIL_STATIC void CMUTIL_XmlToDocumentPrivate(
         CMBool beutify,
         uint32_t depth)
 {
+    uint32_t i;
     if (inode->type == CMXmlNodeText) {
+        for (i = 0; i < depth; i++)
+            CMCall(buffer, AddString, "    ");
         CMUTIL_XmlEscape(buffer, inode->tagname);
     } else if (inode->type == CMXmlNodeTag) {
-        uint32_t i;
         size_t childcnt = CMCall(inode->children, GetSize);
         const char *tname = CMCall(inode->tagname, GetCString);
         size_t namelen = CMCall(inode->tagname, GetSize);
         for (i = 0; i < depth; i++)
-            CMCall(buffer, AddChar, '\t');
+            CMCall(buffer, AddString, "    ");
         CMCall(buffer, AddChar, '<');
         CMCall(buffer, AddNString, tname, namelen);
         CMUTIL_XmlBuildAttribute(buffer, inode);
@@ -427,14 +429,14 @@ typedef struct CMUTIL_XmlParseCtx {
 } CMUTIL_XmlParseCtx;
 
 #define DO_BOOL(...) do { if (!(__VA_ARGS__)) { \
-    char buf[50] = {0,};    \
-    strncat(buf, ctx->pos, 40); strcat(buf, "..."); \
-    CMLogError("xml parse failed near '%s'", buf);  \
+    char __buf[50] = {0,};    \
+    strncat(__buf, ctx->pos, 40); strcat(__buf, "..."); \
+    CMLogError("xml parse failed near '%s'", __buf);  \
     return CMFalse; } } while(0)
 #define DO_OBJ(...) do { if (!(__VA_ARGS__)) { \
-    char buf[50] = {0,};\
-    strncat(buf, ctx->pos, 40); strcat(buf, "..."); \
-    CMLogError("xml parse failed near '%s'", buf);  \
+    char __buf[50] = {0,};\
+    strncat(__buf, ctx->pos, 40); strcat(__buf, "..."); \
+    CMLogError("xml parse failed near '%s'", __buf);  \
     return NULL; } } while(0)
 
 CMUTIL_STATIC CMBool CMUTIL_XmlUnescape(
@@ -605,12 +607,13 @@ CMUTIL_STATIC CMBool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
             }
             *attvalue = 0x0;
             strncat(attvalue, ctx->pos, (uint64_t)(p - ctx->pos));
+            *(attvalue + (uint64_t)(p - ctx->pos)) = 0x0;
             DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, (uint64_t)(p - ctx->pos + 1)));
         } else {
             // assume attribute value is 'true' if there is no value part.
             strcpy(attvalue, "true");
         }
-        bfval = CMUTIL_StringCreateInternal(ctx->memst, 10, attvalue);
+        bfval = CMUTIL_StringCreateInternal(ctx->memst, 0, attvalue);
         afval = CMUTIL_StringCreateInternal(
                     ctx->memst, CMCall(bfval, GetSize), NULL);
         CMUTIL_XmlUnescape(afval, bfval, ctx);
@@ -750,7 +753,7 @@ CMUTIL_XmlNode *CMUTIL_XmlParseStringInternal(
     strcpy(ctx.encoding, "UTF-8");
     if (CMUTIL_XmlParseHeader(&ctx)) {
         CMUTIL_XmlNode *res, *bottom;
-        if (*(ctx.encoding) && strcmp(ctx.encoding, "UTF-8") != 0)
+        if (*(ctx.encoding) && strcasecmp(ctx.encoding, "UTF-8") != 0)
             ctx.cconv = CMUTIL_CSConvCreateInternal(
                         memst, ctx.encoding, "UTF-8");
         ctx.stack = CMUTIL_ArrayCreateInternal(memst, 3, NULL, NULL, CMFalse);
@@ -872,8 +875,11 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_XmlToJsonInternal(
             if (strlen(text) > 0) {
                 CMUTIL_JsonValue *val = CMUTIL_JsonValueCreate();
                 CMCall(val, SetString, text);
-                //if ()
-                res = (CMUTIL_Json*)val;
+                if (res == NULL) {
+                    res = (CMUTIL_Json*)val;
+                } else {
+                    CMCall((CMUTIL_JsonObject*)res, Put, "content", (CMUTIL_Json*)val);
+                }
                 isattr = CMTrue;
             }
         }
