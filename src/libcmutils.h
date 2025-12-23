@@ -1964,7 +1964,11 @@ struct CMUTIL_Map {
      * new value provided. The function returns a pointer to the previous value
      * associated with the key if it existed, or NULL if the key was not found in
      * the map before the operation.
-     * The order of the items in the map is preserved.
+     * The order of the items in the map is preserved. If the key already exists,
+     * the previous order is discarded and the new key-value pair is inserted at
+     * the end of the map.
+     * If 70% of buckets are occupied, the map is rebuilt with 2 times
+     * the current size to reduce the collision rate.
      *
      * @param map A pointer to the map where the key-value pair should be inserted.
      * @param key The key associated with the value to insert or update in the map.
