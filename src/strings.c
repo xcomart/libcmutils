@@ -591,11 +591,11 @@ CMUTIL_String *CMUTIL_StringCreateInternal(
     memset(istr, 0x0, sizeof(CMUTIL_String_Internal));
     memcpy(istr, &g_cmutil_string, sizeof(CMUTIL_String));
 
-    if (capacity == 0) {
+    if (capacity <= 0) {
         if (initcontent) {
             capacity = len;
         } else {
-            CMLogError("initcapacty is zero and initcontent is null");
+            CMLogError("initcapacty must be positive when initcontent is null");
             memst->Free(istr);
             return NULL;
         }
