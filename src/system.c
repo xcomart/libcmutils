@@ -668,11 +668,13 @@ CMBool CMUTIL_PathCreate(const char *path, uint32_t mode)
         if (NULL == p)
             return CMFalse;
 
-        // no permission or path cannot be created.
-        if (++i > 2)
+        // no permission or no more parent directory
+        if (++i > 2 || p == path)
             return CMFalse;
         strncat(subpath, path, (uint64_t)(p - path));     /* Appends NULL */
-        CMUTIL_FileCreate(subpath);
+        // call recursively with the parent directory
+        if (!CMUTIL_PathCreate(subpath, mode))
+            return CMFalse;
     }
 #if defined(MSWIN)
     CMUTIL_UNUSED(mode);

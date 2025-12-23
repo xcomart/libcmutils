@@ -473,7 +473,7 @@ void CMUTIL_ThreadInit()
 {
     g_main_thread_sysid = CMUTIL_ThreadSystemSelfId();
     g_cmutil_thread_context =
-            CMUTIL_GetMem()->Alloc(sizeof(CMUTIL_Thread_Global_Context));
+            CMAlloc(sizeof(CMUTIL_Thread_Global_Context));
     memset(g_cmutil_thread_context, 0x0, sizeof(CMUTIL_Thread_Global_Context));
     g_cmutil_thread_context->mutex =
             CMUTIL_MutexCreateInternal(CMUTIL_GetMem());
@@ -505,6 +505,7 @@ CMUTIL_STATIC void *CMUTIL_ThreadProc(void *param)
 
     iparam->isrunning = CMTrue;
 
+    // we must set the system thread id before run user callback
     iparam->sysid = CMUTIL_ThreadSystemSelfId();
 
     // we must add this thread in the global pool before start user callback.
@@ -653,7 +654,7 @@ CMUTIL_Thread *CMUTIL_ThreadCreate(
 
 uint32_t CMUTIL_ThreadSelfId()
 {
-    unsigned int res = 0;
+    uint32_t res = 0;
     CMUTIL_Thread_Internal q, *r;
     q.sysid = CMUTIL_ThreadSystemSelfId();
     CMCall(g_cmutil_thread_context->mutex, Lock);
@@ -749,6 +750,8 @@ typedef struct CMUTIL_ThreadPoolJob {
 CMUTIL_STATIC void *CMUTIL_ThreadPoolProc(void *vp) {
     CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)vp;
     while (pool->is_running) {
+        CMUTIL_ThreadPoolJob *job = NULL;
+
         // wait for new jobs
         if (!CMCall(pool->feed_sem, Acquire, 1000))
             continue;
@@ -757,7 +760,6 @@ CMUTIL_STATIC void *CMUTIL_ThreadPoolProc(void *vp) {
             break;
 
         // acquire job
-        CMUTIL_ThreadPoolJob *job = NULL;
         CMSync(pool->qmtx, {
             job = (CMUTIL_ThreadPoolJob*)CMCall(pool->jobq, RemoveFront);
         });
