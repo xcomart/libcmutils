@@ -6,6 +6,7 @@
                 "name": "SampleConsoleAppender",
                 "pattern": "%d %P-[%10t] [%-15F:%04L] [%-5p] %c - %m%ex%n",
                 "async": true,
+                "useStderr": true,
                 "asyncBufferSize": 512,
                 "type": "Console"  // can be one of (console, file, rollingfile, socket)
             },{

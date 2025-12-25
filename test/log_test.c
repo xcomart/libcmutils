@@ -22,7 +22,8 @@ int main() {
     logger = CMCall(lsys, CreateLogger, NULL, CMLogLevel_Debug, CMTrue);
     ASSERT(logger != NULL, "LogSystem::CreateLogger");
 
-    apndr = CMUTIL_LogConsoleAppenderCreate("Console", pattern);
+    apndr = CMUTIL_LogConsoleAppenderCreate(
+        "Console", pattern, CMTrue);
     ASSERT(apndr != NULL, "LogConsoleAppenderCreate");
     CMCall(apndr, SetAsync, 64);
     CMCall(logger, AddAppender, apndr, CMLogLevel_Debug); apndr = NULL;
