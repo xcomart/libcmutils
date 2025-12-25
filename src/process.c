@@ -62,6 +62,7 @@ typedef struct CMUTIL_Process_Internal {
     CMStream            inpipe;
     CMStream            outpipe;
     CMStream            errpipe;
+    CMUTIL_Thread       *reader;
 } CMUTIL_Process_Internal;
 
 
@@ -112,7 +113,10 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
     PROCESS_INFORMATION piProcInfo;
     STARTUPINFO siStartInfo;
     // HANDLE cin = nullptr, cout = nullptr, cerr = nullptr;
-    Stream p1[2], p2[2], p3[2];
+    CMStream p1[2], p2[2], p3[2];
+
+    CMUTIL_String *cmd = NULL;
+    int i;
 
     // Create a pipe for the child process's STDIN.
     CMUTIL_CreatePipe(p1, true, false);
@@ -131,8 +135,15 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
     siStartInfo.wShowWindow = SW_HIDE;
 
 
+    cmd = CMCall(ip->command, Clone);
+    for (i=0; i<CMCall(ip->args, GetSize); i++) {
+        CMUTIL_String *arg = CMCall(ip->args, GetAt, i);
+        CMCall(cmd, AddChar, ' ');
+        CMCall(cmd, AddAnother, arg);
+    }
+
     BOOL bSuccess = CreateProcess(nullptr,
-                                  const_cast<TOLPX>(cmd.c_str()), // command line
+                                  CMCall(cmd, GetCString), // command line
                                   nullptr, // process security attributes
                                   nullptr, // primary thread security attributes
                                   TRUE, // handles are inherited
@@ -141,21 +152,35 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
                                   nullptr, // use parent's current directory
                                   &siStartInfo, // STARTUPINFO pointer
                                   &piProcInfo);     // receives PROCESS_INFORMATION
+    CMCall(cmd, Destroy);
     if (!bSuccess) {
-        SPDLOG_ERROR("CreateProcess failed");
-        throw std::runtime_error("CreateProcess failed");
+        CMLogErrorS("CreateProcess failed");
+        goto ERROR_POINT;
     }
     hproc = piProcInfo.hProcess;
     CloseHandle(piProcInfo.hThread);
     pid = piProcInfo.dwProcessId;
     // these pipes are used in child process no longer needed in parent
 
-    infd = p1[1];
-    outfd = p2[0];
-    errfd = p3[0];
+    ip->inpipe = p1[1];
+    ip->outpipe = p2[0];
+    ip->errpipe = p3[0];
     closePipe(p1[0]);
     closePipe(p2[1]);
     closePipe(p3[1]);
+    return CMTrue;
+ERROR_POINT:
+    closePipe(p1[0]);
+    closePipe(p1[1]);
+    closePipe(p2[0]);
+    closePipe(p2[1]);
+    closePipe(p3[0]);
+    closePipe(p3[1]);
+
+    ip->inpipe = EMPTY_STREAM;
+    ip->outpipe = EMPTY_STREAM;
+    ip->errpipe = EMPTY_STREAM;
+    return CMFalse;
 }
 
 #else
@@ -163,7 +188,8 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
 CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
 {
     CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
-    int p1[2], p2[2], p3[2];
+    CMStream p1[2], p2[2], p3[2];
+    int i;
 
     if (ip->inpipe == EMPTY_STREAM && pipe(p1) == -1)
         goto err_pipe1;
@@ -204,22 +230,33 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
     close(p2[1]);
     close(p3[0]);
     close(p3[1]);
+
+    // set environment variables
+    CMUTIL_StringArray *keys = CMCall(ip->env, GetKeys);
+    for (i = 0; i < CMCall(keys, GetSize); i++) {
+        const CMUTIL_String *key = CMCall(keys, GetAt, i);
+        const char *skey = CMCall(key, GetCString);
+        const CMUTIL_String *value = CMCall(ip->env, Get, skey);
+        setenv(skey, CMCall(value, GetCString), 1);
+    }
+    CMCall(keys, Destroy);
     {
         // this is child process
-        char **args = NULL;
+        char **args = CMAlloc((CMCall(ip->args, GetSize) + 2) * sizeof(char *));
+        memset(args, 0, (CMCall(ip->args, GetSize) + 2) * sizeof(char *));
+        args[0] = (char*)CMCall(ip->command, GetCString);
         if (CMCall(ip->args, GetSize) > 0) {
-            args = CMAlloc((CMCall(ip->args, GetSize) + 1) * sizeof(char *));
-            for (size_t i = 0; i < CMCall(ip->args, GetSize); i++) {
+            for (i = 0; i < CMCall(ip->args, GetSize); i++) {
                 const CMUTIL_String *arg = CMCall(ip->args, GetAt, i);
-                args[i] = (char*)CMCall(arg, GetCString);
+                args[i+1] = (char*)CMCall(arg, GetCString);
             }
-            args[CMCall(ip->args, GetSize)] = NULL;
         }
         execvp(CMCall(ip->command, GetCString), args);
-   }
-    // cannot be here in general case, below codes are error handler
+        CMFree(args);
+  }
+    // cannot be here in general cases, the below codes are error handler
     /* Error occurred. */
-    fprintf(stderr, "error running %s: %s\n",
+    CMLogErrorS("error running %s: %s",
         CMCall(ip->command, GetCString), strerror(errno));
     abort();
 
@@ -240,6 +277,25 @@ err_pipe1:
 #endif
 
 
+CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
+{
+    CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)data;
+    while (ip->status != CM_EXITED_) {
+        char buf[1024];
+        ssize_t nread = read(ip->outpipe, buf, sizeof(buf));
+        // if (nread > 0) {
+        //     CMCall(ip->pipe_from, Write, buf, nread);
+        // } else if (nread == 0) {
+        //     CMCall(ip->pipe_from, Close);
+        //     ip->status = CM_EXITED_;
+        // } else {
+        //     CMLogErrorS("read error: %s", strerror(errno));
+        //     ip->status = CM_EXITED_;
+        // }
+    }
+    return NULL;
+}
+
 
 CMUTIL_STATIC CMBool CMUTIL_ProcessStart(
     CMUTIL_Process *proc, CMProcStreamType type)
@@ -250,29 +306,14 @@ CMUTIL_STATIC CMBool CMUTIL_ProcessStart(
         return CMFalse;
     }
 
-#if defined(MSWIN)
-#else
-    const pid_t pid = fork();
-    if (pid == -1) return CMFalse;
-    if (pid == 0) {
-        // this is child process
-        char **args = NULL;
-        if (CMCall(ip->args, GetSize) > 0) {
-            args = CMAlloc((CMCall(ip->args, GetSize) + 1) * sizeof(char *));
-            for (size_t i = 0; i < CMCall(ip->args, GetSize); i++) {
-                const CMUTIL_String *arg = CMCall(ip->args, GetAt, i);
-                args[i] = (char*)CMCall(arg, GetCString);
-            }
-            args[CMCall(ip->args, GetSize)] = NULL;
-        }
-        execvp(CMCall(ip->command, GetCString), args);
-        exit(1);
-    } else {
-        // this is parent process
-        ip->status = CM_RUNNING_;
-        ip->pid = pid;
+    ip->type = type;
+    if (!CMUTIL_StartSubprocess(proc)) {
+        CMLogErrorS("Failed to start subprocess.");
+        return CMFalse;
     }
-#endif
+
+    // TODO: start reader thread
 
     return CMTrue;
 }
+

@@ -5296,8 +5296,8 @@ struct CMUTIL_Process {
      * It facilitates data transfer from one process to another. Both `proc` and
      * `target` must be valid, and the state of both processes must not be
      * started for the operation to succeed.
-     * This process must be started with CMProcStreamWrite or CMProcStreamReadWrite
-     * stream type, and the target process must be started with CMProcStreamRead
+     * This process must be started with CMProcStreamRead or CMProcStreamReadWrite
+     * stream type, and the target process must be started with CMProcStreamWrite
      * or CMProcStreamReadWrite stream type.
      *
      * @param proc The source process whose stdout will be piped.
