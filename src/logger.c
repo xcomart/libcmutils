@@ -1019,17 +1019,23 @@ CMUTIL_STATIC CMUTIL_Mem *CMUTIL_LogAppenderBaseClean(
             res->Free(iap->name);
         if (iap->mutex)
             CMCall(iap->mutex, Destroy);
-    }
+   }
     return res;
 }
+
+typedef struct CMUTIL_LogConsoleAppender {
+    CMUTIL_LogAppenderBase  base;
+    FILE                    *out;
+} CMUTIL_LogConsoleAppender;
 
 CMUTIL_STATIC void CMUTIL_LogConsoleAppenderWriter(
         CMUTIL_LogAppenderBase *appender,
         CMUTIL_String *logmsg, struct tm *logtm)
 {
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)appender;
+    CMUTIL_LogConsoleAppender *cap = (CMUTIL_LogConsoleAppender*)appender;
     CMUTIL_UNUSED(logtm);
-    CMSync(iap->mutex, fprintf(stdout, "%s", CMCall(logmsg, GetCString)););
+    CMSync(iap->mutex, fprintf(cap->out, "%s", CMCall(logmsg, GetCString)););
     CMCall((CMUTIL_LogAppender*)appender, Flush);
 }
 
@@ -1037,6 +1043,7 @@ CMUTIL_STATIC void CMUTIL_LogConsoleAppenderFlush(
         CMUTIL_LogAppender *appender)
 {
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)appender;
+    CMUTIL_LogConsoleAppender *cap = (CMUTIL_LogConsoleAppender*)appender;
     if (iap->isasync) {
         CMSync(iap->mutex, {
             CMCall(iap->flush_buffer, MoveAll, iap->buffer);
@@ -1045,12 +1052,12 @@ CMUTIL_STATIC void CMUTIL_LogConsoleAppenderFlush(
             while (CMCall(list, GetSize) > 0) {
                 CMUTIL_LogAppderAsyncItem *log = (CMUTIL_LogAppderAsyncItem*)
                         CMCall(list, RemoveFront);
-                fprintf(stdout, "%s", CMCall(log->log, GetCString));
+                fprintf(cap->out, "%s", CMCall(log->log, GetCString));
                 CMUTIL_LogAppderAsyncItemDestroy(log);
             }
         });
     }
-    fflush(stdout);
+    fflush(cap->out);
 }
 
 CMUTIL_STATIC void CMUTIL_LogConsoleAppenderDestroy(
@@ -1064,14 +1071,16 @@ CMUTIL_STATIC void CMUTIL_LogConsoleAppenderDestroy(
 }
 
 CMUTIL_LogAppender *CMUTIL_LogConsoleAppenderCreateInternal(
-        CMUTIL_Mem *memst, const char *name, const char *pattern)
+        CMUTIL_Mem *memst, const char *name, const char *pattern,
+        CMBool use_stderr)
 {
-    CMUTIL_LogAppenderBase *res =
-            memst->Alloc(sizeof(CMUTIL_LogAppenderBase));
-    memset(res, 0x0, sizeof(CMUTIL_LogAppenderBase));
-    res->memst = memst;
+    CMUTIL_LogConsoleAppender *res =
+            memst->Alloc(sizeof(CMUTIL_LogConsoleAppender));
+    memset(res, 0x0, sizeof(CMUTIL_LogConsoleAppender));
+    res->base.memst = memst;
+    res->out = use_stderr ? stderr : stdout;
     if (!CMUTIL_LogAppenderBaseInit(
-                res, pattern, name,
+                &res->base, pattern, name,
                 CMUTIL_LogConsoleAppenderWriter,
                 CMUTIL_LogConsoleAppenderFlush,
                 CMUTIL_LogConsoleAppenderDestroy)) {
@@ -1082,10 +1091,10 @@ CMUTIL_LogAppender *CMUTIL_LogConsoleAppenderCreateInternal(
 }
 
 CMUTIL_LogAppender *CMUTIL_LogConsoleAppenderCreate(
-        const char *name, const char *pattern)
+        const char *name, const char *pattern, CMBool use_stderr)
 {
     return CMUTIL_LogConsoleAppenderCreateInternal(
-                CMUTIL_GetMem(), name, pattern);
+                CMUTIL_GetMem(), name, pattern, use_stderr);
 }
 
 typedef struct CMUTIL_LogFileAppender {
@@ -1386,7 +1395,9 @@ CMUTIL_STATIC void CMUTIL_LogSocketAppenderWrite(
         for (i = 0; i < CMCall(iap->clients, GetSize); i++) {
             CMUTIL_Socket *cli = (CMUTIL_Socket*)
                     CMCall(iap->clients, GetAt, i);
-            if (CMCall(cli, Write, logmsg, 1000) != CMSocketOk) {
+            const char *msg = CMCall(logmsg, GetCString);
+            size_t size = CMCall(logmsg, GetSize);
+            if (CMCall(cli, Write, msg, size, 1000) != CMSocketOk) {
                 CMCall(iap->clients, RemoveAt, i);
                 i--;
                 CMCall(cli, Close);
@@ -1901,7 +1912,8 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureDefault(CMUTIL_Mem *memst)
     const CMUTIL_ConfLogger* root_logger =
         CMCall(res, CreateLogger, NULL, CMLogLevel_Debug, CMTrue);
     CMUTIL_LogAppender *conapndr = CMUTIL_LogConsoleAppenderCreateInternal(
-                memst, "__CONSOL", CMUITL_LOG_PATTERN_DEFAULT);
+                memst, "__CONSOL", CMUITL_LOG_PATTERN_DEFAULT,
+                CMFalse);
     //CMCall(conapndr, SetAsync, 64);
     CMCall(res, AddAppender, conapndr);
     CMCall(root_logger, AddAppender, conapndr, CMLogLevel_Debug);
@@ -1920,6 +1932,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneAppender(
     const char *sname = NULL, *spattern = NULL;
     CMUTIL_LogAppender *appender = NULL;
     CMBool async = CMFalse;
+    CMBool use_stderr = CMFalse;
     int64_t asyncBufsz = 256;
 
     if (CMCall(json, GetType) != CMJsonTypeObject) {
@@ -1941,6 +1954,9 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneAppender(
     if (CMCall(jobj, Get, "async")) {
         async = CMCall(jobj, GetBoolean, "async");
     }
+    if (CMCall(jobj, Get, "useStderr")) {
+        use_stderr = CMCall(jobj, GetBoolean, "useStderr");
+    }
     if (CMCall(jobj, Get, "asyncbuffersize")) {
         asyncBufsz = CMCall(jobj, GetLong, "asyncbuffersize");
         if (asyncBufsz < 10) {
@@ -1951,7 +1967,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneAppender(
 
     if (strcmp("console", stype) == 0) {
         appender = CMUTIL_LogConsoleAppenderCreateInternal(
-                    lsys->memst, sname, spattern);
+                    lsys->memst, sname, spattern, use_stderr);
     } else if (strcmp("file", stype) == 0) {
         const char *filename = NULL;
         if (CMCall(jobj, Get, "filename")) {

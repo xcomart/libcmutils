@@ -3541,12 +3541,14 @@ struct CMUTIL_LogAppender {
  *
  * @param name The name of the log appender.
  * @param pattern The log message pattern.
+ * @param use_stderr Whether to use stderr instead of stdout for logging.
  * @return A pointer to the newly created CMUTIL_LogAppender object,
  *         or NULL on failure.
  */
 CMUTIL_API CMUTIL_LogAppender *CMUTIL_LogConsoleAppenderCreate(
     const char *name,
-    const char *pattern);
+    const char *pattern,
+    CMBool use_stderr);
 
 /**
  * @brief Create a file log appender.
@@ -4082,13 +4084,15 @@ struct CMUTIL_Socket {
      * socket within the specified timeout period.
      *
      * @param socket The socket object to write to.
-     * @param data The byte buffer containing the data to write.
+     * @param data The data to write.
+     * @param size The size of the data to write.
      * @param timeout The read operation timeout in milliseconds.
      * @return CMSocketResult indicating success or failure.
      */
     CMSocketResult (*Write)(
             const CMUTIL_Socket *socket,
-            CMUTIL_ByteBuffer *data, long timeout);
+            const void *data,
+            uint32_t size, long timeout);
 
     /**
      * @brief Write a specific part of data to the socket from a buffer.
@@ -4098,15 +4102,15 @@ struct CMUTIL_Socket {
      * the specified timeout period.
      *
      * @param socket The socket object to write to.
-     * @param data The byte buffer containing the data to write.
+     * @param data The data to write.
      * @param offset The offset in the buffer to start writing from.
      * @param length The number of bytes to write.
      * @param timeout The write operation timeout in milliseconds.
      * @return CMSocketResult indicating success or failure.
      */
     CMSocketResult (*WritePart)(
-            const CMUTIL_Socket *socket, CMUTIL_ByteBuffer *data,
-            int offset, uint32_t length, long timeout);
+            const CMUTIL_Socket *socket, const void *data,
+            uint32_t offset, uint32_t length, long timeout);
 
     /**
      * @brief Check if the socket is ready for reading.

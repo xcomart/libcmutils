@@ -545,15 +545,15 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SocketReadSocket(
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SocketWrite(
-        const CMUTIL_Socket *sock, CMUTIL_ByteBuffer *data, long timeout)
+        const CMUTIL_Socket *sock, const void *data,
+        uint32_t size, long timeout)
 {
-    const uint32_t length = (uint32_t)CMCall(data, GetSize);
-    return CMCall(sock, WritePart, data, 0, length, timeout);
+    return CMCall(sock, WritePart, data, 0, size, timeout);
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SocketWritePart(
-        const CMUTIL_Socket *sock, CMUTIL_ByteBuffer *data,
-        int offset, uint32_t length, long timeout)
+        const CMUTIL_Socket *sock, const void *data,
+        uint32_t offset, uint32_t length, long timeout)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
     int rc;
@@ -572,7 +572,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWritePart(
         rc = (int)send(isock->sock, CMCall(data, GetCString) + offset,
                        size, MSG_NOSIGNAL);
 #else
-        rc = (int)send(isock->sock, CMCall(data, GetBytes) + offset,
+        rc = (int)send(isock->sock, ((uint8_t*)data) + offset,
                        (int)size, 0);
 #endif
         if (rc == SOCKET_ERROR) {
@@ -1453,15 +1453,15 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLSocketReadSocket(
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
-        const CMUTIL_Socket *sock, CMUTIL_ByteBuffer *data,
-        int offset, uint32_t length, long timeout)
+        const CMUTIL_Socket *sock, const void *data,
+        uint32_t offset, uint32_t length, long timeout)
 {
     const CMUTIL_SSLSocket_Internal *isck =
             (const CMUTIL_SSLSocket_Internal*)sock;
     CMSocketResult res;
     int rc, cnt = 0;
     uint32_t size = length;
-    const uint8_t *buf = CMCall(data, GetBytes) + offset;
+    const uint8_t *buf = ((uint8_t*)data) + offset;
 #if defined(CMUTIL_SSL_USE_OPENSSL)
     int in_init=0;
 
@@ -1555,10 +1555,8 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
 #endif  // !CMUTIL_SSL_USE_OPENSSL
     if (cnt < timeout * 10)
         return CMSocketOk;
-    else {
-        CMLogError("send timed out.");
-        return CMSocketTimeout;
-    }
+    CMLogError("send timed out.");
+    return CMSocketTimeout;
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWriteSocket(

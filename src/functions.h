@@ -100,7 +100,8 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
 CMUTIL_List *CMUTIL_ListCreateInternal(CMUTIL_Mem *memst, CMFreeCB freecb);
 
 CMUTIL_LogAppender *CMUTIL_LogConsoleAppenderCreateInternal(
-        CMUTIL_Mem *memst, const char *name, const char *pattern);
+        CMUTIL_Mem *memst, const char *name, const char *pattern,
+        CMBool use_stderr);
 CMUTIL_LogAppender *CMUTIL_LogFileAppenderCreateInternal(
         CMUTIL_Mem *memst, const char *name,
         const char *fpath, const char *pattern);
