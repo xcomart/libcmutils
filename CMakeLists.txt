@@ -36,6 +36,7 @@ SET ( LIB_SRCS
     src/network.c
     src/pattern.c
     src/pool.c
+    src/process.c
     src/strings.c
     src/system.c )
 

@@ -5167,6 +5167,219 @@ CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
 CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
 
+/**
+ * @typedef Enumeration of process stream types.
+ */
+typedef enum CMProcStreamType {
+    /** process with no stream */
+    CMProcStreamNone = 0,
+    /** process with read stream */
+    CMProcStreamRead = 1,
+    /** process with writing stream */
+    CMProcStreamWrite = 2,
+    /** process with read and write streams */
+    CMProcStreamReadWrite = 3
+} CMProcStreamType;
+
+/**
+ * @typedef Process structure for managing external processes.
+ */
+typedef struct CMUTIL_Process CMUTIL_Process;
+struct CMUTIL_Process {
+    /**
+     * @brief Start the process.
+     *
+     * If the process is already running, this function will return CMFalse.
+     *
+     * @param proc The process to start.
+     * @param type The type of stream to use for the process.
+     * @return CMTrue if the process started successfully, CMFalse otherwise.
+     */
+    CMBool (*Start)(CMUTIL_Process *proc, CMProcStreamType type);
+
+    /**
+     * @brief Retrieves the process identifier (PID) of the specified process.
+     *
+     * This function returns the PID of the process represented by the given
+     * `CMUTIL_Process` instance. If the process is not running or is in an
+     * invalid state, the behavior is implementation-defined.
+     *
+     * @param proc The process from which to retrieve the PID.
+     * @return The PID of the specified process, or an appropriate error
+     *         indicator if the PID cannot be retrieved.
+     */
+    pid_t (*GetPid)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Function pointer to retrieve the command associated with a given process.
+     *
+     * This variable points to a function that, given a process instance, returns
+     * the associated command in the form of a null-terminated string.
+     *
+     * @param proc Pointer to a CMUTIL_Process instance representing the process.
+     * @return const char* Null-terminated string representing the command associated
+     *         with the specified process. Returns nullptr if the command cannot be
+     *         retrieved or is not available.
+     */
+    const char *(*GetCommand)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Function pointer to retrieve the working directory of a given process.
+     *
+     * This function takes a pointer to a CMUTIL_Process structure and returns a
+     * constant character pointer representing the working directory of the
+     * specified process.
+     *
+     * @param proc A pointer to a CMUTIL_Process structure representing the process
+     *             whose working directory is to be retrieved.
+     * @return A constant character pointer pointing to the working directory of
+     *         the given process.
+     */
+    const char *(*GetWorkingDirectory)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Function pointer to retrieve the argument list of a process.
+     *
+     * This function pointer takes a CMUTIL_Process object as input and
+     * returns a pointer to a CMUTIL_StringArray containing the arguments
+     * associated with the specified process.
+     *
+     * @param proc A pointer to a CMUTIL_Process object whose arguments
+     *             are to be retrieved.
+     * @return A pointer to a CMUTIL_StringArray containing the process arguments.
+     */
+    const CMUTIL_StringArray *(*GetArgs)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Retrieves the environment map for a specified process.
+     *
+     * This function pointer allows access to the environment variables
+     * associated with the given process.
+     *
+     * @param proc A pointer to a CMUTIL_Process object whose environment
+     *             variables are to be retrieved.
+     * @return A pointer to a CMUTIL_Map containing the process environment variables.
+     */
+    const CMUTIL_Map *(*GetEnv)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Suspends the execution of the specified process.
+     *
+     * This function halts the execution of the given process until it is explicitly
+     * resumed. If the process is not running or is in an invalid state, this
+     * function does nothing and returns without error.
+     *
+     * @param proc The process to suspend.
+     */
+    void (*Suspend)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Resumes the execution of the specified process.
+     *
+     * This function resumes a previously suspended process, allowing it to continue
+     * its execution. If the process is not in a suspended state or is in an invalid
+     * state, this function does nothing and returns without error.
+     *
+     * @param proc The process to resume.
+     */
+    void (*Resume)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Establishes a unidirectional pipe between two processes.
+     *
+     * This function creates a communication channel between the stdout
+     * of the source process (`proc`) and the stdin of the target process (`target`).
+     * It facilitates data transfer from one process to another. Both `proc` and
+     * `target` must be valid, and the state of both processes must not be
+     * started for the operation to succeed.
+     * This process must be started with CMProcStreamWrite or CMProcStreamReadWrite
+     * stream type, and the target process must be started with CMProcStreamRead
+     * or CMProcStreamReadWrite stream type.
+     *
+     * @param proc The source process whose stdout will be piped.
+     * @param target The target process whose stdin will receive the piped data.
+     * @return CMTrue if the pipe was successfully established, CMFalse otherwise.
+     */
+    CMBool (*PipeTo)(CMUTIL_Process *proc, CMUTIL_Process *target);
+
+    /**
+     * @brief Write data to the process's stdin.
+     *
+     * If the process is not running, or the stream type is
+     * not CMProcStreamWrite or CMProcStreamReadWrite,
+     * this function will return -1.
+     *
+     * @param proc The process to write to.
+     * @param buf The buffer containing data to write.
+     * @param count The number of bytes to write.
+     * @return The number of bytes written, or -1 on error.
+     */
+    int (*Write)(CMUTIL_Process *proc, const void *buf, size_t count);
+
+    /**
+     * @brief Read data from the process's stdout.
+     *
+     * If the process is not running, or the stream type is
+     * not CMProcStreamRead or CMProcStreamReadWrite,
+     * this function will return -1.
+     *
+     * @param proc The process to read from.
+     * @param buf The buffer to store the read data.
+     * @param count The maximum number of bytes to read.
+     * @return The number of bytes read, or -1 on error.
+     */
+    int (*Read)(CMUTIL_Process *proc, CMUTIL_ByteBuffer *buf, size_t count);
+
+    /**
+     * @brief Waits for the specified process to complete.
+     *
+     * This function blocks the calling thread until the specified process
+     * finishes execution.
+     *
+     * @param proc The process to wait for.
+     * @param millis The maximum time to wait in milliseconds,
+     *               or -1 to wait infinitely.
+     * @return An exit status code from the process, or -1 on error.
+     */
+    int (*Wait)(CMUTIL_Process *proc, long millis);
+
+    /**
+     * @brief Terminates the specified process.
+     *
+     * This function attempts to terminate the specified process.
+     * If the process is not running, this function will do nothing.
+     *
+     * @param proc The process to terminate.
+     */
+    void (*Kill)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Frees resources associated with the specified process.
+     *
+     * This function releases any memory or resources allocated for the given
+     * `CMUTIL_Process` instance. After this function is called, the specified
+     * process object should no longer be used.
+     *
+     * @param proc The process whose resources should be freed.
+     */
+    void (*Destroy)(CMUTIL_Process *proc);
+};
+
+/**
+ * @brief Creates a new process with the specified command and stream type.
+ *
+ * @param cwd The working directory for the new process.
+ * @param env The environment variables for the new process.
+ * @param command The command to execute in the new process.
+ * @param ... Additional arguments of the process.
+ * @return A pointer to the newly created process, or NULL on failure.
+ */
+CMUTIL_API CMUTIL_Process *CMUTIL_ProcessCreate(
+        const char *cwd,
+        CMUTIL_Map *env,
+        const char *command,
+        ...);
+
 #ifdef __cplusplus
 }
 #endif
