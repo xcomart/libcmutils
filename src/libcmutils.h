@@ -4062,31 +4062,33 @@ struct CMUTIL_Socket {
      * @brief Read data from the socket into a buffer.
      *
      * Reads up to 'size' bytes of data from the specified socket
-     * into the provided string buffer within the given timeout period.
+     * into the provided byte buffer within the given timeout period.
      *
      * @param socket The socket object to read from.
-     * @param buffer The string buffer to store the read data.
+     * @param buffer The byte buffer to store the read data.
      * @param size The maximum number of bytes to read.
      * @param timeout The read operation timeout in milliseconds.
      * @return CMSocketResult indicating success or failure.
      */
     CMSocketResult (*Read)(
             const CMUTIL_Socket *socket,
-            CMUTIL_String *buffer, uint32_t size, long timeout);
+            CMUTIL_ByteBuffer *buffer,
+            uint32_t size, long timeout);
 
     /**
-     * @brief Read a specific part of data from the socket into a buffer.
+     * @brief Write the given data to the socket into a buffer.
      *
-     * Writes all data from the provided string buffer to the specified
+     * Writes all data from the provided byte buffer to the specified
      * socket within the specified timeout period.
      *
-     * @param socket The socket object to read from.
-     * @param data The string buffer to store the read data.
+     * @param socket The socket object to write to.
+     * @param data The byte buffer containing the data to write.
      * @param timeout The read operation timeout in milliseconds.
      * @return CMSocketResult indicating success or failure.
      */
     CMSocketResult (*Write)(
-            const CMUTIL_Socket *socket, CMUTIL_String *data, long timeout);
+            const CMUTIL_Socket *socket,
+            CMUTIL_ByteBuffer *data, long timeout);
 
     /**
      * @brief Write a specific part of data to the socket from a buffer.
@@ -4096,14 +4098,14 @@ struct CMUTIL_Socket {
      * the specified timeout period.
      *
      * @param socket The socket object to write to.
-     * @param data The string buffer containing the data to write.
+     * @param data The byte buffer containing the data to write.
      * @param offset The offset in the buffer to start writing from.
      * @param length The number of bytes to write.
      * @param timeout The write operation timeout in milliseconds.
      * @return CMSocketResult indicating success or failure.
      */
     CMSocketResult (*WritePart)(
-            const CMUTIL_Socket *socket, CMUTIL_String *data,
+            const CMUTIL_Socket *socket, CMUTIL_ByteBuffer *data,
             int offset, uint32_t length, long timeout);
 
     /**

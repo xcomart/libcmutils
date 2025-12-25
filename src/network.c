@@ -399,13 +399,13 @@ CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
 
 # define CMUTIL_RBUF_LEN    1024
 CMUTIL_STATIC CMSocketResult CMUTIL_SocketRead(
-        const CMUTIL_Socket *sock, CMUTIL_String *buffer,
+        const CMUTIL_Socket *sock, CMUTIL_ByteBuffer *buffer,
         uint32_t size, long timeout)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
     int rc;
     uint32_t rsize = 0;
-    char buf[CMUTIL_RBUF_LEN];
+    uint8_t buf[CMUTIL_RBUF_LEN];
 
     while (size > rsize) {
         uint32_t toberead = size - rsize;
@@ -435,7 +435,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketRead(
         }
         if (rc > 0) {
             CMLogTrace("%d bytes received", rc);
-            CMCall(buffer, AddNString, buf, (uint32_t)rc);
+            CMCall(buffer, AddBytes, buf, (uint32_t)rc);
             rsize += (uint32_t)rc;
         }
 
@@ -545,14 +545,14 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SocketReadSocket(
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SocketWrite(
-        const CMUTIL_Socket *sock, CMUTIL_String *data, long timeout)
+        const CMUTIL_Socket *sock, CMUTIL_ByteBuffer *data, long timeout)
 {
-    uint32_t length = (uint32_t)CMCall(data, GetSize);
+    const uint32_t length = (uint32_t)CMCall(data, GetSize);
     return CMCall(sock, WritePart, data, 0, length, timeout);
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SocketWritePart(
-        const CMUTIL_Socket *sock, CMUTIL_String *data,
+        const CMUTIL_Socket *sock, CMUTIL_ByteBuffer *data,
         int offset, uint32_t length, long timeout)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
@@ -572,7 +572,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWritePart(
         rc = (int)send(isock->sock, CMCall(data, GetCString) + offset,
                        size, MSG_NOSIGNAL);
 #else
-        rc = (int)send(isock->sock, CMCall(data, GetCString) + offset,
+        rc = (int)send(isock->sock, CMCall(data, GetBytes) + offset,
                        (int)size, 0);
 #endif
         if (rc == SOCKET_ERROR) {
@@ -1331,13 +1331,13 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketCheckWriteBuffer(
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
-        const CMUTIL_Socket *sock, CMUTIL_String *buffer,
+        const CMUTIL_Socket *sock, CMUTIL_ByteBuffer *buffer,
         uint32_t size, long timeout)
 {
     const CMUTIL_SSLSocket_Internal *isck =
             (const CMUTIL_SSLSocket_Internal*)sock;
     CMSocketResult res;
-    char buf[1024];
+    uint8_t buf[1024];
     int rc, cnt = 0;
     size_t rsz;
 #if defined(CMUTIL_SSL_USE_OPENSSL)
@@ -1364,7 +1364,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
                     CMLogError("SSL read failed");
                     return CMSocketReceiveFailed;
                 }
-                CMCall(buffer, AddNString, buf, (uint32_t)rc);
+                CMCall(buffer, AddBytes, buf, (uint32_t)rc);
                 size -= (uint32_t)rc;
                 if (size == 0)
                     return CMSocketOk;
@@ -1453,7 +1453,7 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLSocketReadSocket(
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
-        const CMUTIL_Socket *sock, CMUTIL_String *data,
+        const CMUTIL_Socket *sock, CMUTIL_ByteBuffer *data,
         int offset, uint32_t length, long timeout)
 {
     const CMUTIL_SSLSocket_Internal *isck =
@@ -1461,7 +1461,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
     CMSocketResult res;
     int rc, cnt = 0;
     uint32_t size = length;
-    const char *buf = CMCall(data, GetCString) + offset;
+    const uint8_t *buf = CMCall(data, GetBytes) + offset;
 #if defined(CMUTIL_SSL_USE_OPENSSL)
     int in_init=0;
 
