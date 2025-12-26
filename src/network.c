@@ -569,7 +569,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWritePart(
         if (sr != CMSocketOk) return sr;
 
 #if defined(LINUX)
-        rc = (int)send(isock->sock, CMCall(data, GetCString) + offset,
+        rc = (int)send(isock->sock, data + offset,
                        size, MSG_NOSIGNAL);
 #else
         rc = (int)send(isock->sock, ((uint8_t*)data) + offset,
