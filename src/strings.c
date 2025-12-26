@@ -179,6 +179,7 @@ static struct CMUTIL_CSPair {
 static CMUTIL_Map *g_cmutil_csmap = NULL;
 #else
 # include <iconv.h>
+# include <errno.h>
 #endif
 
 CMUTIL_LogDefine("cmutil.string")
@@ -219,48 +220,55 @@ struct CMUTIL_String_Internal {
     CMUTIL_Mem      *memst;
 };
 
-CMUTIL_STATIC void CMUTIL_StringCheckSize(
+CMUTIL_STATIC CMBool CMUTIL_StringCheckSize(
         CMUTIL_String_Internal *str, size_t insize)
 {
     size_t reqsz = (str->size + insize + 1);
     if (str->capacity < reqsz) {
         size_t newcap = str->capacity * 2;
+        void *orig = str->data;
         while (newcap < reqsz) newcap *= 2;
         str->data = str->memst->Realloc(str->data, newcap);
+        if (str->data == NULL) {
+            str->data = orig;
+            CMLogErrorS("Failed to reallocate memory for string. %d:%s",
+                errno, strerror(errno));
+            return CMFalse;
+        }
         str->capacity = newcap;
     }
+    return CMTrue;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringAddString(CMUTIL_String *string,
         const char *tobeadded)
 {
     if (tobeadded) {
-        CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
-        register const char *p = tobeadded;
-
-        while (*p) {
-            CMUTIL_StringCheckSize(istr, 1);
-            istr->data[istr->size++] = *p++;
-        }
-        istr->data[istr->size] = 0x0;
-        return (ssize_t)istr->size;
+        const size_t size = strlen(tobeadded);
+        const ssize_t ret = CMCall(string, AddNString, tobeadded, size);
+        if (ret < 0)
+            CMLogError("CMUTIL_String AddNString failed");
+        return ret;
     }
     CMLogErrorS("invalid argument. %s", tobeadded == NULL ? "NULL" : "");
     return -1;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringAddNString(CMUTIL_String *string,
-        const char *tobeadded, size_t size)
+        const char *tobeadded, const size_t size)
 {
     if (tobeadded && size > 0) {
         CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
-        CMUTIL_StringCheckSize(istr, size);
+        if (!CMUTIL_StringCheckSize(istr, size)) {
+            CMLogError("CMUTIL_StringCheckSize failed");
+            return -1;
+        }
         memcpy(istr->data + istr->size, tobeadded, size);
         istr->size += size;
         istr->data[istr->size] = 0x0;
         return (ssize_t)istr->size;
     }
-    CMLogErrorS("invalid argument. %s, size: %u",
+    CMLogErrorS("invalid argument. %s, size: %zu",
         tobeadded == NULL ? "NULL" : "", size);
     return -1;
 }
@@ -269,7 +277,10 @@ CMUTIL_STATIC ssize_t CMUTIL_StringAddChar(CMUTIL_String *string, char tobeadded
 {
     CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
 
-    CMUTIL_StringCheckSize(istr, 1);
+    if (!CMUTIL_StringCheckSize(istr, 1)) {
+        CMLogError("CMUTIL_StringCheckSize failed");
+        return -1;
+    }
     istr->data[istr->size++] = tobeadded;
 
     istr->data[istr->size] = 0x0;
@@ -284,6 +295,8 @@ CMUTIL_STATIC ssize_t CMUTIL_StringAddPrint(
     va_start(args, fmt);
     ir = CMCall(string, AddVPrint, fmt, args);
     va_end(args);
+    if (ir < 0)
+        CMLogError("CMUTIL_String AddVPrint failed");
     return ir;
 }
 
@@ -293,7 +306,14 @@ CMUTIL_STATIC ssize_t CMUTIL_StringAddVPrint(
     if (fmt) {
         char buf[4096];
         ssize_t len = vsnprintf(buf, sizeof(buf), fmt, args);
-        return CMCall(string, AddNString, buf, len);
+        if (len < 0) {
+            CMLogErrorS("vsnprintf failed. %d:%s", errno, strerror(errno));
+            return -1;
+        }
+        len = CMCall(string, AddNString, buf, len);
+        if (len < 0)
+            CMLogError("CMUTIL_String AddNString failed");
+        return len;
     }
     CMLogErrorS("invalid argument. %s", fmt == NULL ? "NULL" : "");
     return -1;
@@ -305,54 +325,72 @@ CMUTIL_STATIC ssize_t CMUTIL_StringAddAnother(
     if (tobeadded) {
         const char *str = CMCall(tobeadded, GetCString);
         const size_t len = CMCall(tobeadded, GetSize);
-        return CMCall(string, AddNString, str, len);
+        const ssize_t ret = CMCall(string, AddNString, str, len);
+        if (ret < 0)
+            CMLogError("CMUTIL_String AddNString failed");
+        return ret;
     }
     CMLogErrorS("invalid argument. %s", tobeadded == NULL ? "NULL" : "");
     return -1;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringInsertString(CMUTIL_String *string,
-        const char *tobeadded, uint32_t at)
+        const char *tobeadded, const uint32_t at)
 {
     size_t size = strlen((const char*)tobeadded);
-    return CMCall(string, InsertNString, tobeadded, at, size);
+    const ssize_t ret = CMCall(string, InsertNString, tobeadded, at, size);
+    if (ret < 0)
+        CMLogError("CMUTIL_String InsertNString failed");
+    return ret;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringInsertNString(CMUTIL_String *string,
-        const char *tobeadded, uint32_t at, size_t size)
+        const char *tobeadded, const uint32_t at, const size_t size)
 {
     if (tobeadded && size > 0) {
         CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
-        CMUTIL_StringCheckSize(istr, size);
+        if (!CMUTIL_StringCheckSize(istr, size)) {
+            CMLogError("CMUTIL_StringCheckSize failed");
+            return -1;
+        }
         memmove(istr->data+at+size, istr->data+at, istr->size-(size_t)at+1);
         memcpy(istr->data+at, tobeadded, size);
         istr->size += size;
         return (ssize_t)istr->size;
     }
-    CMLogErrorS("invalid argument. %s, size: %u",
+    CMLogErrorS("invalid argument. %s, size: %zu",
         tobeadded == NULL ? "NULL" : "", size);
     return -1;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringInsertPrint(
-        CMUTIL_String *string, uint32_t idx, const char *fmt, ...)
+        CMUTIL_String *string, const uint32_t idx, const char *fmt, ...)
 {
     va_list args;
     ssize_t ir;
     va_start(args, fmt);
     ir = CMCall(string, InsertVPrint, idx, fmt, args);
     va_end(args);
+    if (ir < 0)
+        CMLogError("CMUTIL_String InsertVPrint failed");
     return ir;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringInsertVPrint(
-        CMUTIL_String *string, uint32_t idx, const char *fmt, va_list args)
+        CMUTIL_String *string, const uint32_t idx,
+        const char *fmt, va_list args)
 {
     if (fmt) {
         char buf[4096];
-        const ssize_t len = vsnprintf(buf, sizeof(buf), fmt, args);
-        const ssize_t ir = CMCall(string, InsertNString, buf, idx, len);
-        return ir;
+        ssize_t len = vsnprintf(buf, sizeof(buf), fmt, args);
+        if (len < 0) {
+            CMLogErrorS("vsnprintf failed. %d:%s", errno, strerror(errno));
+            return -1;
+        }
+        len = CMCall(string, InsertNString, buf, idx, len);
+        if (len < 0)
+            CMLogError("CMUTIL_String InsertNString failed");
+        return len;
     }
     CMLogErrorS("invalid argument. %s", fmt == NULL ? "NULL" : "");
     return -1;
@@ -362,8 +400,11 @@ CMUTIL_STATIC ssize_t CMUTIL_StringInsertAnother(
         CMUTIL_String *string, uint32_t idx, CMUTIL_String *tobeadded)
 {
     const char *str = CMCall(tobeadded, GetCString);
-    const ssize_t len = CMCall(tobeadded, GetSize);
-    return CMCall(string, InsertNString, str, idx, len);
+    ssize_t len = CMCall(tobeadded, GetSize);
+    len = CMCall(string, InsertNString, str, idx, len);
+    if (len < 0)
+        CMLogError("CMUTIL_String InsertNString failed");
+    return len;
 }
 
 CMUTIL_STATIC void CMUTIL_StringCutTailOff(
@@ -388,6 +429,9 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringSubstring(
             len = istr->size - offset;
         res = CMUTIL_StringCreateInternal(istr->memst, len, NULL);
         CMCall(res, AddNString, istr->data + offset, len);
+    } else {
+        CMLogErrorS("invalid argument. offset: %zu, length: %zu",
+            offset, length);
     }
     return res;
 }
@@ -432,6 +476,8 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringToUpper(
             *p++ = (char)toupper(*q++);
         *p = 0x0;
         res->size = istr->size;
+    } else {
+        CMLogError("CMUTIL_StringCreateInternal failed");
     }
     return (CMUTIL_String*)res;
 }
@@ -463,17 +509,30 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringReplace(
         prv = istr->data;
         cur = strstr(prv, needle);
         while (cur) {
-            if (cur - prv)
-                CMCall(res, AddNString, prv, (size_t)(cur-prv));
-            CMCall(res, AddString, alter);
+            ssize_t ir;
+            if (cur - prv) {
+                ir = CMCall(res, AddNString, prv, (size_t)(cur-prv));
+                if (ir < 0) {
+                    CMLogError("CMUTIL_String AddNString failed");
+                    goto FAIL_POINT;
+                }
+            }
+            ir = CMCall(res, AddString, alter);
+            if (ir < 0) {
+                CMLogError("CMUTIL_String AddString failed");
+                goto FAIL_POINT;
+            }
             cur += nlen; prv = cur;
             cur = strstr(prv, needle);
         }
         CMCall(res, AddString, prv);
     } else {
-        CMLogErrorS("not enough memory.");
+        CMLogError("CMUTIL_StringCreateInternal failed");
     }
     return res;
+FAIL_POINT:
+    if (res) CMCall(res, Destroy);
+    return NULL;
 }
 
 CMUTIL_STATIC size_t CMUTIL_StringGetSize(const CMUTIL_String *string)
@@ -488,11 +547,13 @@ CMUTIL_STATIC const char *CMUTIL_StringGetCString(const CMUTIL_String *string)
     return istr->data;
 }
 
-CMUTIL_STATIC int CMUTIL_StringGetChar(const CMUTIL_String *string, uint32_t idx)
+CMUTIL_STATIC int CMUTIL_StringGetChar(
+    const CMUTIL_String *string, const uint32_t idx)
 {
     const CMUTIL_String_Internal *istr = (const CMUTIL_String_Internal*)string;
     if (idx < istr->size)
         return (int)istr->data[idx];
+    CMLogErrorS("invalid argument. idx: %zu", idx);
     return -1;
 }
 
@@ -510,6 +571,10 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringClone(const CMUTIL_String *string)
     const char *str = CMCall(string, GetCString);
     CMUTIL_String *res =
             CMUTIL_StringCreateInternal(istr->memst, size, NULL);
+    if (!res) {
+        CMLogError("CMUTIL_StringCreateInternal failed");
+        return NULL;
+    }
     CMCall(res, AddNString, str, size);
     return res;
 }
@@ -585,37 +650,56 @@ CMUTIL_String *CMUTIL_StringCreateInternal(
         size_t initcapacity,
         const char *initcontent)
 {
-    CMUTIL_String_Internal *istr = memst->Alloc(sizeof(CMUTIL_String_Internal));
     size_t capacity = initcapacity;
-    const size_t len = initcontent ? strlen(initcontent) : 0;
+    ssize_t len = initcontent ? (ssize_t)strlen(initcontent) : 0;
+    CMUTIL_String_Internal *istr = memst->Alloc(sizeof(CMUTIL_String_Internal));
+    if (!istr) {
+        CMLogErrorS("memory allocation failed");
+        return NULL;
+    }
     memset(istr, 0x0, sizeof(CMUTIL_String_Internal));
     memcpy(istr, &g_cmutil_string, sizeof(CMUTIL_String));
+
+    istr->memst = memst;
 
     if (capacity <= 0) {
         if (initcontent) {
             capacity = len;
         } else {
-            CMLogError("initcapacty must be positive when initcontent is null");
+            CMLogErrorS("initcapacity must be positive when initcontent is null");
             memst->Free(istr);
             return NULL;
         }
     }
     istr->data = memst->Alloc(capacity+1);
+    if (!istr->data) {
+        CMLogErrorS("memory allocation failed");
+        memst->Free(istr);
+        return NULL;
+    }
     istr->capacity = capacity+1;
     *(istr->data) = 0x0;
-    istr->memst = memst;
 
-    if (initcontent && len > 0)
-        CMCall((CMUTIL_String*)istr, AddNString, initcontent, len);
+    if (initcontent && len > 0) {
+        len = CMCall((CMUTIL_String*)istr, AddNString, initcontent, len);
+        if (len < 0) {
+            CMLogError("CMUTIL_String AddNString failed");
+            CMCall((CMUTIL_String*)istr, Destroy);
+            return NULL;
+        }
+    }
     return (CMUTIL_String*)istr;
 }
 
 CMUTIL_String *CMUTIL_StringCreateEx(
-        size_t initcapacity,
+        const size_t initcapacity,
         const char *initcontent)
 {
-    return CMUTIL_StringCreateInternal(
+    CMUTIL_String *res = CMUTIL_StringCreateInternal(
                 CMUTIL_GetMem(), initcapacity, initcontent);
+    if (!res)
+        CMLogError("CMUTIL_StringCreateInternal failed");
+    return res;
 }
 
 
@@ -635,7 +719,7 @@ CMUTIL_STATIC void CMUTIL_StringArrayAdd(
         CMUTIL_StringArray *array, CMUTIL_String *string)
 {
     CMUTIL_StringArray_Internal *iarray = (CMUTIL_StringArray_Internal*)array;
-    CMCall(iarray->array, Add, string);
+    CMCall(iarray->array, Add, string, NULL);
 }
 
 CMUTIL_STATIC void CMUTIL_StringArrayAddCString(

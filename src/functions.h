@@ -180,6 +180,13 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(CMUTIL_Mem *memst,
         CMBool testonborrow,
         void *udata, CMUTIL_Timer *timer);
 
+CMUTIL_Process *CMUTIL_ProcessCreateInternal(
+        CMUTIL_Mem *memst,
+        const char *cwd,
+        CMUTIL_Map *env,
+        const char *command,
+        CMUTIL_StringArray *args);
+
 CMUTIL_String *CMUTIL_StringCreateInternal(
         CMUTIL_Mem *memst,
         size_t initcapacity,

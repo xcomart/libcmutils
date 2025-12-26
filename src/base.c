@@ -47,11 +47,11 @@ void CMUTIL_Init(CMMemOper memoper)
         CMUTIL_LogInit();
         CMUTIL_LogSystem *log_system = CMUTIL_LogSystemGet();
         if (log_system) {
-            CMUTIL_Logger *log = CMCall(log_system, GetLogger, "cmutil");
+            CMUTIL_Logger *log = CMCall(log_system, GetLogger, "cmutils");
             if (log) {
                 log->LogEx(log, CMLogLevel_Debug,
                     __FILE__, __LINE__, CMFalse,
-                    "libcmutil version %s", CMUTIL_GetLibVersion());
+                    "libcmutils version %s", CMUTIL_GetLibVersion());
             }
         } else {
             CMUTIL_LogFallback(CMLogLevel_Debug, __FILE__, __LINE__,

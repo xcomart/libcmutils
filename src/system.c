@@ -112,9 +112,14 @@ CMUTIL_STATIC void *CMUTIL_LibraryGetProcedure(
         proc = dlsym(ilib->library, proc_name);
 #endif
         if (proc)
-            CMCall(ilib->procs, Put, proc_name, proc);
+            CMCall(ilib->procs, Put, proc_name, proc, NULL);
     }
     CMCall(ilib->mutex, Unlock);
+    if (proc == NULL) {
+        CMLogErrorS("Failed to get procedure %s, %d:%s",
+            proc_name, errno, strerror(errno));
+        return NULL;
+    }
     return proc;
 }
 
@@ -443,7 +448,7 @@ CMUTIL_STATIC CMUTIL_FileList *CMUTIL_FileChildren(const CMUTIL_File *file)
                 CMUTIL_File *f = CMUTIL_FileCreateInternal(
                             ifile->memst, pathbuf);
                 ((CMUTIL_File_Internal*)f)->isref = CMTrue;
-                CMCall(flist->files, Add, f);
+                CMCall(flist->files, Add, f, NULL);
             }
         }
         closedir(dirp);
@@ -477,7 +482,7 @@ CMUTIL_STATIC void CMUTIL_FileFindFileOper(
                         flist->memst, filepath);
             if (f) {
                 ((CMUTIL_File_Internal*)f)->isref = CMTrue;
-                CMCall(flist->files, Add, f);
+                CMCall(flist->files, Add, f, NULL);
             } else {
                 CMLogError("file creation failed for %s", filepath);
             }

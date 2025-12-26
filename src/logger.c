@@ -411,7 +411,7 @@ void CMUTIL_LogInit()
         g_cmutil_log_type_arr[i] = (CMUTIL_LogFormatType)i;
 
 #define LOGTYPE_ADD(a, b) CMCall(g_cmutil_log_item_map, Put, a, \
-        &g_cmutil_log_type_arr[b])
+        &g_cmutil_log_type_arr[b], NULL)
 
     LOGTYPE_ADD("d"             , LogType_DateTime);
     LOGTYPE_ADD("date"          , LogType_DateTime);
@@ -441,15 +441,15 @@ void CMUTIL_LogInit()
     LOGTYPE_ADD("n"             , LogType_LineSeparator);
 
     g_cmutil_log_datefmt_map = CMUTIL_MapCreate();
-    CMCall(g_cmutil_log_datefmt_map, Put, "DEFAULT", "%F %T.%Q");
-    CMCall(g_cmutil_log_datefmt_map, Put, "ISO8601", "%FT%T.%Q");
+    CMCall(g_cmutil_log_datefmt_map, Put, "DEFAULT", "%F %T.%Q", NULL);
+    CMCall(g_cmutil_log_datefmt_map, Put, "ISO8601", "%FT%T.%Q", NULL);
     CMCall(g_cmutil_log_datefmt_map, Put,
-                "ISO8601_BASIC", "%Y%m%dT%H%M%S.%Q");
-    CMCall(g_cmutil_log_datefmt_map, Put, "ABSOLUTE", "%T.%Q");
-    CMCall(g_cmutil_log_datefmt_map, Put, "DATE", "%d %b %Y %T.%Q");
-    CMCall(g_cmutil_log_datefmt_map, Put, "COMPACT", "%Y%m%d%H%M%S.%Q");
-    CMCall(g_cmutil_log_datefmt_map, Put, "GENERAL", "%Y%m%d %H%M%S.%Q");
-    CMCall(g_cmutil_log_datefmt_map, Put, "UNIX", "%s%Q");
+                "ISO8601_BASIC", "%Y%m%dT%H%M%S.%Q", NULL);
+    CMCall(g_cmutil_log_datefmt_map, Put, "ABSOLUTE", "%T.%Q", NULL);
+    CMCall(g_cmutil_log_datefmt_map, Put, "DATE", "%d %b %Y %T.%Q", NULL);
+    CMCall(g_cmutil_log_datefmt_map, Put, "COMPACT", "%Y%m%d%H%M%S.%Q", NULL);
+    CMCall(g_cmutil_log_datefmt_map, Put, "GENERAL", "%Y%m%d %H%M%S.%Q", NULL);
+    CMCall(g_cmutil_log_datefmt_map, Put, "UNIX", "%s%Q", NULL);
 
     g_cmutil_log_levels = CMUTIL_StringArrayCreate();
     CMCall(g_cmutil_log_levels, Add,
@@ -679,7 +679,8 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
                         const char *skey = CMCall(v, GetCString);
                         if (CMCall(map, Get, skey) == NULL) {
                             CMUTIL_String *d = CMCall(v, Substring, 0, len);
-                            CMUTIL_String *prev = CMCall(map, Put, skey, d);
+                            CMUTIL_String *prev = NULL;
+                            CMCall(map, Put, skey, d, (void**)&prev);
                             if (prev) CMCall(prev, Destroy);
                         }
                     }
@@ -694,7 +695,8 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
                     const char *skey = CMCall(v, GetCString);
                     if (CMCall(map, Get, skey) == NULL) {
                         CMUTIL_String *d = CMCall(v, ToLower);
-                        CMUTIL_String *prev = CMCall(map, Put, skey, d);
+                        CMUTIL_String *prev = NULL;
+                        CMCall(map, Put, skey, d, (void**)&prev);
                         if (prev) CMCall(prev, Destroy);
                     }
                 }
@@ -705,7 +707,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
                 CMUTIL_String *prev = NULL;
                 // pill-off quotations
                 val = CMUTIL_LogTokenPillOff(item->memst, val);
-                prev = (CMUTIL_String*)CMCall(map, Put, ks, val);
+                CMCall(map, Put, ks, val, (void**)&prev);
                 if (prev) CMCall(prev, Destroy);
             }
         }
@@ -1455,7 +1457,7 @@ CMUTIL_STATIC void *CMUTIL_LogSocketAppenderAcceptor(void *data)
         CMUTIL_Socket *cli = NULL;
         const CMSocketResult sr = CMCall(iap->listener, Accept, &cli, 1000);
         if (sr == CMSocketOk) {
-            CMSync(iap->base.mutex, CMCall(iap->clients, Add, cli););
+            CMSync(iap->base.mutex, CMCall(iap->clients, Add, cli, NULL););
         }
     }
     return NULL;
@@ -1546,7 +1548,7 @@ CMUTIL_STATIC void CMUTIL_LogSystemAddAppender(
     const char *name = CMCall(appender, GetName);
     CMSync(ilsys->mutex, {
         if (CMCall(ilsys->appenders, Get, name) == NULL)
-            CMCall(ilsys->appenders, Put, name, appender);
+            CMCall(ilsys->appenders, Put, name, appender, NULL);
     });
 }
 
@@ -1609,7 +1611,7 @@ CMUTIL_STATIC void CMUTIL_ConfLoggerAddAppender(
     for ( ;level <= CMLogLevel_Fatal; level++) {
         CMUTIL_Array *lapndrs = (CMUTIL_Array*)CMCall(
                     cli->lvlapndrs, GetAt, level);
-        CMCall(lapndrs, Add, appender);
+        CMCall(lapndrs, Add, appender, NULL);
     }
 }
 
@@ -1634,12 +1636,12 @@ CMUTIL_STATIC CMUTIL_ConfLogger *CMUTIL_LogSystemCreateLogger(
     for (i=0; i<lvllen; i++) {
         CMCall(res->lvlapndrs, Add, CMUTIL_ArrayCreateInternal(
                    ilsys->memst, 3, CMUTIL_LogAppenderComparator,
-                   NULL, CMTrue));
+                   NULL, CMTrue), NULL);
     }
-    CMCall(ilsys->cloggers, Add, res);
+    CMCall(ilsys->cloggers, Add, res, NULL);
     for (i=level; i<lvllen; i++) {
         CMUTIL_Array* lvllog = CMCall(ilsys->levelloggers, GetAt, i);
-        CMCall(lvllog, Add, res);
+        CMCall(lvllog, Add, res, NULL);
     }
     res->base.AddAppender = CMUTIL_ConfLoggerAddAppender;
     res->Log = CMUTIL_ConfLoggerLog;
@@ -1724,38 +1726,38 @@ CMUTIL_STATIC CMUTIL_Logger *CMUTIL_LogSystemGetLogger(
     CMUTIL_Logger_Internal* res = NULL;
     q.fullname = CMUTIL_StringCreateInternal(ilsys->memst, 20, name);
 
-    CMSync(ilsys->mutex, {
-        res = (CMUTIL_Logger_Internal*)CMCall(ilsys->loggers, Find, &q, NULL);
-        if (res == NULL) {
-            uint32_t i;
-            // create logger
-            res = ilsys->memst->Alloc(sizeof(CMUTIL_Logger_Internal));
-            memset(res, 0x0, sizeof(CMUTIL_Logger_Internal));
-            res->memst = ilsys->memst;
-            res->fullname = q.fullname;
-            res->namepath = CMUTIL_StringSplitInternal(ilsys->memst, name, ".");
-            res->logrefs = CMUTIL_ArrayCreateInternal(
-                        ilsys->memst, 3, CMUTIL_LoggerRefComparator, NULL, CMTrue);
-            res->minlevel = CMLogLevel_Fatal;
-            for (i=0; i<CMCall(ilsys->cloggers, GetSize); i++) {
-                CMUTIL_ConfLogger_Internal *cl = (CMUTIL_ConfLogger_Internal*)
-                        CMCall(ilsys->cloggers, GetAt, i);
-                // adding root logger and parent loggers
-                if (strlen(cl->name) == 0 || strstr(name, cl->name) == 0) {
-                    CMCall(res->logrefs, Add, cl);
-                    if (res->minlevel > cl->level)
-                        res->minlevel = cl->level;
-                }
+    CMCall(ilsys->mutex, Lock);
+    res = (CMUTIL_Logger_Internal*)CMCall(ilsys->loggers, Find, &q, NULL);
+    if (res == NULL) {
+        uint32_t i;
+        // create logger
+        res = ilsys->memst->Alloc(sizeof(CMUTIL_Logger_Internal));
+        memset(res, 0x0, sizeof(CMUTIL_Logger_Internal));
+        res->memst = ilsys->memst;
+        res->fullname = q.fullname;
+        res->namepath = CMUTIL_StringSplitInternal(ilsys->memst, name, ".");
+        res->logrefs = CMUTIL_ArrayCreateInternal(
+                    ilsys->memst, 3, CMUTIL_LoggerRefComparator, NULL, CMTrue);
+        res->minlevel = CMLogLevel_Fatal;
+        for (i=0; i<CMCall(ilsys->cloggers, GetSize); i++) {
+            CMUTIL_ConfLogger_Internal *cl = (CMUTIL_ConfLogger_Internal*)
+                    CMCall(ilsys->cloggers, GetAt, i);
+            // adding root logger and parent loggers
+            if (strlen(cl->name) == 0 || strstr(name, cl->name) == 0) {
+                CMCall(res->logrefs, Add, cl, NULL);
+                if (res->minlevel > cl->level)
+                    res->minlevel = cl->level;
             }
-            // logex and destroyer
-            res->base.LogEx = CMUTIL_LoggerLogEx;
-            res->base.IsEnabled = CMUTIL_LoggerIsEnabled;
-            res->Destroy = CMUTIL_LoggerDestroy;
-            CMCall(ilsys->loggers, Add, res);
-        } else {
-            CMCall(q.fullname, Destroy);
         }
-    });
+        // logex and destroyer
+        res->base.LogEx = CMUTIL_LoggerLogEx;
+        res->base.IsEnabled = CMUTIL_LoggerIsEnabled;
+        res->Destroy = CMUTIL_LoggerDestroy;
+        CMCall(ilsys->loggers, Add, res, NULL);
+    } else {
+        CMCall(q.fullname, Destroy);
+    }
+    CMCall(ilsys->mutex, Unlock);
     return (CMUTIL_Logger*)res;
 }
 
@@ -1835,7 +1837,8 @@ CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem *memst)
                 CMUTIL_DoubleArrayDestroyer, CMFalse);
     for (i=0; i<(CMLogLevel_Fatal+1); i++)
         CMCall(res->levelloggers, Add, CMUTIL_ArrayCreateInternal(
-                        memst, 3, CMUTIL_ConfLoggerComparator, NULL, CMTrue));
+                        memst, 3, CMUTIL_ConfLoggerComparator, NULL, CMTrue),
+                        NULL);
     res->loggers = CMUTIL_ArrayCreateInternal(
                 memst, 50, CMUTIL_LoggerComparator,
                 CMUTIL_LoggerDestroyer, CMTrue);

@@ -226,7 +226,7 @@ CMUTIL_STATIC void *CMUTIL_MemRcyAlloc(size_t size)
         node = (CMUTIL_MemNode*)res;
         node->index = idx;
     }
-    CMCall(list->used, Add, node);
+    CMCall(list->used, Add, node, NULL);
     list->usedsize += size;
     CMCall(list->mutex, Unlock);
     node->size = size;
