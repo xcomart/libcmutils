@@ -38,8 +38,8 @@ int main() {
 
     ASSERT(map != NULL, "CMUTIL_MapCreate");
 
-    CMCall(map, Put, "key1", "value1");
-    CMCall(map, Put, "key2", "value2");
+    CMCall(map, Put, "key1", "value1", NULL);
+    CMCall(map, Put, "key2", "value2", NULL);
     ASSERT(strcmp(CMCall(map, Get, "key1"), "value1") == 0, "CMUTIL_Map Put/Get");
 
     ASSERT(strcmp(CMCall(map, Remove, "key2"), "value2") == 0, "CMUTIL_Map Remove");
@@ -54,7 +54,7 @@ int main() {
         char vbuf[20];
         sprintf(kbuf, "key%d", i);
         sprintf(vbuf, "value%d", i);
-        CMCall(map, Put, kbuf, CMStrdup(vbuf));
+        CMCall(map, Put, kbuf, CMStrdup(vbuf), NULL);
     }
 
     ASSERT(strcmp(CMCall(map, Get, "KEY1"), "value1") == 0 && strcmp(CMCall(map, Get, "key1"), "value1") == 0, "CMUTIL_Map Put/Get case insensitive");

@@ -148,7 +148,7 @@ CMUTIL_STATIC void CMUTIL_SSL_InitOpenSSLLocks(void)
     uint32_t i, nl = (uint32_t)CRYPTO_num_locks();
     g_cmutil_openssl_locks = CMUTIL_ArrayCreateEx(nl, NULL, NULL);
     for (i=0; i<nl; i++)
-        CMCall(g_cmutil_openssl_locks, Add, CMUTIL_MutexCreate());
+        CMCall(g_cmutil_openssl_locks, Add, CMUTIL_MutexCreate(), NULL);
 }
 
 static void CMUTIL_SSL_ClearOpenSSLLocks(void)

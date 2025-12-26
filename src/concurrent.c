@@ -502,6 +502,7 @@ CMUTIL_STATIC void *CMUTIL_ThreadProc(void *param)
 #endif
 {
     CMUTIL_Thread_Internal *iparam = (CMUTIL_Thread_Internal*)param;
+    void *res = NULL;
 
     iparam->isrunning = CMTrue;
 
@@ -510,8 +511,13 @@ CMUTIL_STATIC void *CMUTIL_ThreadProc(void *param)
 
     // we must add this thread in the global pool before start user callback.
     CMCall(g_cmutil_thread_context->mutex, Lock);
-    CMCall(g_cmutil_thread_context->threads, Add, iparam);
+    CMCall(g_cmutil_thread_context->threads, Add, iparam, &res);
     CMCall(g_cmutil_thread_context->mutex, Unlock);
+    if (res != NULL) {
+        CMLogErrorS("Previous thread found with same system thread id, "
+            "this situation may not happen, please report to developer. "
+            "With below callstack");
+    }
 
     iparam->retval = iparam->proc(iparam->udata);
 
@@ -588,7 +594,11 @@ CMUTIL_STATIC CMBool CMUTIL_ThreadStart(CMUTIL_Thread *thread)
     ithread->sysid = (uint64_t)ithread->thread;
 #endif
 
-    return ir == 0? CMTrue:CMFalse;
+    if (ir != 0) {
+        CMLogErrorS("Failed to create thread. %d:%s", errno, strerror(errno));
+        return CMFalse;
+    }
+    return CMTrue;
 }
 
 CMUTIL_STATIC uint32_t CMUTIL_ThreadGetId(const CMUTIL_Thread *thread)
@@ -1306,8 +1316,8 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerTaskCreate(
         res->base.Cancel = CMUTIL_TimerTaskCancel;
 
         CMSync(itimer->mutex, {
-            CMCall(itimer->scheduled, Add, res);
-            CMCall(itimer->alltasks, Add, res);
+            CMCall(itimer->scheduled, Add, res, NULL);
+            CMCall(itimer->alltasks, Add, res, NULL);
         });
 
         return (CMUTIL_TimerTask*)res;
@@ -1468,7 +1478,7 @@ CMUTIL_STATIC void CMUTIL_TimerWorker(void *param)
         isfree = CMTrue;
     }
     else if (addedto) {
-        CMCall(addedto, Add, itask);
+        CMCall(addedto, Add, itask, NULL);
     }
     CMCall(itimer->mutex, Unlock);
 
@@ -1507,7 +1517,14 @@ CMUTIL_STATIC int CMUTIL_TimerTaskComp(const void *a, const void *b)
 {
     const CMUTIL_TimerTask_Internal *ta = (const CMUTIL_TimerTask_Internal*)a;
     const CMUTIL_TimerTask_Internal *tb = (const CMUTIL_TimerTask_Internal*)b;
-    return CMUTIL_TimerTVCompare(&(ta->nextrun), &(tb->nextrun));
+    int ret = CMUTIL_TimerTVCompare(&(ta->nextrun), &(tb->nextrun));
+    if (ret == 0) ret = (int)(ta->period - tb->period);
+    if (ret == 0) ret = (int)(ta - tb);
+    if (ret == 0) {
+        CMLogErrorS("TimerTask with same address, this cannot be happen. "
+                    "Please report to developer. With below callstack.");
+    }
+    return ret;
 }
 
 CMUTIL_STATIC int CMUTIL_TimerAddrComp(const void *a, const void *b)

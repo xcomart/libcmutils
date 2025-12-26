@@ -46,17 +46,24 @@ typedef struct CMUTIL_Array_Internal {
 } CMUTIL_Array_Internal;
 
 
-CMUTIL_STATIC void CMUTIL_ArrayCheckSize(
-        CMUTIL_Array_Internal *array, size_t insize)
+CMUTIL_STATIC CMBool CMUTIL_ArrayCheckSize(
+        CMUTIL_Array_Internal *array, const size_t insize)
 {
+    void *origdata = array->data;
     size_t reqsz = (array->size + insize);
     if (array->capacity < reqsz) {
         size_t newcap = array->size * 2;
         while (newcap < reqsz) newcap *= 2;
         array->data = array->memst->Realloc(
                     array->data, (uint32_t)newcap * sizeof(void*));
+        if (array->data == NULL) {
+            CMLogErrorS("Failed to allocate memory for array.");
+            array->data = origdata;
+            return CMFalse;
+        }
         array->capacity = newcap;
     }
+    return CMTrue;
 }
 
 CMUTIL_STATIC int CMUTIL_ArraySearchPrivate(
@@ -105,7 +112,10 @@ CMUTIL_STATIC void* CMUTIL_ArrayInsertAtPrivate(
 {
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
 
-    CMUTIL_ArrayCheckSize(iarray, 1);
+    if (!CMUTIL_ArrayCheckSize(iarray, 1)) {
+        CMLogError("CMUTIL_ArrayCheckSize failed");
+        return NULL;
+    }
     if (index < iarray->size) {
         memmove(iarray->data+index+1, iarray->data+index,
                 (uint32_t)(iarray->size - index) * sizeof(void*));
@@ -125,8 +135,12 @@ CMUTIL_STATIC void* CMUTIL_ArrayInsertAt(
 {
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
 
-    if (!iarray->issorted)
-        return CMUTIL_ArrayInsertAtPrivate(array, item, index);
+    if (!iarray->issorted) {
+        void *ret = CMUTIL_ArrayInsertAtPrivate(array, item, index);
+        if (!ret)
+            CMLogError("CMUTIL_ArrayInsertAtPrivate failed");
+        return ret;
+    }
     CMLogErrorS("InsertAt is not applicable to sorted array.");
     return NULL;
 }
@@ -151,15 +165,19 @@ CMUTIL_STATIC void* CMUTIL_ArraySetAt(
         CMUTIL_Array *array, void *item, uint32_t index)
 {
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
-    if (!iarray->issorted)
-        return CMUTIL_ArraySetAtPrivate(array, item, index);
+    if (!iarray->issorted) {
+        void *ret = CMUTIL_ArraySetAtPrivate(array, item, index);
+        if (!ret)
+            CMLogError("CMUTIL_ArraySetAtPrivate failed");
+        return ret;
+    }
     CMLogErrorS("SetAt is not applicable to sorted array.");
     return NULL;
 }
 
-CMUTIL_STATIC void *CMUTIL_ArrayAdd(CMUTIL_Array *array, void *item)
+CMUTIL_STATIC CMBool CMUTIL_ArrayAdd(CMUTIL_Array *array, void *item, void **ret)
 {
-    void *res = NULL;
+    CMBool result = CMTrue;
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
     if (iarray->issorted) {
         uint32_t index;
@@ -167,16 +185,24 @@ CMUTIL_STATIC void *CMUTIL_ArrayAdd(CMUTIL_Array *array, void *item)
                 iarray->comparator, &index);
         if (found == 1) {
             // found same data and duplication
-            res = CMCall(array, GetAt, index);
+            if (ret)
+                *ret = iarray->data[index];
             iarray->data[index] = item;
         } else if (found != 0) {
-            CMUTIL_ArrayInsertAtPrivate(array, item, index);
+            void *res = CMUTIL_ArrayInsertAtPrivate(array, item, index);
+            if (!res) {
+                CMLogError("CMUTIL_ArrayInsertAtPrivate failed");
+                result = CMFalse;
+            }
         }
     } else {
-        CMUTIL_ArrayCheckSize(iarray, 1);
+        if (!CMUTIL_ArrayCheckSize(iarray, 1)) {
+            CMLogError("CMUTIL_ArrayCheckSize failed");
+            return CMFalse;
+        }
         iarray->data[iarray->size++] = item;
     }
-    return res;
+    return result;
 }
 
 CMUTIL_STATIC void *CMUTIL_ArrayRemoveAt(
@@ -269,7 +295,10 @@ CMUTIL_STATIC CMBool CMUTIL_ArrayPush(CMUTIL_Array *array, void *item)
         CMLogErrorS("Push method cannot applicable to sorted array.");
         return CMFalse;
     }
-    CMCall(array, Add, item);
+    if (!CMCall(array, Add, item, NULL)) {
+        CMLogError("CMUTIL_Array Add failed");
+        return CMFalse;
+    }
     return CMTrue;
 }
 
@@ -291,7 +320,7 @@ CMUTIL_STATIC void *CMUTIL_ArrayTop(const CMUTIL_Array *array)
 
 CMUTIL_STATIC void *CMUTIL_ArrayBottom(const CMUTIL_Array *array)
 {
-    size_t size = CMCall(array, GetSize);
+    const size_t size = CMCall(array, GetSize);
     if (size > 0)
         return CMCall(array, GetAt, 0);
     return NULL;
@@ -341,6 +370,10 @@ CMUTIL_STATIC CMUTIL_Iterator *CMUTIL_ArrayIterator(const CMUTIL_Array *array)
     const CMUTIL_Array_Internal *iarray = (const CMUTIL_Array_Internal*)array;
     CMUTIL_ArrayIterator_st *res =
             iarray->memst->Alloc(sizeof(CMUTIL_ArrayIterator_st));
+    if (!res) {
+        CMLogError("Failed to allocate memory for array iterator.");
+        return NULL;
+    }
     memset(res, 0x0, sizeof(CMUTIL_ArrayIterator_st));
     memcpy(res, &g_cmutil_array_iterator, sizeof(CMUTIL_Iterator));
     res->iarray = iarray;
@@ -352,15 +385,15 @@ CMUTIL_STATIC void CMUTIL_ArrayClear(CMUTIL_Array *array)
 {
     CMUTIL_Array_Internal *iarray = (CMUTIL_Array_Internal*)array;
     if (iarray) {
-        if (iarray->data) {
-            if (iarray->freecb) {
-                for (uint32_t i = 0; i<iarray->size; i++)
-                    iarray->freecb(iarray->data[i]);
-            }
+        if (iarray->data && iarray->freecb) {
+            for (uint32_t i = 0; i<iarray->size; i++)
+                iarray->freecb(iarray->data[i]);
         }
         memset(iarray->data, 0x0,
                (uint32_t)iarray->capacity * sizeof(void*));
         iarray->size = 0;
+    } else {
+        CMLogErrorS("Array is NULL for CMUTIL_ArrayClear.");
     }
 }
 
@@ -405,10 +438,19 @@ CMUTIL_Array *CMUTIL_ArrayCreateInternal(
         CMBool sorted)
 {
     CMUTIL_Array_Internal *iarray = mem->Alloc(sizeof(CMUTIL_Array_Internal));
+    if (!iarray) {
+        CMLogErrorS("Failed to allocate memory for array.");
+        return NULL;
+    }
     memset(iarray, 0x0, sizeof(CMUTIL_Array_Internal));
 
     memcpy(iarray, &g_cmutil_array, sizeof(CMUTIL_Array));
     iarray->data = mem->Alloc(sizeof(void*) * (uint32_t)initcapacity);
+    if (!iarray->data) {
+        CMLogErrorS("Failed to allocate memory for array data.");
+        mem->Free(iarray);
+        return NULL;
+    }
     iarray->capacity = initcapacity;
     iarray->comparator = comparator;
     iarray->issorted = sorted;
@@ -422,9 +464,12 @@ CMUTIL_Array *CMUTIL_ArrayCreateEx(size_t initcapacity,
         CMCompareCB comparator,
         CMFreeCB freecb)
 {
-    return CMUTIL_ArrayCreateInternal(
+    CMUTIL_Array* ret = CMUTIL_ArrayCreateInternal(
                 CMUTIL_GetMem(), initcapacity,
                 comparator, freecb, comparator? CMTrue:CMFalse);
+    if (!ret)
+        CMLogError("CMUTIL_ArrayCreateInternal failed.");
+    return ret;
 }
 
 

@@ -491,10 +491,11 @@ CMUTIL_STATIC void CMUTIL_JsonObjectPut(
         CMUTIL_JsonObject *jobj, const char *key, CMUTIL_Json *json)
 {
     CMUTIL_JsonObject_Internal *ijobj = (CMUTIL_JsonObject_Internal*)jobj;
-    json = CMCall(ijobj->map, Put, key, json);
+    CMUTIL_Json *prev = NULL;
+    CMCall(ijobj->map, Put, key, json, (void**)&prev);
     // destory previous mapped item
-    if (json) CMCall(json, Destroy);
-    else CMCall(ijobj->keys, Add, CMStrdup(key));
+    if (prev) CMCall(prev, Destroy);
+    else CMCall(ijobj->keys, Add, ijobj->memst->Strdup(key), NULL);
 }
 
 #define CMUTIL_JsonObjectPutBody(jobj, key, method, value) do {             \
@@ -684,7 +685,7 @@ CMUTIL_STATIC void CMUTIL_JsonArrayAdd(
         CMUTIL_JsonArray *jarr, CMUTIL_Json *json)
 {
     CMUTIL_JsonArray_Internal *ijarr = (CMUTIL_JsonArray_Internal*)jarr;
-    CMCall(ijarr->arr, Add, json);
+    CMCall(ijarr->arr, Add, json, NULL);
 }
 
 #define CMUTIL_JsonArrayAddBody(jarr, value, method) do{                      \

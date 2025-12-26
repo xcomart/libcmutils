@@ -916,10 +916,12 @@ struct CMUTIL_Array {
      *
      * @param array This dynamic array object.
      * @param item Item to be added.
-     * @return Previous data at that position if this array is a sorted array.
-     *         NULL if this is not a sorted array.
+     * @param ret Pointer to store the previous data at that position
+     *            if this array is a sorted array.
+     *            NULL if this is not a sorted array.
+     * @return CMTrue if successful, CMFalse otherwise.
      */
-    void *(*Add)(CMUTIL_Array *array, void *item);
+    CMBool (*Add)(CMUTIL_Array *array, void *item, void **ret);
 
     /**
      * @brief Remove an item from this array.
@@ -1973,11 +1975,13 @@ struct CMUTIL_Map {
      * @param map A pointer to the map where the key-value pair should be inserted.
      * @param key The key associated with the value to insert or update in the map.
      * @param value A pointer to the value to associate with the specified key.
-     * @return A pointer to the previous value associated with the key, or nullptr
-     *         if the key did not previously exist in the map.
+     * @param prev A pointer to a pointer that will receive the previous value
+     *             associated with the key, or NULL if the key did not
+     *             previously exist in the map.
+     * @return CMTrue if the operation was successful, CMFalse otherwise.
      */
-    void *(*Put)(
-            CMUTIL_Map *map, const char* key, void* value);
+    CMBool (*Put)(
+            CMUTIL_Map *map, const char* key, void* value, void** prev);
 
     /**
      * @brief Copies all key-value pairs from one map to another.
@@ -5175,13 +5179,26 @@ CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
  * @typedef Enumeration of process stream types.
  */
 typedef enum CMProcStreamType {
-    /** process with no stream */
+    /**
+     * Process with no stream. stdout and stderr of the child process
+     * will be redirected to the current process's stdout and stderr
+     */
     CMProcStreamNone = 0,
-    /** process with read stream */
+    /**
+     * Process with read stream.
+     * Current process can read from child process's stdout using Read method.
+     */
     CMProcStreamRead = 1,
-    /** process with writing stream */
+    /**
+     * Process with writing stream.
+     * Current process can write to child process's stdin using Write method
+     */
     CMProcStreamWrite = 2,
-    /** process with read and write streams */
+    /**
+     * Process with read and write streams.
+     * Current process can read from child process's stdout
+     * and write to child process's stdin.
+     */
     CMProcStreamReadWrite = 3
 } CMProcStreamType;
 
@@ -5318,7 +5335,7 @@ struct CMUTIL_Process {
      * @param count The number of bytes to write.
      * @return The number of bytes written, or -1 on error.
      */
-    int (*Write)(CMUTIL_Process *proc, const void *buf, size_t count);
+    ssize_t (*Write)(CMUTIL_Process *proc, const void *buf, size_t count);
 
     /**
      * @brief Read data from the process's stdout.
@@ -5332,7 +5349,7 @@ struct CMUTIL_Process {
      * @param count The maximum number of bytes to read.
      * @return The number of bytes read, or -1 on error.
      */
-    int (*Read)(CMUTIL_Process *proc, CMUTIL_ByteBuffer *buf, size_t count);
+    ssize_t (*Read)(CMUTIL_Process *proc, CMUTIL_ByteBuffer *buf, size_t count);
 
     /**
      * @brief Waits for the specified process to complete.

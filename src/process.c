@@ -23,6 +23,8 @@ SOFTWARE.
  */
 
 #include "functions.h"
+#include <stdint.h>
+#include <sys/poll.h>
 
 CMUTIL_LogDefine("cmutils.process")
 
@@ -34,6 +36,7 @@ typedef HANDLE CMStream;
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <unistd.h>
 
 typedef int CMStream;
 #define EMPTY_STREAM (-1)
@@ -55,6 +58,9 @@ typedef struct CMUTIL_Process_Internal {
     CMProcStreamType    type;
     CMUTIL_Map          *env;
     CMUTIL_StringArray  *args;
+#if defined(MSWIN)
+    HANDLE              hproc;
+#endif
     pid_t               pid;
     CMUTIL_Process      *pipe_from;
     CMUTIL_Process      *pipe_to;
@@ -190,21 +196,25 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
     CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
     CMStream p1[2], p2[2], p3[2];
     int i;
+    pid_t pid;
+    CMUTIL_StringArray *keys = NULL;
 
-    if (ip->inpipe == EMPTY_STREAM && pipe(p1) == -1)
+    if (ip->type & CMProcStreamWrite && pipe(p1) == -1)
         goto err_pipe1;
     if (pipe(p2) == -1)
         goto err_pipe2;
     if (pipe(p3) == -1)
         goto err_pipe3;
 
-    pid_t pid;
-    if ((pid = fork()) == -1)
+    if ((pid = fork()) == -1) {
+        CMLogErrorS("fork failed %d:%s", errno, strerror(errno));
         goto err_fork;
+    }
 
     if (pid) {
         /* Parent process. */
-        if (ip->inpipe == EMPTY_STREAM) {
+        ip->pid = pid;
+        if (ip->type & CMProcStreamWrite) {
             ip->inpipe = p1[1];  // write to process stdin
             close(p1[0]);
         }
@@ -215,12 +225,11 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
         return CMTrue;
     }
     /* Child process. */
-    if (ip->inpipe == EMPTY_STREAM) {
+    if (ip->type & CMProcStreamWrite) {
         dup2(p1[0], STDIN_FILENO);
         close(p1[0]);
         close(p1[1]);
-    } else
-    {
+    } else {
         dup2(ip->inpipe, STDIN_FILENO);
         close(ip->inpipe);
     }
@@ -232,7 +241,7 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
     close(p3[1]);
 
     // set environment variables
-    CMUTIL_StringArray *keys = CMCall(ip->env, GetKeys);
+    keys = CMCall(ip->env, GetKeys);
     for (i = 0; i < CMCall(keys, GetSize); i++) {
         const CMUTIL_String *key = CMCall(keys, GetAt, i);
         const char *skey = CMCall(key, GetCString);
@@ -253,7 +262,7 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
         }
         execvp(CMCall(ip->command, GetCString), args);
         CMFree(args);
-  }
+    }
     // cannot be here in general cases, the below codes are error handler
     /* Error occurred. */
     CMLogErrorS("error running %s: %s",
@@ -277,22 +286,147 @@ err_pipe1:
 #endif
 
 
+CMUTIL_STATIC ssize_t CMUTIL_ProcessReadPipe(
+    CMStream strm, uint8_t *data, size_t size)
+{
+    ssize_t read_size = 0;
+#ifdef _WIN32
+    while (read_size < size) {
+        DWORD rsz = 0;
+        if (!ReadFile(strm, data+read_size, size-read_size, &rsz, nullptr)) {
+            if (GetLastError() != ERROR_IO_PENDING) {
+                return -1;
+            }
+            Sleep(10);
+        }
+        if (rsz > 0)
+            read_size += rsz;
+    }
+#else
+    read_size = read(strm, data, size);
+#endif
+    return read_size;
+}
+
+CMUTIL_STATIC ssize_t CMUTIL_ProcessWritePipe(
+    CMStream strm, const uint8_t *data, size_t size)
+{
+    ssize_t write_size = 0;
+#ifdef _WIN32
+    while (write_size < size) {
+        DWORD wsz = 0;
+        if (!WriteFile(strm, data+write_size, size-write_size, &wsz, nullptr)) {
+            DWORD err = GetLastError();
+            if (err != ERROR_IO_PENDING) {
+                return -1;
+            }
+            Sleep(10);
+        }
+        if (wsz > 0)
+            write_size += wsz;
+    }
+#else
+    write_size = write(strm, data, size);
+#endif
+    return write_size;
+}
+
+CMUTIL_STATIC void CMUTIL_ProcessFlushStdout(
+    CMUTIL_Process_Internal *ip, CMUTIL_ByteBuffer *bbuf)
+{
+    const uint8_t *buf = CMCall(bbuf, GetBytes);
+    const size_t size = CMCall(bbuf, GetSize);
+    if (ip->pipe_to) {
+        CMCall(ip->pipe_to, Write, buf, size);
+    } else {
+        fwrite(buf, 1, size, stdout);
+    }
+}
+
+CMUTIL_STATIC void CMUTIL_ProcessFlushStderr(
+    CMUTIL_Process_Internal *ip, CMUTIL_ByteBuffer *bbuf)
+{
+    const uint8_t *buf = CMCall(bbuf, GetBytes);
+    const size_t size = CMCall(bbuf, GetSize);
+    fwrite(buf, 1, size, stderr);
+}
+
 CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
 {
     CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)data;
-    while (ip->status != CM_EXITED_) {
-        char buf[1024];
-        ssize_t nread = read(ip->outpipe, buf, sizeof(buf));
-        // if (nread > 0) {
-        //     CMCall(ip->pipe_from, Write, buf, nread);
-        // } else if (nread == 0) {
-        //     CMCall(ip->pipe_from, Close);
-        //     ip->status = CM_EXITED_;
-        // } else {
-        //     CMLogErrorS("read error: %s", strerror(errno));
-        //     ip->status = CM_EXITED_;
-        // }
+    CMUTIL_ByteBuffer *stdbuf = CMUTIL_ByteBufferCreateInternal(
+        ip->memst, 1025);
+    CMUTIL_ByteBuffer *errbuf = CMUTIL_ByteBufferCreateInternal(
+        ip->memst, 1025);
+    struct pollfd pfd[2];
+    struct pollfd *tpfd = pfd;
+    int fd_cnt = 2;
+    int closecnt = 0;
+    memset(pfd, 0x0, sizeof(struct pollfd));
+
+    if (ip->type & CMProcStreamRead) {
+        fd_cnt--;
+        tpfd = pfd + 1;
     }
+    pfd[0].fd = ip->outpipe;
+    pfd[1].fd = ip->errpipe;
+    pfd[0].events = POLLIN;
+    pfd[1].events = POLLIN;
+
+    while (closecnt < 3) {
+        uint8_t c;
+        const int rc = poll(tpfd, fd_cnt, 0);
+        if (rc > 0) {
+            ssize_t n;
+            if (pfd[0].revents) {
+                n = CMUTIL_ProcessReadPipe(ip->outpipe, &c, 1);
+                if (n == 1) {
+                    CMLogDebug("Read from stdout: %c", c);
+                    CMCall(stdbuf, AddByte, c);
+                    if (CMCall(stdbuf, GetSize) == 1024) {
+                        CMUTIL_ProcessFlushStdout(ip, stdbuf);
+                        CMCall(stdbuf, Clear);
+                    }
+                } else {
+                    CMLogError("read error: %s", strerror(errno));
+                    closecnt |= 1;
+                }
+                pfd[0].revents = 0;
+            }
+            if (pfd[1].revents) {
+                n = CMUTIL_ProcessReadPipe(ip->errpipe, &c, 1);
+                if (n == 1) {
+                    CMLogDebug("Read from stderr: %c", c);
+                    CMCall(errbuf, AddByte, c);
+                    if (CMCall(errbuf, GetSize) == 1024) {
+                        CMUTIL_ProcessFlushStderr(ip, errbuf);
+                        CMCall(errbuf, Clear);
+                    }
+                } else {
+                    CMLogError("read error: %s", strerror(errno));
+                    closecnt |= 2;
+                }
+                pfd[1].revents = 0;
+            }
+        } else if (rc == 0) {
+            CMLogDebug("no data from stdout or stderr");
+            if (CMCall(stdbuf, GetSize) > 0) {
+                CMUTIL_ProcessFlushStdout(ip, stdbuf);
+                CMCall(stdbuf, Clear);
+            }
+            if (CMCall(errbuf, GetSize) > 0) {
+                CMUTIL_ProcessFlushStderr(ip, errbuf);
+                CMCall(errbuf, Clear);
+            }
+            USLEEP(10000);
+        } else {
+            CMLogError("poll error: %s", strerror(errno));
+            break;
+        }
+    }
+    ip->status = CM_EXITED_;
+    CMCall(stdbuf, Destroy);
+    CMCall(errbuf, Destroy);
     return NULL;
 }
 
@@ -308,12 +442,300 @@ CMUTIL_STATIC CMBool CMUTIL_ProcessStart(
 
     ip->type = type;
     if (!CMUTIL_StartSubprocess(proc)) {
-        CMLogErrorS("Failed to start subprocess.");
+        CMLogError("Failed to start subprocess.");
         return CMFalse;
     }
 
-    // TODO: start reader thread
+    // start a reader thread
+    ip->status = CM_RUNNING_;
+    ip->reader = CMUTIL_ThreadCreate(CMUTIL_ProcessReadProc, ip, NULL);
+    if (ip->reader == NULL) {
+        CMLogError("Failed to create reader thread.");
+        return CMFalse;
+    }
+    CMCall(ip->reader, Start);
 
     return CMTrue;
 }
 
+CMUTIL_STATIC pid_t CMUTIL_ProcessGetPid(CMUTIL_Process *proc)
+{
+    const CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    return ip->pid;
+}
+
+CMUTIL_STATIC const char *CMUTIL_ProcessGetCommand(CMUTIL_Process *proc)
+{
+    const CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    return CMCall(ip->command, GetCString);
+}
+
+CMUTIL_STATIC const char *CMUTIL_ProcessGetWorkingDirectory(
+    CMUTIL_Process *proc)
+{
+    const CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    return CMCall(ip->cwd, GetCString);
+}
+
+CMUTIL_STATIC const CMUTIL_StringArray *CMUTIL_ProcessGetArgs(
+    CMUTIL_Process *proc)
+{
+    const CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    return ip->args;
+}
+
+CMUTIL_STATIC const CMUTIL_Map *CMUTIL_ProcessGetEnv(CMUTIL_Process *proc)
+{
+    const CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    return ip->env;
+}
+
+CMUTIL_STATIC void CMUTIL_ProcessSuspend(CMUTIL_Process *proc)
+{
+    CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    if (ip->status != CM_RUNNING_) {
+        CMLogErrorS("Process is not running.");
+        return;
+    }
+#if defined(MSWIN)
+    DebugActiveProcess(ip->pid);
+#else
+    kill(ip->pid, SIGSTOP);
+#endif
+
+    ip->status = CM_SUSPENDED_;
+}
+
+CMUTIL_STATIC void CMUTIL_ProcessResume(CMUTIL_Process *proc)
+{
+    CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    if (ip->status != CM_SUSPENDED_) {
+        CMLogErrorS("Process is not suspended.");
+        return;
+    }
+#if defined(MSWIN)
+    DebugActiveProcessStop(ip->pid);
+#else
+    kill(ip->pid, SIGCONT);
+#endif
+
+    ip->status = CM_RUNNING_;
+}
+
+CMUTIL_STATIC CMBool CMUTIL_ProcessPipeTo(
+    CMUTIL_Process *proc, CMUTIL_Process *target)
+{
+    CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    CMUTIL_Process_Internal *it = (CMUTIL_Process_Internal *)target;
+
+    if (ip->status != CM_RUNNING_ ||
+        (ip->type != CMProcStreamRead && ip->type != CMProcStreamReadWrite)) {
+        CMLogErrorS("Process is not suitable for piping.");
+        return CMFalse;
+    }
+
+    if (it->status != CM_RUNNING_ ||
+        (it->type != CMProcStreamWrite && it->type != CMProcStreamReadWrite)) {
+        CMLogErrorS("Target process is not suitable for piping.");
+        return CMFalse;
+    }
+
+    it->pipe_from = proc;
+    ip->pipe_to = target;
+    return CMTrue;
+}
+
+CMUTIL_STATIC ssize_t CMUTIL_ProcessWrite(
+    CMUTIL_Process *proc, const void *buf, size_t count)
+{
+    const CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    return write(ip->inpipe, buf, count);
+}
+
+CMUTIL_STATIC ssize_t CMUTIL_ProcessRead(
+    CMUTIL_Process *proc, CMUTIL_ByteBuffer *buf, size_t count)
+{
+    const CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    ssize_t ir;
+    uint8_t bytes[1024];
+    ssize_t nread = 0;
+    while (nread < count) {
+        ssize_t remain = (ssize_t)count - nread;
+        if (remain > sizeof(bytes)) remain = sizeof(bytes);
+        ir = read(ip->outpipe, bytes, remain);
+        if (ir <= 0) break;
+        CMCall(buf, AddBytes, bytes, ir);
+        nread += ir;
+    }
+    return nread;
+}
+
+CMUTIL_STATIC int CMUTIL_ProcessWait(CMUTIL_Process *proc, long millis)
+{
+    int status;
+    CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+
+    if (ip->status == CM_RUNNING_) {
+#if defined(MSWIN)
+        if (ip->hproc) {
+            WaitForSingleObject(ip->hproc, millis < 0 ? INFINITE : millis);
+        }
+#else
+        long counts = millis / 100;
+        long step = 10000;
+        if (millis < 0) {
+            counts = INT32_MAX;
+        } else {
+            if (counts == 0) {
+                counts = 1;
+                step = millis * 1000;
+            } else {
+                counts++;
+            }
+        }
+        while (counts--) {
+            const pid_t pid = waitpid(ip->pid, &status, WNOHANG);
+            if (pid > 0) break;
+            usleep(step);
+        }
+        CMLogDebug("waitpid(%d) exit code: %d", ip->pid, status);
+#endif
+    } else {
+        CMLogErrorS("Process is not running.");
+        status = -1;
+    }
+    return status;
+}
+
+CMUTIL_STATIC void CMUTIL_ProcessKill(CMUTIL_Process *proc)
+{
+    CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    if (ip->status == CM_RUNNING_ || ip->status == CM_SUSPENDED_) {
+#if defined(MSWIN)
+        if (ip->hproc != INVALID_HANDLE_VALUE) {
+            TerminateProcess(ip->hproc, PROCESS_TERMINATE);
+            ip->hproc = INVALID_HANDLE_VALUE;
+        }
+#else
+        kill(ip->pid, SIGTERM);
+#endif
+    } else {
+        CMLogErrorS("Process is not running.");
+    }
+    ip->status = CM_EXITED_;
+}
+
+CMUTIL_STATIC void CMUTIL_ProcessDestroy(CMUTIL_Process *proc)
+{
+    CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    // disconnect from a process chain
+    if (ip->pipe_from) {
+        CMUTIL_Process_Internal *it = (CMUTIL_Process_Internal *)ip->pipe_from;
+        it->pipe_to = NULL;
+        ip->pipe_from = NULL;
+    }
+    if (ip->pipe_to) {
+        CMUTIL_Process_Internal *it = (CMUTIL_Process_Internal *)ip->pipe_to;
+        it->pipe_from = NULL;
+        ip->pipe_to = NULL;
+    }
+
+    if (ip->status == CM_RUNNING_ || ip->status == CM_SUSPENDED_) {
+        CMUTIL_ProcessKill(proc);
+    }
+    CMUTIL_ClosePipe(ip->inpipe);
+    CMUTIL_ClosePipe(ip->outpipe);
+    CMUTIL_ClosePipe(ip->errpipe);
+    if (ip->reader) CMCall(ip->reader, Join);
+    if (ip->command) CMCall(ip->command, Destroy);
+    if (ip->cwd) CMCall(ip->cwd, Destroy);
+    if (ip->args) CMCall(ip->args, Destroy);
+    if (ip->env) CMCall(ip->env, Destroy);
+#if defined(MSWIN)
+    if (ip->hproc != INVALID_HANDLE_VALUE) CloseHandle(ip->hproc);
+#endif
+    ip->memst->Free(ip);
+}
+
+static CMUTIL_Process g_cmutil_process = {
+    CMUTIL_ProcessStart,
+    CMUTIL_ProcessGetPid,
+    CMUTIL_ProcessGetCommand,
+    CMUTIL_ProcessGetWorkingDirectory,
+    CMUTIL_ProcessGetArgs,
+    CMUTIL_ProcessGetEnv,
+    CMUTIL_ProcessSuspend,
+    CMUTIL_ProcessResume,
+    CMUTIL_ProcessPipeTo,
+    CMUTIL_ProcessWrite,
+    CMUTIL_ProcessRead,
+    CMUTIL_ProcessWait,
+    CMUTIL_ProcessKill,
+    CMUTIL_ProcessDestroy
+};
+
+CMUTIL_Process *CMUTIL_ProcessCreateInternal(
+        CMUTIL_Mem *memst,
+        const char *cwd,
+        CMUTIL_Map *env,
+        const char *command,
+        CMUTIL_StringArray *args)
+{
+    CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)memst->Alloc(
+        sizeof(CMUTIL_Process_Internal));
+    if (ip == NULL) {
+        CMLogErrorS("Failed to allocate memory.");
+        return NULL;
+    }
+    memset(ip, 0x0, sizeof(CMUTIL_Process_Internal));
+    memcpy(ip, &g_cmutil_process, sizeof(CMUTIL_Process));
+    ip->memst = memst;
+    ip->cwd = CMUTIL_StringCreateInternal(memst, 0, cwd);
+    ip->env = env;
+    ip->command = CMUTIL_StringCreateInternal(memst, 0, command);
+    ip->args = args;
+    ip->status = CM_IDLE_;
+    ip->inpipe = EMPTY_STREAM;
+    ip->outpipe = EMPTY_STREAM;
+    ip->errpipe = EMPTY_STREAM;
+    ip->type = CMProcStreamNone;
+    if (CMLogIsEnabled(CMLogLevel_Debug)) {
+        int i;
+        CMUTIL_String *buf = CMUTIL_StringCreateInternal(memst, 1024, NULL);
+        CMCall(buf, AddAnother, ip->command);
+        for (i = 0; i < CMCall(args, GetSize); i++) {
+            const CMUTIL_String *arg = CMCall(args, GetAt, i);
+            CMCall(buf, AddAnother, arg);
+        }
+        CMLogDebug("Creating process: %s", CMCall(buf, GetCString));
+        CMCall(buf, Destroy);
+    }
+    return (CMUTIL_Process *)ip;
+}
+
+CMUTIL_Process *CMUTIL_ProcessCreate(
+        const char *cwd,
+        CMUTIL_Map *env,
+        const char *command,
+        ...)
+{
+    CMUTIL_Process *res = NULL;
+    CMUTIL_StringArray *args = CMUTIL_StringArrayCreateInternal(
+        CMUTIL_GetMem(), 10);
+    char *sarg = NULL;
+    va_list vargs;
+    va_start(vargs, command);
+    sarg = va_arg(vargs, char*);
+    while (sarg != NULL) {
+        CMCall(args, AddCString, sarg);
+        sarg = va_arg(vargs, char*);
+    }
+    va_end(vargs);
+    res = CMUTIL_ProcessCreateInternal(
+        CMUTIL_GetMem(), cwd, env, command, args);
+    if (res == NULL)
+        CMCall(args, Destroy);
+    return res;
+}
+
+/* end of file */

@@ -24,6 +24,8 @@ SOFTWARE.
 
 #include "functions.h"
 
+CMUTIL_LogDefine("cmutils.config")
+
 typedef enum CMUTIL_ConfType {
     ConfItem_Comment,
     ConfItem_Pair
@@ -106,6 +108,14 @@ CMUTIL_STATIC void CMUTIL_ConfItemDestroy(void *data)
     }
 }
 
+// CMUTIL_STATIC int CMUTIL_ConfItemCompare(const void *a, const void *b)
+// {
+//     const CMUTIL_ConfItem *ia = (CMUTIL_ConfItem*)a;
+//     const CMUTIL_ConfItem *ib = (CMUTIL_ConfItem*)b;
+//     if (ia->key && ib->key) return strcmp(ia->key, ib->key);
+//     return ((int)ia->index) - ((int)ib->index);
+// }
+
 CMUTIL_STATIC void CMUTIL_ConfigDestroy(CMUTIL_Config *conf)
 {
     if (conf) {
@@ -169,10 +179,15 @@ const char *CMUTIL_ConfigGet(const CMUTIL_Config *conf, const char *key)
 void CMUTIL_ConfigSet(CMUTIL_Config *conf, const char *key, const char *value)
 {
     CMUTIL_Config_Internal *iconf = (CMUTIL_Config_Internal*)conf;
-    char *prev = (char*)CMCall(
-                iconf->confs, Put, key, iconf->memst->Strdup(value));
-
+    char *prev = NULL;
+    char *newval = iconf->memst->Strdup(value);
     const int keylen = (int)strlen(key);
+
+    if (!CMCall(iconf->confs, Put, key, newval, (void**)&prev)) {
+        CMLogError("CMUTIL_Array Put failed");
+        iconf->memst->Free(newval);
+        return;
+    }
     if (iconf->maxkeylen < keylen)
         iconf->maxkeylen = keylen;
 
@@ -186,8 +201,8 @@ void CMUTIL_ConfigSet(CMUTIL_Config *conf, const char *key, const char *value)
         item->key = iconf->memst->Strdup(key);
         item->type = ConfItem_Pair;
         item->memst = iconf->memst;
-        CMCall(iconf->sequence, Add, item);
-        CMCall(iconf->revconf, Put, item->key, item);
+        CMCall(iconf->sequence, Add, item, NULL);
+        CMCall(iconf->revconf, Put, item->key, item, NULL);
     }
 }
 
@@ -249,7 +264,8 @@ CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem *memst)
     res->confs = CMUTIL_MapCreateInternal(
                 memst, CMUTIL_MAP_DEFAULT, CMFalse, memst->Free);
     res->sequence = CMUTIL_ArrayCreateInternal(
-                memst, 100, NULL, CMUTIL_ConfItemDestroy, CMFalse);
+                memst, 100, NULL,
+                CMUTIL_ConfItemDestroy, CMFalse);
     res->revconf = CMUTIL_MapCreateInternal(
                 memst, CMUTIL_MAP_DEFAULT, CMFalse, NULL);
     return (CMUTIL_Config*)res;
@@ -296,6 +312,9 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
             {
                 int keylen = 0;
                 const char *v = NULL;
+                char *nval = NULL;
+                char *prev = NULL;
+                CMUTIL_ConfItem *previtem = NULL;
                 char name[1025], value[2049];
                 p = CMUTIL_NextTermBefore(name, p, " =\t", '\\', 1024);
                 DOFAILED;
@@ -305,18 +324,39 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
                 v = CMUTIL_StrTrim(value);
                 if (*p == '#')
                     item->comment = memst->Strdup(CMUTIL_StrRTrim((char*)p));
-                CMCall(res->confs, Put, name, memst->Strdup(v));
+                nval = memst->Strdup(v);
+                if (!CMCall(res->confs, Put, name, nval, (void**)&prev)) {
+                    CMLogError("CMUTIL_Array Put failed");
+                    memst->Free(nval);
+                    continue;
+                }
+                if (prev) {
+                    memst->Free(prev);
+                    CMLogWarn("Duplicate key: %s, previous value will "
+                              "be overwritten", name);
+                }
                 item->key = memst->Strdup(name);
                 keylen = (int)strlen(item->key);
                 if (res->maxkeylen < keylen)
                     res->maxkeylen = keylen;
                 item->type = ConfItem_Pair;
-                CMCall(res->revconf, Put, item->key, item);
+                if (!CMCall(res->revconf, Put, item->key, item, (void**)&previtem)) {
+                    CMLogError("CMUTIL_Map Put failed");
+                    CMCall(res->confs, Remove, name);
+                    memst->Free(nval);
+                    continue;
+                }
+                if (previtem) {
+                    CMLogWarn("Duplicate key: %s, previous item will "
+                              "be overwritten", name);
+                    CMCall(res->sequence, Remove, previtem);
+                    CMUTIL_ConfItemDestroy(previtem);
+                }
             }
             }
 
             item->index = (uint32_t)CMCall(res->sequence, GetSize);
-            CMCall(res->sequence, Add, item);
+            CMCall(res->sequence, Add, item, NULL);
             CMCall(str, Clear);
         }
     FAILED:
