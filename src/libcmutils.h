@@ -1624,6 +1624,19 @@ struct CMUTIL_StringArray {
      */
     void (*Destroy)(
             CMUTIL_StringArray *array);
+
+    /**
+     * @brief Function pointer used to format and output the contents of a string array.
+     *
+     * This function pointer allows the user to specify a custom implementation for processing
+     * a string array and formatting its contents into a string output.
+     *
+     * @param array Pointer to the CMUTIL_StringArray object that contains the input strings.
+     * @param out Pointer to the CMUTIL_String object where the formatted output will be stored.
+     */
+    void (*PrintTo)(
+            const CMUTIL_StringArray *array,
+            CMUTIL_String *out);
 };
 
 /**
@@ -5395,13 +5408,26 @@ struct CMUTIL_Process {
  * @param env The environment variables for the new process.
  * @param command The command to execute in the new process.
  * @param ... Additional arguments of the process.
+ *            The last argument must be NULL.
  * @return A pointer to the newly created process, or NULL on failure.
  */
-CMUTIL_API CMUTIL_Process *CMUTIL_ProcessCreate(
+CMUTIL_API CMUTIL_Process *CMUTIL_ProcessCreateEx(
         const char *cwd,
         CMUTIL_Map *env,
         const char *command,
         ...);
+
+/**
+ * @brief Creates a new process with the specified command and stream type.
+ *
+ * @param cwd The working directory for the new process.
+ * @param env The environment variables for the new process.
+ * @param command The command to execute in the new process.
+ * @param ... Additional arguments of the process.
+ * @return A pointer to the newly created process, or NULL on failure.
+ */
+#define CMUTIL_ProcessCreate(cwd, env, command, ...) \
+        CMUTIL_ProcessCreateEx(cwd, env, command, ##__VA_ARGS__, NULL)
 
 #ifdef __cplusplus
 }
