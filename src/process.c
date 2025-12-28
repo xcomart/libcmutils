@@ -470,7 +470,7 @@ CMUTIL_STATIC const char *CMUTIL_ProcessGetCommand(CMUTIL_Process *proc)
     return CMCall(ip->command, GetCString);
 }
 
-CMUTIL_STATIC const char *CMUTIL_ProcessGetWorkingDirectory(
+CMUTIL_STATIC const char *CMUTIL_ProcessGetWorkDir(
     CMUTIL_Process *proc)
 {
     const CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
@@ -661,7 +661,7 @@ static CMUTIL_Process g_cmutil_process = {
     CMUTIL_ProcessStart,
     CMUTIL_ProcessGetPid,
     CMUTIL_ProcessGetCommand,
-    CMUTIL_ProcessGetWorkingDirectory,
+    CMUTIL_ProcessGetWorkDir,
     CMUTIL_ProcessGetArgs,
     CMUTIL_ProcessGetEnv,
     CMUTIL_ProcessSuspend,

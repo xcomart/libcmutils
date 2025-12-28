@@ -5271,7 +5271,7 @@ struct CMUTIL_Process {
      * @return A constant character pointer pointing to the working directory of
      *         the given process.
      */
-    const char *(*GetWorkingDirectory)(CMUTIL_Process *proc);
+    const char *(*GetWorkDir)(CMUTIL_Process *proc);
 
     /**
      * @brief Function pointer to retrieve the argument list of a process.
