@@ -916,10 +916,12 @@ struct CMUTIL_Array {
      *
      * @param array This dynamic array object.
      * @param item Item to be added.
-     * @return Previous data at that position if this array is a sorted array.
-     *         NULL if this is not a sorted array.
+     * @param ret Pointer to store the previous data at that position
+     *            if this array is a sorted array.
+     *            NULL if this is not a sorted array.
+     * @return CMTrue if successful, CMFalse otherwise.
      */
-    void *(*Add)(CMUTIL_Array *array, void *item);
+    CMBool (*Add)(CMUTIL_Array *array, void *item, void **ret);
 
     /**
      * @brief Remove an item from this array.
@@ -1622,6 +1624,19 @@ struct CMUTIL_StringArray {
      */
     void (*Destroy)(
             CMUTIL_StringArray *array);
+
+    /**
+     * @brief Function pointer used to format and output the contents of a string array.
+     *
+     * This function pointer allows the user to specify a custom implementation for processing
+     * a string array and formatting its contents into a string output.
+     *
+     * @param array Pointer to the CMUTIL_StringArray object that contains the input strings.
+     * @param out Pointer to the CMUTIL_String object where the formatted output will be stored.
+     */
+    void (*PrintTo)(
+            const CMUTIL_StringArray *array,
+            CMUTIL_String *out);
 };
 
 /**
@@ -1973,11 +1988,13 @@ struct CMUTIL_Map {
      * @param map A pointer to the map where the key-value pair should be inserted.
      * @param key The key associated with the value to insert or update in the map.
      * @param value A pointer to the value to associate with the specified key.
-     * @return A pointer to the previous value associated with the key, or nullptr
-     *         if the key did not previously exist in the map.
+     * @param prev A pointer to a pointer that will receive the previous value
+     *             associated with the key, or NULL if the key did not
+     *             previously exist in the map.
+     * @return CMTrue if the operation was successful, CMFalse otherwise.
      */
-    void *(*Put)(
-            CMUTIL_Map *map, const char* key, void* value);
+    CMBool (*Put)(
+            CMUTIL_Map *map, const char* key, void* value, void** prev);
 
     /**
      * @brief Copies all key-value pairs from one map to another.
@@ -2113,9 +2130,11 @@ struct CMUTIL_Map {
      *
      * @param map A pointer to the map object to be printed.
      * @param out A pointer to the CMUTIL_String object to append the output.
+     * @param to_strcb A callback function to convert value to string,
+     *                or NULL to use as string itself.
      */
     void (*PrintTo)(
-            const CMUTIL_Map *map, CMUTIL_String *out);
+            const CMUTIL_Map *map, CMUTIL_String *out, const char*(*to_strcb)(void*));
 
     /**
      * @brief Get the value at a specific index in the map.
@@ -3541,12 +3560,14 @@ struct CMUTIL_LogAppender {
  *
  * @param name The name of the log appender.
  * @param pattern The log message pattern.
+ * @param use_stderr Whether to use stderr instead of stdout for logging.
  * @return A pointer to the newly created CMUTIL_LogAppender object,
  *         or NULL on failure.
  */
 CMUTIL_API CMUTIL_LogAppender *CMUTIL_LogConsoleAppenderCreate(
     const char *name,
-    const char *pattern);
+    const char *pattern,
+    CMBool use_stderr);
 
 /**
  * @brief Create a file log appender.
@@ -4062,31 +4083,35 @@ struct CMUTIL_Socket {
      * @brief Read data from the socket into a buffer.
      *
      * Reads up to 'size' bytes of data from the specified socket
-     * into the provided string buffer within the given timeout period.
+     * into the provided byte buffer within the given timeout period.
      *
      * @param socket The socket object to read from.
-     * @param buffer The string buffer to store the read data.
+     * @param buffer The byte buffer to store the read data.
      * @param size The maximum number of bytes to read.
      * @param timeout The read operation timeout in milliseconds.
      * @return CMSocketResult indicating success or failure.
      */
     CMSocketResult (*Read)(
             const CMUTIL_Socket *socket,
-            CMUTIL_String *buffer, uint32_t size, long timeout);
+            CMUTIL_ByteBuffer *buffer,
+            uint32_t size, long timeout);
 
     /**
-     * @brief Read a specific part of data from the socket into a buffer.
+     * @brief Write the given data to the socket into a buffer.
      *
-     * Writes all data from the provided string buffer to the specified
+     * Writes all data from the provided byte buffer to the specified
      * socket within the specified timeout period.
      *
-     * @param socket The socket object to read from.
-     * @param data The string buffer to store the read data.
+     * @param socket The socket object to write to.
+     * @param data The data to write.
+     * @param size The size of the data to write.
      * @param timeout The read operation timeout in milliseconds.
      * @return CMSocketResult indicating success or failure.
      */
     CMSocketResult (*Write)(
-            const CMUTIL_Socket *socket, CMUTIL_String *data, long timeout);
+            const CMUTIL_Socket *socket,
+            const void *data,
+            uint32_t size, long timeout);
 
     /**
      * @brief Write a specific part of data to the socket from a buffer.
@@ -4096,15 +4121,15 @@ struct CMUTIL_Socket {
      * the specified timeout period.
      *
      * @param socket The socket object to write to.
-     * @param data The string buffer containing the data to write.
+     * @param data The data to write.
      * @param offset The offset in the buffer to start writing from.
      * @param length The number of bytes to write.
      * @param timeout The write operation timeout in milliseconds.
      * @return CMSocketResult indicating success or failure.
      */
     CMSocketResult (*WritePart)(
-            const CMUTIL_Socket *socket, CMUTIL_String *data,
-            int offset, uint32_t length, long timeout);
+            const CMUTIL_Socket *socket, const void *data,
+            uint32_t offset, uint32_t length, long timeout);
 
     /**
      * @brief Check if the socket is ready for reading.
@@ -5164,6 +5189,245 @@ CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
  */
 CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
+
+/**
+ * @typedef Enumeration of process stream types.
+ */
+typedef enum CMProcStreamType {
+    /**
+     * Process with no stream. stdout and stderr of the child process
+     * will be redirected to the current process's stdout and stderr
+     */
+    CMProcStreamNone = 0,
+    /**
+     * Process with read stream.
+     * Current process can read from child process's stdout using Read method.
+     */
+    CMProcStreamRead = 1,
+    /**
+     * Process with writing stream.
+     * Current process can write to child process's stdin using Write method
+     */
+    CMProcStreamWrite = 2,
+    /**
+     * Process with read and write streams.
+     * Current process can read from child process's stdout
+     * and write to child process's stdin.
+     */
+    CMProcStreamReadWrite = 3
+} CMProcStreamType;
+
+/**
+ * @typedef Process structure for managing external processes.
+ */
+typedef struct CMUTIL_Process CMUTIL_Process;
+struct CMUTIL_Process {
+    /**
+     * @brief Start the process.
+     *
+     * If the process is already running, this function will return CMFalse.
+     *
+     * @param proc The process to start.
+     * @param type The type of stream to use for the process.
+     * @return CMTrue if the process started successfully, CMFalse otherwise.
+     */
+    CMBool (*Start)(CMUTIL_Process *proc, CMProcStreamType type);
+
+    /**
+     * @brief Retrieves the process identifier (PID) of the specified process.
+     *
+     * This function returns the PID of the process represented by the given
+     * `CMUTIL_Process` instance. If the process is not running or is in an
+     * invalid state, the behavior is implementation-defined.
+     *
+     * @param proc The process from which to retrieve the PID.
+     * @return The PID of the specified process, or an appropriate error
+     *         indicator if the PID cannot be retrieved.
+     */
+    pid_t (*GetPid)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Function pointer to retrieve the command associated with a given process.
+     *
+     * This variable points to a function that, given a process instance, returns
+     * the associated command in the form of a null-terminated string.
+     *
+     * @param proc Pointer to a CMUTIL_Process instance representing the process.
+     * @return const char* Null-terminated string representing the command associated
+     *         with the specified process. Returns nullptr if the command cannot be
+     *         retrieved or is not available.
+     */
+    const char *(*GetCommand)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Function pointer to retrieve the working directory of a given process.
+     *
+     * This function takes a pointer to a CMUTIL_Process structure and returns a
+     * constant character pointer representing the working directory of the
+     * specified process.
+     *
+     * @param proc A pointer to a CMUTIL_Process structure representing the process
+     *             whose working directory is to be retrieved.
+     * @return A constant character pointer pointing to the working directory of
+     *         the given process.
+     */
+    const char *(*GetWorkDir)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Function pointer to retrieve the argument list of a process.
+     *
+     * This function pointer takes a CMUTIL_Process object as input and
+     * returns a pointer to a CMUTIL_StringArray containing the arguments
+     * associated with the specified process.
+     *
+     * @param proc A pointer to a CMUTIL_Process object whose arguments
+     *             are to be retrieved.
+     * @return A pointer to a CMUTIL_StringArray containing the process arguments.
+     */
+    const CMUTIL_StringArray *(*GetArgs)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Retrieves the environment map for a specified process.
+     *
+     * This function pointer allows access to the environment variables
+     * associated with the given process.
+     *
+     * @param proc A pointer to a CMUTIL_Process object whose environment
+     *             variables are to be retrieved.
+     * @return A pointer to a CMUTIL_Map containing the process environment variables.
+     */
+    const CMUTIL_Map *(*GetEnv)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Suspends the execution of the specified process.
+     *
+     * This function halts the execution of the given process until it is explicitly
+     * resumed. If the process is not running or is in an invalid state, this
+     * function does nothing and returns without error.
+     *
+     * @param proc The process to suspend.
+     */
+    void (*Suspend)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Resumes the execution of the specified process.
+     *
+     * This function resumes a previously suspended process, allowing it to continue
+     * its execution. If the process is not in a suspended state or is in an invalid
+     * state, this function does nothing and returns without error.
+     *
+     * @param proc The process to resume.
+     */
+    void (*Resume)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Establishes a unidirectional pipe between two processes.
+     *
+     * This function creates a communication channel between the stdout
+     * of the source process (`proc`) and the stdin of the target process (`target`).
+     * It facilitates data transfer from one process to another. Both `proc` and
+     * `target` must be valid, and the state of both processes must not be
+     * started for the operation to succeed.
+     * This process must be started with CMProcStreamRead or CMProcStreamReadWrite
+     * stream type, and the target process must be started with CMProcStreamWrite
+     * or CMProcStreamReadWrite stream type.
+     *
+     * @param proc The source process whose stdout will be piped.
+     * @param target The target process whose stdin will receive the piped data.
+     * @return CMTrue if the pipe was successfully established, CMFalse otherwise.
+     */
+    CMBool (*PipeTo)(CMUTIL_Process *proc, CMUTIL_Process *target);
+
+    /**
+     * @brief Write data to the process's stdin.
+     *
+     * If the process is not running, or the stream type is
+     * not CMProcStreamWrite or CMProcStreamReadWrite,
+     * this function will return -1.
+     *
+     * @param proc The process to write to.
+     * @param buf The buffer containing data to write.
+     * @param count The number of bytes to write.
+     * @return The number of bytes written, or -1 on error.
+     */
+    ssize_t (*Write)(CMUTIL_Process *proc, const void *buf, size_t count);
+
+    /**
+     * @brief Read data from the process's stdout.
+     *
+     * If the process is not running, or the stream type is
+     * not CMProcStreamRead or CMProcStreamReadWrite,
+     * this function will return -1.
+     *
+     * @param proc The process to read from.
+     * @param buf The buffer to store the read data.
+     * @param count The maximum number of bytes to read.
+     * @return The number of bytes read, or -1 on error.
+     */
+    ssize_t (*Read)(CMUTIL_Process *proc, CMUTIL_ByteBuffer *buf, size_t count);
+
+    /**
+     * @brief Waits for the specified process to complete.
+     *
+     * This function blocks the calling thread until the specified process
+     * finishes execution.
+     *
+     * @param proc The process to wait for.
+     * @param millis The maximum time to wait in milliseconds,
+     *               or -1 to wait infinitely.
+     * @return An exit status code from the process, or -1 on error.
+     */
+    int (*Wait)(CMUTIL_Process *proc, long millis);
+
+    /**
+     * @brief Terminates the specified process.
+     *
+     * This function attempts to terminate the specified process.
+     * If the process is not running, this function will do nothing.
+     *
+     * @param proc The process to terminate.
+     */
+    void (*Kill)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Frees resources associated with the specified process.
+     *
+     * This function releases any memory or resources allocated for the given
+     * `CMUTIL_Process` instance. After this function is called, the specified
+     * process object should no longer be used.
+     *
+     * @param proc The process whose resources should be freed.
+     */
+    void (*Destroy)(CMUTIL_Process *proc);
+};
+
+/**
+ * @brief Creates a new process with the specified command and stream type.
+ *
+ * @param cwd The working directory for the new process.
+ * @param env The environment variables for the new process.
+ * @param command The command to execute in the new process.
+ * @param ... Additional arguments of the process.
+ *            The last argument must be NULL.
+ * @return A pointer to the newly created process, or NULL on failure.
+ */
+CMUTIL_API CMUTIL_Process *CMUTIL_ProcessCreateEx(
+        const char *cwd,
+        CMUTIL_Map *env,
+        const char *command,
+        ...);
+
+/**
+ * @brief Creates a new process with the specified command and stream type.
+ *
+ * @param cwd The working directory for the new process.
+ * @param env The environment variables for the new process.
+ * @param command The command to execute in the new process.
+ * @param ... Additional arguments of the process.
+ * @return A pointer to the newly created process, or NULL on failure.
+ */
+#define CMUTIL_ProcessCreate(cwd, env, command, ...) \
+        CMUTIL_ProcessCreateEx(cwd, env, command, ##__VA_ARGS__, NULL)
 
 #ifdef __cplusplus
 }

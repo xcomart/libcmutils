@@ -3,6 +3,7 @@
 //
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "libcmutils.h"
 #include "test.h"
@@ -14,29 +15,40 @@ static CMBool g_running = CMTrue;
 void client_handler(void* udata) {
     CMUTIL_Socket *csock = (CMUTIL_Socket *) udata;
     CMSocketResult sr = CMSocketOk;
-    CMUTIL_String *buf = CMUTIL_StringCreate();
+    CMUTIL_ByteBuffer *buf = CMUTIL_ByteBufferCreateEx(1024);
+    CMUTIL_String *str = CMUTIL_StringCreate();
 
     while (g_running) {
         sr = CMCall(csock, Read, buf, 4, 1000);
         if (sr == CMSocketOk) {
-            int len = (int)strtol(CMCall(buf, GetCString), NULL, 10);
+            uint8_t *p = CMCall(buf, GetBytes);
+            size_t blen = CMCall(buf, GetSize);
+            CMCall(str, AddNString, (char*)p, blen);
+            int len = (int)strtol(CMCall(str, GetCString), NULL, 10);
             if (len == 0) break;
             CMCall(buf, Clear);
             sr = CMCall(csock, Read, buf, len, 1000);
             if (sr != CMSocketOk) break;
-            CMLogInfo("received from client: %04d%s", len, CMCall(buf, GetCString));
-            CMCall(buf, AddString, " - response");
-            len = (int)CMCall(buf, GetSize);
-            CMCall(buf, InsertPrint, 0, "%04d", len);
-            sr = CMCall(csock, Write, buf, 1000);
+            p = CMCall(buf, GetBytes);
+            blen = CMCall(buf, GetSize);
+            CMCall(str, AddNString, (char*)p, blen);
+            CMLogInfo("received from client: %04d%s", len, CMCall(str, GetCString));
+            CMCall(str, AddString, " - response");
+            len = (int)CMCall(str, GetSize);
+            CMCall(str, InsertPrint, 0, "%04d", len);
+            p = (uint8_t*)CMCall(str, GetCString);
+            blen = CMCall(str, GetSize);
+            sr = CMCall(csock, Write, p, blen, 1000);
             if (sr != CMSocketOk) break;
-            CMLogInfo("sent to client: %s", CMCall(buf, GetCString));
+            CMLogInfo("sent to client: %s", CMCall(str, GetCString));
             CMCall(buf, Clear);
+            CMCall(str, Clear);
         } else {
             break;
         }
     }
     CMCall(buf, Destroy);
+    CMCall(str, Destroy);
     CMCall(csock, Close);
 }
 
@@ -66,7 +78,8 @@ void *server_proc(void* udata) {
 void client_proc(void* udata) {
     CMUTIL_SocketAddr *addr = (CMUTIL_SocketAddr*) udata;
     CMUTIL_Socket *csock = CMUTIL_SocketConnectWithAddr(addr, 1000);
-    CMUTIL_String *buf = CMUTIL_StringCreate();
+    CMUTIL_String *sbuf = CMUTIL_StringCreate();
+    CMUTIL_ByteBuffer *buf = CMUTIL_ByteBufferCreateEx(1024);
     CMUTIL_Thread *self_thread = CMUTIL_ThreadSelf();
     const char *tname = CMCall(self_thread, GetName);
     CMSocketResult sr = CMSocketOk;
@@ -76,30 +89,38 @@ void client_proc(void* udata) {
         CMUTIL_SocketAddrGet(addr, host, &port);
         CMLogInfo("connected to server: %s:%d", host, port);
         for (int i=0; i<10; i++) {
-            CMCall(buf, AddPrint, "%s: %d", tname, i);
-            int len = CMCall(buf, GetSize);
-            CMCall(buf, InsertPrint, 0, "%04d", len);
-            sr = CMCall(csock, Write, buf, 1000);
+            CMCall(sbuf, AddPrint, "%s: %d", tname, i);
+            int len = CMCall(sbuf, GetSize);
+            CMCall(sbuf, InsertPrint, 0, "%04d", len);
+            uint8_t *p = (uint8_t*)CMCall(sbuf, GetCString);
+            size_t blen = CMCall(sbuf, GetSize);
+            sr = CMCall(csock, Write, p, blen, 1000);
             if (sr != CMSocketOk) break;
-            CMLogInfo("sent to server: %s", CMCall(buf, GetCString));
-            CMCall(buf, Clear);
+            CMLogInfo("sent to server: %s", CMCall(sbuf, GetCString));
+            CMCall(sbuf, Clear);
             sr = CMCall(csock, Read, buf, 4, 1000);
             if (sr != CMSocketOk) break;
-            CMLogInfo("received length : %s", CMCall(buf, GetCString));
-            len = (int)strtol(CMCall(buf, GetCString), NULL, 10);
+            p = CMCall(buf, GetBytes);
+            blen = CMCall(buf, GetSize);
+            CMCall(sbuf, AddNString, (char*)p, blen);
+            CMLogInfo("received length : %s", CMCall(sbuf, GetCString));
+            len = (int)strtol(CMCall(sbuf, GetCString), NULL, 10);
             CMCall(buf, Clear);
             sr = CMCall(csock, Read, buf, len, 1000);
             if (sr != CMSocketOk) break;
-            CMLogInfo("received from server: %04d%s", len, CMCall(buf, GetCString));
+            p = CMCall(buf, GetBytes);
+            CMCall(sbuf, AddNString, (char*)p, len);
+            CMLogInfo("received from server: %04d%s", len, CMCall(sbuf, GetCString));
             CMCall(buf, Clear);
+            CMCall(sbuf, Clear);
         }
         if (sr == CMSocketOk) {
-            CMCall(buf, AddString, "0000");
-            CMCall(csock, Write, buf, 1000);
+            CMCall(csock, Write, "0000", 4, 1000);
         }
     }
 
     if (buf) CMCall(buf, Destroy);
+    if (sbuf) CMCall(sbuf, Destroy);
     if (csock) CMCall(csock, Close);
 }
 

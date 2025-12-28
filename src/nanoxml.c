@@ -126,7 +126,7 @@ void CMUTIL_XmlInit()
                 CMUTIL_GetMem(), 10, CMFalse, NULL);
 
     while (pair->key) {
-        CMCall(g_cmutil_xml_escape_map, Put, pair->key, pair->val);
+        CMCall(g_cmutil_xml_escape_map, Put, pair->key, pair->val, NULL);
         pair++;
     }
 }
@@ -157,8 +157,13 @@ CMUTIL_STATIC void CMUTIL_XmlSetAttribute(
         CMUTIL_XmlNode *node, const char *key, const char *value)
 {
     CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
-    CMCall(inode->attributes, Put, key,
-                CMUTIL_StringCreateInternal(inode->memst, 10, value));
+    CMUTIL_String *nval = CMUTIL_StringCreateInternal(inode->memst, 0, value);
+    CMUTIL_String *oldval = CMCall(inode->attributes, Get, key);
+    if (oldval) CMCall(oldval, Destroy);
+    if (!CMCall(inode->attributes, Put, key, nval, NULL)) {
+        CMCall(nval, Destroy);
+        CMLogError("CMUTIL_Map Put failed");
+    }
 }
 
 CMUTIL_STATIC size_t CMUTIL_XmlChildCount(const CMUTIL_XmlNode *node)
@@ -172,7 +177,7 @@ CMUTIL_STATIC void CMUTIL_XmlAddChild(
         CMUTIL_XmlNode *node, CMUTIL_XmlNode *child)
 {
     CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
-    CMCall(inode->children, Add, child);
+    CMCall(inode->children, Add, child, NULL);
     ((CMUTIL_XmlNode_Internal*)child)->parent = node;
 }
 
@@ -617,8 +622,9 @@ CMUTIL_STATIC CMBool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
         afval = CMUTIL_StringCreateInternal(
                     ctx->memst, CMCall(bfval, GetSize), NULL);
         CMUTIL_XmlUnescape(afval, bfval, ctx);
-        CMCall(inode->attributes, Put, attname, afval);
-        CMCall(bfval, Destroy);
+        CMCall(bfval, Destroy); bfval = NULL;
+        CMCall(inode->attributes, Put, attname, afval, (void**)&bfval);
+        if (bfval) CMCall(bfval, Destroy);
         DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
     }
     return CMTrue;

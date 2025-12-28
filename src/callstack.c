@@ -979,8 +979,7 @@ CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_StackWalkerGetStack(
         stacks = backtrace_symbols(buffer, nptrs);
         if (stacks) {
             for (i=skipdepth+1; i<nptrs; i++)
-                CMCall(res, Add, CMUTIL_StringCreateInternal(
-                                iwalker->memst, 50, stacks[i]));
+                CMCall(res, AddCString, stacks[i]);
             free(stacks);
         }
         return res;
