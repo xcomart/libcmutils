@@ -195,7 +195,7 @@ void CMUTIL_StringBaseInit()
     g_cmutil_csmap = CMUTIL_MapCreateEx(CMUTIL_MAP_DEFAULT, CMTrue, NULL);
     pair = g_msvc_cspiars;
     while (pair->csname) {
-        CMCall(g_cmutil_csmap, Put, pair->csname, pair);
+        CMCall(g_cmutil_csmap, Put, pair->csname, pair, NULL);
         pair++;
     }
 #endif

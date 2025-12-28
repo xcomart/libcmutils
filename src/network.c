@@ -451,15 +451,15 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SocketReadSocket(
     SOCKET rsock = INVALID_SOCKET;
 #if defined(MSWIN)
     WSAPROTOCOL_INFO pi;
-    CMUTIL_String *rcvbuf = CMUTIL_StringCreateInternal(
-                isock->memst, sizeof(pi), NULL);
+    CMUTIL_ByteBuffer *rcvbuf = CMUTIL_ByteBufferCreateInternal(
+                isock->memst, sizeof(pi));
     *rval = CMCall(sock, Read, rcvbuf, sizeof(pi), timeout);
     if (*rval != CMSocketOk) {
         // error code has been set already.
         CMCall(rcvbuf, Destroy);
         return NULL;
     }
-    memcpy(&pi, CMCall(rcvbuf, GetCString), sizeof(pi));
+    memcpy(&pi, CMCall(rcvbuf, GetBytes), sizeof(pi));
     CMCall(rcvbuf, Destroy);
     rsock = WSASocket(AF_INET, SOCK_STREAM, 0, &pi, 0, WSA_FLAG_OVERLAPPED);
     if (rsock == INVALID_SOCKET)
@@ -606,16 +606,12 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteSocket(
 #if defined(MSWIN)
     int ir;
     WSAPROTOCOL_INFO pi;
-    CMUTIL_String *sendbuf = NULL;
 
     ir = WSADuplicateSocket(isent->sock, (DWORD)pid, &pi);
     if (ir != 0)
         return CMSocketUnknownError;
-    sendbuf = CMUTIL_StringCreateInternal(isock->memst, sizeof(pi), NULL);
-    CMCall(sendbuf, AddNString, (char*)&pi, sizeof(pi));
 
-    res = CMCall(&isock->base, Write, sendbuf, timeout);
-    CMCall(sendbuf, Destroy);
+    res = CMCall(&isock->base, Write, (uint8_t*)&pi, sizeof(pi), timeout);
 #else
     char *cmd="SERV";
     struct iovec vector;
