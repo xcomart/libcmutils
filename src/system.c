@@ -432,7 +432,7 @@ CMUTIL_STATIC CMUTIL_FileList *CMUTIL_FileChildren(const CMUTIL_File *file)
                 CMUTIL_File *f = CMUTIL_FileCreateInternal(
                             ifile->memst, pathbuf);
                 ((CMUTIL_File_Internal*)f)->isref = CMTrue;
-                CMCall(flist->files, Add, f);
+                CMCall(flist->files, Add, f, NULL);
             }
         } while (FindNextFile(hFind, &ffd) != 0);
     }
