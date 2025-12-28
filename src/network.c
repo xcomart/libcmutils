@@ -148,7 +148,7 @@ CMUTIL_STATIC void CMUTIL_SSL_InitOpenSSLLocks(void)
     uint32_t i, nl = (uint32_t)CRYPTO_num_locks();
     g_cmutil_openssl_locks = CMUTIL_ArrayCreateEx(nl, NULL, NULL);
     for (i=0; i<nl; i++)
-        CMCall(g_cmutil_openssl_locks, Add, CMUTIL_MutexCreate());
+        CMCall(g_cmutil_openssl_locks, Add, CMUTIL_MutexCreate(), NULL);
 }
 
 static void CMUTIL_SSL_ClearOpenSSLLocks(void)
@@ -399,13 +399,13 @@ CMUTIL_STATIC CMUTIL_Socket_Internal *CMUTIL_SocketCreate(
 
 # define CMUTIL_RBUF_LEN    1024
 CMUTIL_STATIC CMSocketResult CMUTIL_SocketRead(
-        const CMUTIL_Socket *sock, CMUTIL_String *buffer,
+        const CMUTIL_Socket *sock, CMUTIL_ByteBuffer *buffer,
         uint32_t size, long timeout)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
     int rc;
     uint32_t rsize = 0;
-    char buf[CMUTIL_RBUF_LEN];
+    uint8_t buf[CMUTIL_RBUF_LEN];
 
     while (size > rsize) {
         uint32_t toberead = size - rsize;
@@ -435,7 +435,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketRead(
         }
         if (rc > 0) {
             CMLogTrace("%d bytes received", rc);
-            CMCall(buffer, AddNString, buf, (uint32_t)rc);
+            CMCall(buffer, AddBytes, buf, (uint32_t)rc);
             rsize += (uint32_t)rc;
         }
 
@@ -451,15 +451,15 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SocketReadSocket(
     SOCKET rsock = INVALID_SOCKET;
 #if defined(MSWIN)
     WSAPROTOCOL_INFO pi;
-    CMUTIL_String *rcvbuf = CMUTIL_StringCreateInternal(
-                isock->memst, sizeof(pi), NULL);
+    CMUTIL_ByteBuffer *rcvbuf = CMUTIL_ByteBufferCreateInternal(
+                isock->memst, sizeof(pi));
     *rval = CMCall(sock, Read, rcvbuf, sizeof(pi), timeout);
     if (*rval != CMSocketOk) {
         // error code has been set already.
         CMCall(rcvbuf, Destroy);
         return NULL;
     }
-    memcpy(&pi, CMCall(rcvbuf, GetCString), sizeof(pi));
+    memcpy(&pi, CMCall(rcvbuf, GetBytes), sizeof(pi));
     CMCall(rcvbuf, Destroy);
     rsock = WSASocket(AF_INET, SOCK_STREAM, 0, &pi, 0, WSA_FLAG_OVERLAPPED);
     if (rsock == INVALID_SOCKET)
@@ -545,15 +545,15 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SocketReadSocket(
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SocketWrite(
-        const CMUTIL_Socket *sock, CMUTIL_String *data, long timeout)
+        const CMUTIL_Socket *sock, const void *data,
+        uint32_t size, long timeout)
 {
-    uint32_t length = (uint32_t)CMCall(data, GetSize);
-    return CMCall(sock, WritePart, data, 0, length, timeout);
+    return CMCall(sock, WritePart, data, 0, size, timeout);
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SocketWritePart(
-        const CMUTIL_Socket *sock, CMUTIL_String *data,
-        int offset, uint32_t length, long timeout)
+        const CMUTIL_Socket *sock, const void *data,
+        uint32_t offset, uint32_t length, long timeout)
 {
     const CMUTIL_Socket_Internal *isock = (const CMUTIL_Socket_Internal*)sock;
     int rc;
@@ -569,10 +569,10 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWritePart(
         if (sr != CMSocketOk) return sr;
 
 #if defined(LINUX)
-        rc = (int)send(isock->sock, CMCall(data, GetCString) + offset,
+        rc = (int)send(isock->sock, data + offset,
                        size, MSG_NOSIGNAL);
 #else
-        rc = (int)send(isock->sock, CMCall(data, GetCString) + offset,
+        rc = (int)send(isock->sock, ((uint8_t*)data) + offset,
                        (int)size, 0);
 #endif
         if (rc == SOCKET_ERROR) {
@@ -606,16 +606,12 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteSocket(
 #if defined(MSWIN)
     int ir;
     WSAPROTOCOL_INFO pi;
-    CMUTIL_String *sendbuf = NULL;
 
     ir = WSADuplicateSocket(isent->sock, (DWORD)pid, &pi);
     if (ir != 0)
         return CMSocketUnknownError;
-    sendbuf = CMUTIL_StringCreateInternal(isock->memst, sizeof(pi), NULL);
-    CMCall(sendbuf, AddNString, (char*)&pi, sizeof(pi));
 
-    res = CMCall(&isock->base, Write, sendbuf, timeout);
-    CMCall(sendbuf, Destroy);
+    res = CMCall(&isock->base, Write, (uint8_t*)&pi, sizeof(pi), timeout);
 #else
     char *cmd="SERV";
     struct iovec vector;
@@ -1331,13 +1327,13 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketCheckWriteBuffer(
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
-        const CMUTIL_Socket *sock, CMUTIL_String *buffer,
+        const CMUTIL_Socket *sock, CMUTIL_ByteBuffer *buffer,
         uint32_t size, long timeout)
 {
     const CMUTIL_SSLSocket_Internal *isck =
             (const CMUTIL_SSLSocket_Internal*)sock;
     CMSocketResult res;
-    char buf[1024];
+    uint8_t buf[1024];
     int rc, cnt = 0;
     size_t rsz;
 #if defined(CMUTIL_SSL_USE_OPENSSL)
@@ -1364,7 +1360,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
                     CMLogError("SSL read failed");
                     return CMSocketReceiveFailed;
                 }
-                CMCall(buffer, AddNString, buf, (uint32_t)rc);
+                CMCall(buffer, AddBytes, buf, (uint32_t)rc);
                 size -= (uint32_t)rc;
                 if (size == 0)
                     return CMSocketOk;
@@ -1453,15 +1449,15 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_SSLSocketReadSocket(
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
-        const CMUTIL_Socket *sock, CMUTIL_String *data,
-        int offset, uint32_t length, long timeout)
+        const CMUTIL_Socket *sock, const void *data,
+        uint32_t offset, uint32_t length, long timeout)
 {
     const CMUTIL_SSLSocket_Internal *isck =
             (const CMUTIL_SSLSocket_Internal*)sock;
     CMSocketResult res;
     int rc, cnt = 0;
     uint32_t size = length;
-    const char *buf = CMCall(data, GetCString) + offset;
+    const uint8_t *buf = ((uint8_t*)data) + offset;
 #if defined(CMUTIL_SSL_USE_OPENSSL)
     int in_init=0;
 
@@ -1555,10 +1551,8 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
 #endif  // !CMUTIL_SSL_USE_OPENSSL
     if (cnt < timeout * 10)
         return CMSocketOk;
-    else {
-        CMLogError("send timed out.");
-        return CMSocketTimeout;
-    }
+    CMLogError("send timed out.");
+    return CMSocketTimeout;
 }
 
 CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWriteSocket(

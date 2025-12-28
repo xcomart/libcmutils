@@ -114,7 +114,8 @@ CMUTIL_STATIC void CMUTIL_MapRebuild(CMUTIL_Map_Internal *imap)
                         NULL, CMTrue);
             newbuckets[index] = bucket;
         }
-        CMCall(bucket, Add, item);
+        // cannot be duplicated when map rebuild.
+        CMCall(bucket, Add, item, NULL);
     }
 
     for (i=0; i<imap->bucketsize; i++) {
@@ -138,7 +139,8 @@ CMUTIL_STATIC CMUTIL_MapItem *CMUTIL_MapPutBase(
     CMUTIL_Array *bucket = imap->buckets[index];
     CMUTIL_MapItem *item = imap->memst->Alloc(sizeof(CMUTIL_MapItem));
     CMUTIL_MapItem *ires = NULL;
-    *prev = NULL;
+    if (prev)
+        *prev = NULL;
 
     memset(item, 0x0, sizeof(CMUTIL_MapItem));
 
@@ -163,38 +165,56 @@ CMUTIL_STATIC CMUTIL_MapItem *CMUTIL_MapPutBase(
         CMUTIL_MapToUpper(item->key);
     item->value = value;
     item->order = imap->order_seq++;
-    ires = CMCall(bucket, Add, item);
+    if (!CMCall(bucket, Add, item, (void**)&ires)) {
+        CMLogError("CMUTIL_Array Add failed");
+        imap->memst->Free(item->key);
+        imap->memst->Free(item);
+        return NULL;
+    }
     if (ires) {
-        *prev = ires->value;
+        if (prev)
+            *prev = ires->value;
         CMCall(imap->keyset, Remove, ires);
         imap->memst->Free(ires->key);
         imap->memst->Free(ires);
-    } else {
+   } else {
         imap->size++;
     }
     return item;
 }
 
-CMUTIL_STATIC void *CMUTIL_MapPut(
-        CMUTIL_Map *map, const char* key, void* value)
+CMUTIL_STATIC CMBool CMUTIL_MapPut(
+        CMUTIL_Map *map, const char* key, void* value, void** prev)
 {
     CMUTIL_Map_Internal *imap = (CMUTIL_Map_Internal*)map;
-    void *res = NULL;
-    CMUTIL_MapItem *item = CMUTIL_MapPutBase(imap, key, value, &res);
-    CMCall(imap->keyset, Add, item);
-    return res;
+    CMUTIL_MapItem *item = CMUTIL_MapPutBase(imap, key, value, prev);
+    if (!CMCall(imap->keyset, Add, item, NULL)) {
+        CMLogError("CMUTIL_Array Add failed");
+        CMCall(map, Remove, key);
+        return CMFalse;
+    }
+    return CMTrue;
 }
 
 CMUTIL_STATIC void CMUTIL_MapPutAll(
         CMUTIL_Map *map, const CMUTIL_Map *src)
 {
+    const CMUTIL_Map_Internal *imap = (const CMUTIL_Map_Internal*)map;
     CMUTIL_StringArray *keys = CMCall(src, GetKeys);
     uint32_t i;
     for (i=0; i<CMCall(keys, GetSize); i++) {
         const CMUTIL_String *skey = CMCall(keys, GetAt, i);
         const char *key = CMCall(skey, GetCString);
         void *val = CMCall(src, Get, key);
-        CMCall(map, Put, key, val);
+        void *prev = NULL;
+        CMCall(map, Put, key, val, &prev);
+        if (prev) {
+            if (imap->freecb)
+                imap->freecb(prev);
+            else {
+                CMLogErrorS("No free callback provided for previous value");
+            }
+        }
     }
     CMCall(keys, Destroy);
 }
@@ -395,18 +415,27 @@ CMUTIL_STATIC void CMUTIL_MapDestroy(CMUTIL_Map *map)
     imap->memst->Free(imap);
 }
 
-CMUTIL_STATIC void CMUTIL_MapPrintTo(const CMUTIL_Map *map, CMUTIL_String *out)
+CMUTIL_STATIC void CMUTIL_MapPrintTo(const CMUTIL_Map *map, CMUTIL_String *out, const char*(*to_strcb)(void*))
 {
     const CMUTIL_Map_Internal *imap = (const CMUTIL_Map_Internal*)map;
     uint32_t i;
 
     CMCall(out, AddChar, '{');
     for (i=0; i<CMCall(imap->keyset, GetSize); i++) {
+        CMUTIL_String *sv = NULL;
+        const char *v = NULL;
         CMUTIL_MapItem *item =
                 (CMUTIL_MapItem*)CMCall(imap->keyset, GetAt, i);
         if (CMCall(out, GetSize) > 1)
             CMCall(out, AddChar, ',');
         CMCall(out, AddString, item->key);
+        CMCall(out, AddChar, '=');
+        void *val = CMCall(map, Get, item->key);
+        if (to_strcb)
+            v = to_strcb(val);
+        else
+            v = (char*)val;
+        CMCall(out, AddString, v);
     }
     CMCall(out, AddChar, '}');
 }

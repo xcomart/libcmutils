@@ -27,13 +27,13 @@ int main()
     ASSERT(arr != NULL, "CMUTIL_ArrayCreateEx with capacity");
     ASSERT(CMCall(arr, GetSize) == 0, "GetSize");
 
-    CMCall(arr, Add, &a[2]);
+    CMCall(arr, Add, &a[2], NULL);
     ASSERT((CMCall(arr, GetSize) == 1 && *(int*)CMCall(arr, GetAt, 0) == 3), "Add");
 
-    CMCall(arr, Add, &a[0]);
-    CMCall(arr, Add, &a[0]);
-    CMCall(arr, Add, &a[0]);
-    CMCall(arr, Add, &a[0]);
+    CMCall(arr, Add, &a[0], NULL);
+    CMCall(arr, Add, &a[0], NULL);
+    CMCall(arr, Add, &a[0], NULL);
+    CMCall(arr, Add, &a[0], NULL);
     ASSERT(CMCall(arr, GetSize) == 5, "array extension");
 
     ASSERT(CMCall(arr, Remove, &a[2]) == &a[2] && CMCall(arr, GetSize) == 4, "Remove in unsorted array");
@@ -63,9 +63,9 @@ int main()
     ASSERT(arr != NULL, "CMUTIL_ArrayCreateEx with comparator and destructor");
     ASSERT(CMCall(arr, GetSize) == 0, "GetSize");
 
-    CMCall(arr, Add, CMStrdup("banana"));
-    CMCall(arr, Add, CMStrdup("cherry"));
-    CMCall(arr, Add, CMStrdup("apple"));
+    CMCall(arr, Add, CMStrdup("banana"), NULL);
+    CMCall(arr, Add, CMStrdup("cherry"), NULL);
+    CMCall(arr, Add, CMStrdup("apple"), NULL);
 
     ASSERT(CMCall(arr, GetSize) == 3, "GetSize after adding 3 string elements");
     ASSERT(strcmp(CMCall(arr, GetAt, 0), "apple") == 0, "Check sorted order at index 0");
@@ -76,12 +76,12 @@ int main()
 
     str = CMStrdup("banana");
     ASSERT(CMCall(arr, Push, str) == CMFalse && CMCall(arr, GetSize) == 2, "Push to sorted array should fail");
-    CMCall(arr, Add, str); str = NULL;
+    CMCall(arr, Add, str, NULL); str = NULL;
     ASSERT(strcmp(CMCall(arr, Top), "cherry") == 0, "Top in sorted array");
     ASSERT(strcmp(CMCall(arr, Bottom), "apple") == 0, "Bottom in sorted array");
     str = CMCall(arr, Pop);
     ASSERT(strcmp(str, "cherry") == 0 && CMCall(arr, GetSize) == 2, "Pop in sorted array");
-    CMCall(arr, Add, str); str = NULL;
+    CMCall(arr, Add, str, NULL); str = NULL;
 
 
     iter = CMCall(arr, Iterator);
@@ -97,11 +97,11 @@ int main()
 
     str = (char*)CMCall(arr, Remove, "cherry");
     ASSERT(strcmp(str, "cherry") == 0 && CMCall(arr, GetSize) == 2, "Remove in sorted array");
-    CMCall(arr, Add, str); str = NULL;
+    CMCall(arr, Add, str, NULL); str = NULL;
 
     str = CMCall(arr, RemoveAt, 1);
     ASSERT(strcmp(str, "banana") == 0 && CMCall(arr, GetSize) == 2, "RemoveAt in sorted array");
-    CMCall(arr, Add, str); str = NULL;
+    CMCall(arr, Add, str, NULL); str = NULL;
 
     idx = 0;
     ASSERT(strcmp(CMCall(arr, Find, "banana", &idx), "banana") == 0 && idx == 1, "Find in sorted array");

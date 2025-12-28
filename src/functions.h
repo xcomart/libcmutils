@@ -100,7 +100,8 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
 CMUTIL_List *CMUTIL_ListCreateInternal(CMUTIL_Mem *memst, CMFreeCB freecb);
 
 CMUTIL_LogAppender *CMUTIL_LogConsoleAppenderCreateInternal(
-        CMUTIL_Mem *memst, const char *name, const char *pattern);
+        CMUTIL_Mem *memst, const char *name, const char *pattern,
+        CMBool use_stderr);
 CMUTIL_LogAppender *CMUTIL_LogFileAppenderCreateInternal(
         CMUTIL_Mem *memst, const char *name,
         const char *fpath, const char *pattern);
@@ -178,6 +179,13 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(CMUTIL_Mem *memst,
         long pinginterval,
         CMBool testonborrow,
         void *udata, CMUTIL_Timer *timer);
+
+CMUTIL_Process *CMUTIL_ProcessCreateInternal(
+        CMUTIL_Mem *memst,
+        const char *cwd,
+        CMUTIL_Map *env,
+        const char *command,
+        CMUTIL_StringArray *args);
 
 CMUTIL_String *CMUTIL_StringCreateInternal(
         CMUTIL_Mem *memst,
