@@ -815,6 +815,21 @@ CMUTIL_STATIC void CMUTIL_StringArrayDestroy(
     iarray->memst->Free(iarray);
 }
 
+CMUTIL_STATIC void CMUTIL_StringArrayPrintTo(
+        const CMUTIL_StringArray *array, CMUTIL_String *out)
+{
+    const CMUTIL_StringArray_Internal *iarray =
+            (const CMUTIL_StringArray_Internal*)array;
+    int i;
+    CMCall(out, AddString, "[");
+    for (i=0; i<CMCall(iarray->array, GetSize); i++) {
+        CMUTIL_String *item = (CMUTIL_String*)CMCall(array, GetAt, i);
+        if (i > 0) CMCall(out, AddString, ", ");
+        CMCall(out, AddAnother, item);
+    }
+    CMCall(out, AddChar, ']');
+}
+
 static CMUTIL_StringArray g_cmutil_stringarray = {
     CMUTIL_StringArrayAdd,
     CMUTIL_StringArrayAddCString,
@@ -827,7 +842,8 @@ static CMUTIL_StringArray g_cmutil_stringarray = {
     CMUTIL_StringArrayGetCString,
     CMUTIL_StringArrayGetSize,
     CMUTIL_StringArrayIterator,
-    CMUTIL_StringArrayDestroy
+    CMUTIL_StringArrayDestroy,
+    CMUTIL_StringArrayPrintTo
 };
 
 CMUTIL_StringArray *CMUTIL_StringArrayCreateInternal(
