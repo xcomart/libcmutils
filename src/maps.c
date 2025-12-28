@@ -415,18 +415,27 @@ CMUTIL_STATIC void CMUTIL_MapDestroy(CMUTIL_Map *map)
     imap->memst->Free(imap);
 }
 
-CMUTIL_STATIC void CMUTIL_MapPrintTo(const CMUTIL_Map *map, CMUTIL_String *out)
+CMUTIL_STATIC void CMUTIL_MapPrintTo(const CMUTIL_Map *map, CMUTIL_String *out, const char*(*to_strcb)(void*))
 {
     const CMUTIL_Map_Internal *imap = (const CMUTIL_Map_Internal*)map;
     uint32_t i;
 
     CMCall(out, AddChar, '{');
     for (i=0; i<CMCall(imap->keyset, GetSize); i++) {
+        CMUTIL_String *sv = NULL;
+        const char *v = NULL;
         CMUTIL_MapItem *item =
                 (CMUTIL_MapItem*)CMCall(imap->keyset, GetAt, i);
         if (CMCall(out, GetSize) > 1)
             CMCall(out, AddChar, ',');
         CMCall(out, AddString, item->key);
+        CMCall(out, AddChar, '=');
+        void *val = CMCall(map, Get, item->key);
+        if (to_strcb)
+            v = to_strcb(val);
+        else
+            v = (char*)val;
+        CMCall(out, AddString, v);
     }
     CMCall(out, AddChar, '}');
 }

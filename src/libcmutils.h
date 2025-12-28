@@ -2117,9 +2117,11 @@ struct CMUTIL_Map {
      *
      * @param map A pointer to the map object to be printed.
      * @param out A pointer to the CMUTIL_String object to append the output.
+     * @param to_strcb A callback function to convert value to string,
+     *                or NULL to use as string itself.
      */
     void (*PrintTo)(
-            const CMUTIL_Map *map, CMUTIL_String *out);
+            const CMUTIL_Map *map, CMUTIL_String *out, const char*(*to_strcb)(void*));
 
     /**
      * @brief Get the value at a specific index in the map.
