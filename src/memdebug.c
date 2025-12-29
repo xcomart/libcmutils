@@ -54,7 +54,7 @@ static CMUTIL_Mutex *g_cmutil_memlog_mutex = NULL;
 
 CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
 {
-    static char buf[2048];
+    static char buf[2048] = {0,};
     static CMBool havepath = CMFalse;
     static int rcnt = 0;
     FILE *res = NULL;
@@ -63,11 +63,11 @@ CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
     if (!havepath) {
         ssize_t sz;
         struct tm currtm;
-        struct timeval tv;
-        char dtbuf[32];
+        char dtbuf[32] = {0,};
+        time_t now = time(NULL);
+        // localtime_s(&currtm, &now);
+        localtime_r(&now, &currtm);
 
-        gettimeofday(&tv, NULL);
-        localtime_r((time_t*)&(tv.tv_sec), &currtm);
 #if defined(LINUX)
         sz = readlink("/proc/self/exe", buf, sizeof(buf));
 #elif defined(SUNOS)
@@ -78,7 +78,7 @@ CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
         strcat(buf, appname);
         sz = (ssize_t)strlen(buf);
 #elif defined(MSWIN)
-        sz = (size_t)GetModuleFileName(NULL, buf, sizeof(buf));
+        sz = (ssize_t)GetModuleFileName(NULL, buf, sizeof(buf));
 #else
         // unknown platform just save it current dir
         sz = 0;
@@ -89,7 +89,7 @@ CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
         strcat(buf, dtbuf);
         strcat(buf, ".txt");
 
-        printf("memory log will be stored at '%s'.\n", buf);
+        printf("memory log will be stored at '%s'."S_CRLF, buf);
 
         havepath = CMTrue;
     }
