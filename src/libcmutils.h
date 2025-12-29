@@ -3932,6 +3932,20 @@ struct CMUTIL_LogSystem {
      * @param logsys A pointer to the CMUTIL_LogSystem object to be destroyed.
      */
     void(*Destroy)(CMUTIL_LogSystem *logsys);
+
+    /**
+     * @brief Function for updating the environment of the log system.
+     *
+     * This function is used to update or reconfigure the environment
+     * of a given log system. It allows dynamic changes to the log system's
+     * environment settings.
+     * Use when a new process is created using a fork.
+     *
+     * @param logsys A pointer to the CMUTIL_LogSystem object whose environment
+     *               should be updated.
+     * @return CMTrue on success, CMFalse on failure.
+     */
+    CMBool (*UpdateEnv)(CMUTIL_LogSystem *logsys);
 };
 
 /**
