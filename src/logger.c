@@ -623,16 +623,13 @@ CMUTIL_STATIC void CMUTIL_LogAppenderBaseAppend(
     CMCall(iter, Destroy);
 
     if (iap->isasync) {
-        if (CMCall(iap->buffer, GetSize) >= iap->buffersz) {
-            // CMCall(iap->mutex, Unlock);
-            // CMCall(param.dest, Destroy);
-            // printf("Warning! '%s' async buffer is full.\n", iap->name);
-            // return;
-            CMCall(appender, Flush);
-        }
+        CMCall(iap->mutex, Lock);
         CMCall(iap->buffer, AddTail,
             CMUTIL_LogAppderAsyncItemCreate(
                         iap->memst, param.dest, &currtm));
+        if (CMCall(iap->buffer, GetSize) >= iap->buffersz) {
+            CMCall(appender, Flush);
+        }
         CMCall(iap->mutex, Unlock);
     }
     else {
@@ -2167,8 +2164,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
             uint32_t i;
             for (i=0; i<CMCall(jarr, GetSize); i++) {
                 CMUTIL_Json *item = CMCall(jarr, Get, i);
-                CMJsonType type = CMCall(item, GetType);
-                if (type == CMJsonTypeArray) {
+                if (CMCall(item, GetType) == CMJsonTypeArray) {
                     printf("invalid appender reference in logger.\n");
                     return CMFalse;
                 }
