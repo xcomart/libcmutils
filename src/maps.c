@@ -200,14 +200,12 @@ CMUTIL_STATIC void CMUTIL_MapPutAll(
         CMUTIL_Map *map, const CMUTIL_Map *src)
 {
     const CMUTIL_Map_Internal *imap = (const CMUTIL_Map_Internal*)map;
-    CMUTIL_StringArray *keys = CMCall(src, GetKeys);
+    CMUTIL_Map_Internal *smap = (CMUTIL_Map_Internal*)src;
     uint32_t i;
-    for (i=0; i<CMCall(keys, GetSize); i++) {
-        const CMUTIL_String *skey = CMCall(keys, GetAt, i);
-        const char *key = CMCall(skey, GetCString);
-        void *val = CMCall(src, Get, key);
+    for (i=0; i<CMCall(smap->keyset, GetSize); i++) {
+        const CMUTIL_MapItem *item = CMCall(smap->keyset, GetAt, i);
         void *prev = NULL;
-        CMCall(map, Put, key, val, &prev);
+        CMCall(map, Put, item->key, item->value, &prev);
         if (prev) {
             if (imap->freecb)
                 imap->freecb(prev);
@@ -216,7 +214,6 @@ CMUTIL_STATIC void CMUTIL_MapPutAll(
             }
         }
     }
-    CMCall(keys, Destroy);
 }
 
 CMUTIL_STATIC void *CMUTIL_MapGet(const CMUTIL_Map *map, const char* key)
@@ -309,23 +306,23 @@ CMUTIL_STATIC size_t CMUTIL_MapGetSize(const CMUTIL_Map *map)
 typedef struct CMUTIL_MapIter_st {
     CMUTIL_Iterator             base;
     const CMUTIL_Map_Internal   *imap;
-    CMUTIL_StringArray          *keys;
-    CMUTIL_Iterator             *keyiter;
+    uint32_t                    index;
 } CMUTIL_MapIter_st;
 
 CMUTIL_STATIC CMBool CMUTIL_MapIterHasNext(const CMUTIL_Iterator *iter)
 {
     const CMUTIL_MapIter_st *iiter = (const CMUTIL_MapIter_st*)iter;
-    return CMCall(iiter->keyiter, HasNext);
+    return iiter->index < CMCall(iiter->imap->keyset, GetSize) ?
+            CMTrue : CMFalse;
 }
 
 CMUTIL_STATIC void *CMUTIL_MapIterNext(CMUTIL_Iterator *iter)
 {
     CMUTIL_MapIter_st *iiter = (CMUTIL_MapIter_st*)iter;
-    CMUTIL_String *key = (CMUTIL_String*)CMCall(iiter->keyiter, Next);
-    if (key) {
-        const char *skey = CMCall(key, GetCString);
-        return CMCall((const CMUTIL_Map*)iiter->imap, Get, skey);
+    CMUTIL_MapItem *item = CMCall(iiter->imap->keyset, GetAt, iiter->index);
+    if (item) {
+        iiter->index++;
+        return item->value;
     }
     return NULL;
 }
@@ -333,8 +330,6 @@ CMUTIL_STATIC void *CMUTIL_MapIterNext(CMUTIL_Iterator *iter)
 CMUTIL_STATIC void CMUTIL_MapIterDestroy(CMUTIL_Iterator *iter)
 {
     CMUTIL_MapIter_st *iiter = (CMUTIL_MapIter_st*)iter;
-    CMCall(iiter->keyiter, Destroy);
-    CMCall(iiter->keys, Destroy);
     iiter->imap->memst->Free(iiter);
 }
 
@@ -351,8 +346,7 @@ CMUTIL_STATIC CMUTIL_Iterator *CMUTIL_MapIterator(const CMUTIL_Map *map)
     memset(res, 0x0, sizeof(CMUTIL_MapIter_st));
     memcpy(res, &g_cmutil_map_iterator, sizeof(CMUTIL_Iterator));
     res->imap = imap;
-    res->keys = CMCall(map, GetKeys);
-    res->keyiter = CMCall(res->keys, Iterator);
+    res->index = 0;
 
     return (CMUTIL_Iterator*)res;
 }
@@ -424,10 +418,10 @@ CMUTIL_STATIC void CMUTIL_MapPrintTo(const CMUTIL_Map *map, CMUTIL_String *out, 
     for (i=0; i<CMCall(imap->keyset, GetSize); i++) {
         CMUTIL_String *sv = NULL;
         const char *v = NULL;
-        CMUTIL_MapItem *item =
+        const CMUTIL_MapItem *item =
                 (CMUTIL_MapItem*)CMCall(imap->keyset, GetAt, i);
-        if (CMCall(out, GetSize) > 1)
-            CMCall(out, AddChar, ',');
+        if (i > 0)
+            CMCall(out, AddString, ", ");
         CMCall(out, AddString, item->key);
         CMCall(out, AddChar, '=');
         void *val = CMCall(map, Get, item->key);
