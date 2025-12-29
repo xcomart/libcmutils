@@ -1520,10 +1520,6 @@ CMUTIL_STATIC int CMUTIL_TimerTaskComp(const void *a, const void *b)
     int ret = CMUTIL_TimerTVCompare(&(ta->nextrun), &(tb->nextrun));
     if (ret == 0) ret = (int)(ta->period - tb->period);
     if (ret == 0) ret = (int)(ta - tb);
-    if (ret == 0) {
-        CMLogErrorS("TimerTask with same address, this cannot be happen. "
-                    "Please report to developer. With below callstack.");
-    }
     return ret;
 }
 
