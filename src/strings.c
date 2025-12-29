@@ -892,7 +892,7 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_CSConvConv(
             // convert mbcs to widechar and convert widechar to mbcs
             WCHAR *wstr = NULL;
             int cvsize;
-            int size = CMCall(instr, GetSize);
+            int size = (int)CMCall(instr, GetSize);
             char *rbuf = NULL;
             wstr = memst->Alloc(sizeof(WCHAR) * size);
             cvsize = MultiByteToWideChar(
@@ -1181,7 +1181,11 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddByte(
         CMUTIL_ByteBuffer *buffer,
         uint8_t b)
 {
-    return CMCall(buffer, AddBytes, &b, 1);
+    CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
+    CMUTIL_ByteBufferCheckSize(bbi, 1);
+    *(bbi->buffer + bbi->size) = b;
+    bbi->size ++;
+    return buffer;
 }
 
 CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytes(
@@ -1189,16 +1193,7 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytes(
         const uint8_t *bytes,
         uint32_t length)
 {
-    if (bytes && length > 0) {
-        CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
-        CMUTIL_ByteBufferCheckSize(bbi, length);
-        memcpy(bbi->buffer + bbi->size, bytes, length);
-        bbi->size += length;
-        return buffer;
-    }
-    CMLogErrorS("invalid parameter bytes: %s, length: %u",
-        bytes == NULL ? "NULL" : "not NULL", length);
-    return NULL;
+    return CMCall(buffer, AddBytesPart, bytes, 0, length);
 }
 
 CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytesPart(
