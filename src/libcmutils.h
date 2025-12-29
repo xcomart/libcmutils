@@ -5214,7 +5214,13 @@ typedef enum CMProcStreamType {
      * Current process can read from child process's stdout
      * and write to child process's stdin.
      */
-    CMProcStreamReadWrite = 3
+    CMProcStreamReadWrite = 3,
+    /**
+     * Process with read the error streams.
+     * The current process can read from the child process's stderr
+     * using the ReadErr method.
+     */
+    CMProcStreamReadErr = 4
 } CMProcStreamType;
 
 /**
@@ -5399,6 +5405,20 @@ struct CMUTIL_Process {
      * @param proc The process whose resources should be freed.
      */
     void (*Destroy)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Read data from the process's stderr.
+     *
+     * If the process is not running, or the stream type does
+     * not contain CMProcStreamReadErr flag,
+     * this function will return -1.
+     *
+     * @param proc The process to read from.
+     * @param buf The buffer to store the read data.
+     * @param count The maximum number of bytes to read.
+     * @return The number of bytes read, or -1 on error.
+     */
+    ssize_t (*ReadErr)(CMUTIL_Process *proc, CMUTIL_ByteBuffer *buf, size_t count);
 };
 
 /**
