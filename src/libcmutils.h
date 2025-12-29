@@ -5195,24 +5195,27 @@ CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
  */
 typedef enum CMProcStreamType {
     /**
-     * Process with no stream. stdout and stderr of the child process
+     * Process with no stream. The stdout and stderr of the child process
      * will be redirected to the current process's stdout and stderr
      */
     CMProcStreamNone = 0,
     /**
      * Process with read stream.
-     * Current process can read from child process's stdout using Read method.
+     * The current process can read from the child process's stdout
+     * using the Read method.
      */
     CMProcStreamRead = 1,
     /**
      * Process with writing stream.
-     * Current process can write to child process's stdin using Write method
+     * The current process can write to the child process's stdin
+     * using Write method
      */
     CMProcStreamWrite = 2,
     /**
      * Process with read and write streams.
-     * Current process can read from child process's stdout
-     * and write to child process's stdin.
+     * The current process can read from the child process's stdout
+     * and write to the child process's stdin.
+     * This is the same as `CMProcStreamRead | CMProcStreamWrite`.
      */
     CMProcStreamReadWrite = 3,
     /**
@@ -5234,7 +5237,7 @@ struct CMUTIL_Process {
      * If the process is already running, this function will return CMFalse.
      *
      * @param proc The process to start.
-     * @param type The type of stream to use for the process.
+     * @param type The combination of the type of stream to use for the process.
      * @return CMTrue if the process started successfully, CMFalse otherwise.
      */
     CMBool (*Start)(CMUTIL_Process *proc, CMProcStreamType type);
@@ -5422,7 +5425,11 @@ struct CMUTIL_Process {
 };
 
 /**
- * @brief Creates a new process with the specified command and stream type.
+ * @brief Creates a new process with the specified command and arguments.
+ *
+ * Sets working directory, environment variables, command, and arguments
+ * for the new process. Same as `CMUTIL_ProcessCreate` macro, but
+ * the last parameter must be NULL.
  *
  * @param cwd The working directory for the new process.
  * @param env The environment variables for the new process.
@@ -5438,7 +5445,11 @@ CMUTIL_API CMUTIL_Process *CMUTIL_ProcessCreateEx(
         ...);
 
 /**
- * @brief Creates a new process with the specified command and stream type.
+ * @brief Creates a new process with the specified command and arguments.
+ *
+ * Sets working directory, environment variables, command, and arguments
+ * for the new process.
+ * This macro adds NULL as the last argument to `CMUTIL_ProcessCreateEx`.
  *
  * @param cwd The working directory for the new process.
  * @param env The environment variables for the new process.
