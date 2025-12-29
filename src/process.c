@@ -224,6 +224,8 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
         CMUTIL_ClosePipe(p3[1]);
         return CMTrue;
     }
+    CMUTIL_LogSystem *lsys = CMUTIL_LogSystemGet();
+    CMCall(lsys, UpdateEnv);
     /* Child process. */
     if (ip->type & CMProcStreamWrite) {
         dup2(p1[0], STDIN_FILENO);
