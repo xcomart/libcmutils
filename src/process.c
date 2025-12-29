@@ -216,29 +216,29 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
         ip->pid = pid;
         if (ip->type & CMProcStreamWrite) {
             ip->inpipe = p1[1];  // write to process stdin
-            close(p1[0]);
+            CMUTIL_ClosePipe(p1[0]);
         }
         ip->outpipe = p2[0]; // read from process stdout
         ip->errpipe = p3[0]; // read from process stderr
-        close(p2[1]);
-        close(p3[1]);
+        CMUTIL_ClosePipe(p2[1]);
+        CMUTIL_ClosePipe(p3[1]);
         return CMTrue;
     }
     /* Child process. */
     if (ip->type & CMProcStreamWrite) {
         dup2(p1[0], STDIN_FILENO);
-        close(p1[0]);
-        close(p1[1]);
+        CMUTIL_ClosePipe(p1[0]);
+        CMUTIL_ClosePipe(p1[1]);
     } else {
         dup2(ip->inpipe, STDIN_FILENO);
-        close(ip->inpipe);
+        CMUTIL_ClosePipe(ip->inpipe);
     }
     dup2(p2[1], STDOUT_FILENO);
     dup2(p3[1], STDERR_FILENO);
-    close(p2[0]);
-    close(p2[1]);
-    close(p3[0]);
-    close(p3[1]);
+    CMUTIL_ClosePipe(p2[0]);
+    CMUTIL_ClosePipe(p2[1]);
+    CMUTIL_ClosePipe(p3[0]);
+    CMUTIL_ClosePipe(p3[1]);
 
     // set environment variables
     if (ip->env) {
@@ -286,15 +286,15 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
     abort();
 
 err_fork:
-    close(p3[1]);
-    close(p3[0]);
+    CMUTIL_ClosePipe(p3[1]);
+    CMUTIL_ClosePipe(p3[0]);
 err_pipe3:
-    close(p2[1]);
-    close(p2[0]);
+    CMUTIL_ClosePipe(p2[1]);
+    CMUTIL_ClosePipe(p2[0]);
 err_pipe2:
     if (ip->inpipe == EMPTY_STREAM) {
-        close(p1[1]);
-        close(p1[0]);
+        CMUTIL_ClosePipe(p1[1]);
+        CMUTIL_ClosePipe(p1[0]);
     }
 err_pipe1:
     return CMFalse;
@@ -357,7 +357,7 @@ CMUTIL_STATIC void CMUTIL_ProcessFlushStdout(
     if (ip->pipe_to) {
         CMCall(ip->pipe_to, Write, buf, size);
     } else {
-        fwrite(buf, 1, size, stdout);
+        CMLogDebug("[%s] stdout - %.*s", CMCall(ip->command, GetCString), size, buf);
     }
     CMCall(bbuf, Clear);
 }
@@ -367,7 +367,7 @@ CMUTIL_STATIC void CMUTIL_ProcessFlushStderr(
 {
     const uint8_t *buf = CMCall(bbuf, GetBytes);
     const size_t size = CMCall(bbuf, GetSize);
-    fwrite(buf, 1, size, stderr);
+    CMLogDebug("[%s] stderr - %.*s", CMCall(ip->command, GetCString), size, buf);
     CMCall(bbuf, Clear);
 }
 
@@ -383,10 +383,16 @@ CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
 #if defined(MSWIN)
     HANDLE pfd[2];
     HANDLE *tpfd = pfd;
-    if (ip->type & CMProcStreamRead) {
+    if (ip->type & CMProcStreamRead && ip->pipe_to == NULL) {
         fd_cnt--;
         tpfd = pfd + 1;
     }
+    if (ip->type & CMProcStreamReadErr) {
+        fd_cnt--;
+        // no need reader
+        if (fd_cnt == 0) closecnt = 3;
+    }
+
     while (closecnt < 3) {
         uint8_t c;
         DWORD rc = WaitForMultipleObjects(fd_cnt, tpfd, FALSE, 0);
@@ -394,20 +400,23 @@ CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
             if (rc == WAIT_OBJECT_0 && fd_cnt == 2) {
                 ssize_t sz = CMUTIL_ProcessReadPipe(ip->outpipe, &c, 1);
                 if (sz == 1) {
-                    CMCall(stdbuf, AddByte, c);
-                    if (CMCall(stdbuf, GetSize) == 1024) {
+                    if (strchr("\r\n", c) == NULL) {
+                        CMCall(stdbuf, AddByte, c);
+                    }
+                    if (CMCall(stdbuf, GetSize) == 1024 || c == '\n') {
                         CMUTIL_ProcessFlushStdout(ip, stdbuf);
                     }
                 } else if (sz < 0) {
                     CMLogError("read stdout error: %s", strerror(errno));
                     closecnt |= 1;
                 }
-            } else if ((rc == WAIT_OBJECT_0 + 1 && fd_cnt == 2) ||
-                (rc == WAIT_OBJECT_0 && fd_cnt == 1)) {
+            } else if (rc == WAIT_OBJECT_0 + (fd_cnt - 1) {
                 ssize_t sz = CMUTIL_ProcessReadPipe(ip->errpipe, &c, 1);
                 if (sz == 1) {
-                    CMCall(errbuf, AddByte, c);
-                    if (CMCall(errbuf, GetSize) == 1024) {
+                    if (strchr("\r\n", c) == NULL) {
+                        CMCall(errbuf, AddByte, c);
+                    }
+                    if (CMCall(errbuf, GetSize) == 1024 || c == '\n') {
                         CMUTIL_ProcessFlushStderr(ip, errbuf);
                     }
                 } else if (sz < 0) {
@@ -419,6 +428,14 @@ CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
             CMLogError("read stdout error: %s", strerror(errno));
             closecnt = 3;
         } else if (rc == WAIT_TIMEOUT) {
+            if (CMCall(stdbuf, GetSize) > 0) {
+                CMUTIL_ProcessFlushStdout(ip, stdbuf);
+                CMCall(stdbuf, Clear);
+            }
+            if (CMCall(errbuf, GetSize) > 0) {
+                CMUTIL_ProcessFlushStderr(ip, errbuf);
+                CMCall(errbuf, Clear);
+            }
             USLEEP(10000);
         }
     }
@@ -427,9 +444,14 @@ CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
     struct pollfd *tpfd = pfd;
     memset(pfd, 0x0, sizeof(struct pollfd)*2);
 
-    if (ip->type & CMProcStreamRead) {
+    if (ip->type & CMProcStreamRead && ip->pipe_to == NULL) {
         fd_cnt--;
         tpfd = pfd + 1;
+    }
+    if (ip->type & CMProcStreamReadErr) {
+        fd_cnt--;
+        // no need reader
+        if (fd_cnt == 0) closecnt = 3;
     }
     pfd[0].fd = ip->outpipe;
     pfd[1].fd = ip->errpipe;
@@ -437,15 +459,17 @@ CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
     pfd[1].events = POLLIN;
 
     while (closecnt < 3) {
-        uint8_t c;
+        uint8_t c = 0;
         const int rc = poll(tpfd, fd_cnt, 0);
         if (rc > 0) {
             ssize_t n;
             if (pfd[0].revents) {
                 n = CMUTIL_ProcessReadPipe(ip->outpipe, &c, 1);
                 if (n == 1) {
-                    CMCall(stdbuf, AddByte, c);
-                    if (CMCall(stdbuf, GetSize) == 1024) {
+                    if (strchr("\r\n", c) == NULL) {
+                        CMCall(stdbuf, AddByte, c);
+                    }
+                    if (CMCall(stdbuf, GetSize) == 1024 || c == '\n') {
                         CMUTIL_ProcessFlushStdout(ip, stdbuf);
                     }
                 } else if (n < 0) {
@@ -463,8 +487,10 @@ CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
             if (pfd[1].revents) {
                 n = CMUTIL_ProcessReadPipe(ip->errpipe, &c, 1);
                 if (n == 1) {
-                    CMCall(errbuf, AddByte, c);
-                    if (CMCall(errbuf, GetSize) == 1024) {
+                    if (strchr("\r\n", c) == NULL) {
+                        CMCall(errbuf, AddByte, c);
+                    }
+                    if (CMCall(errbuf, GetSize) == 1024 || c == '\n') {
                         CMUTIL_ProcessFlushStderr(ip, errbuf);
                     }
                 } else if (n < 0) {
@@ -677,6 +703,7 @@ CMUTIL_STATIC int CMUTIL_ProcessWait(CMUTIL_Process *proc, long millis)
             if (pid > 0) break;
             usleep(step);
         }
+#endif
         if (ip->reader) {
             CMCall(ip->reader, Join);
             ip->reader = NULL;
@@ -692,7 +719,6 @@ CMUTIL_STATIC int CMUTIL_ProcessWait(CMUTIL_Process *proc, long millis)
                 command, ip->pid, status);
             CMCall(buf, Destroy);
         }
-#endif
     } else {
         CMLogErrorS("Process is not running.");
         status = -1;
@@ -749,6 +775,24 @@ CMUTIL_STATIC void CMUTIL_ProcessDestroy(CMUTIL_Process *proc)
     ip->memst->Free(ip);
 }
 
+CMUTIL_STATIC ssize_t CMUTIL_ProcessReadErr(
+    CMUTIL_Process *proc, CMUTIL_ByteBuffer *buf, size_t count)
+{
+    const CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
+    ssize_t ir;
+    uint8_t bytes[1024];
+    ssize_t nread = 0;
+    while (nread < count) {
+        ssize_t remain = (ssize_t)count - nread;
+        if (remain > sizeof(bytes)) remain = sizeof(bytes);
+        ir = CMUTIL_ProcessReadPipe(ip->errpipe, bytes, remain);
+        if (ir <= 0) break;
+        CMCall(buf, AddBytes, bytes, ir);
+        nread += ir;
+    }
+    return nread;
+}
+
 static CMUTIL_Process g_cmutil_process = {
     CMUTIL_ProcessStart,
     CMUTIL_ProcessGetPid,
@@ -763,7 +807,8 @@ static CMUTIL_Process g_cmutil_process = {
     CMUTIL_ProcessRead,
     CMUTIL_ProcessWait,
     CMUTIL_ProcessKill,
-    CMUTIL_ProcessDestroy
+    CMUTIL_ProcessDestroy,
+    CMUTIL_ProcessReadErr
 };
 
 CMUTIL_Process *CMUTIL_ProcessCreateInternal(
