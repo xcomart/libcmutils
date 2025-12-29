@@ -1172,7 +1172,7 @@ CMUTIL_STATIC void CMUTIL_ByteBufferCheckSize(
         size_t ncapa = bbi->capacity * 2;
         while (ncapa < reqsz)
             ncapa *= 2;
-        bbi->memst->Realloc(bbi->buffer, ncapa);
+        bbi->buffer = bbi->memst->Realloc(bbi->buffer, ncapa);
         bbi->capacity = ncapa;
     }
 }
