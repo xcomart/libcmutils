@@ -1406,12 +1406,12 @@ CMUTIL_STATIC void CMUTIL_LogSocketAppenderWrite(
     uint32_t i;
     CMUTIL_LogSocketAppender *iap = (CMUTIL_LogSocketAppender*)appender;
     CMSync(iap->base.mutex, {
-        for (i = 0; i < CMCall(iap->clients, GetSize); i++) {
+        for (i = 0; i < (uint32_t)CMCall(iap->clients, GetSize); i++) {
             CMUTIL_Socket *cli = (CMUTIL_Socket*)
                     CMCall(iap->clients, GetAt, i);
             const char *msg = CMCall(logmsg, GetCString);
             size_t size = CMCall(logmsg, GetSize);
-            if (CMCall(cli, Write, msg, size, 1000) != CMSocketOk) {
+            if (CMCall(cli, Write, msg, (uint32_t)size, 1000) != CMSocketOk) {
                 CMCall(iap->clients, RemoveAt, i);
                 i--;
                 CMCall(cli, Close);
