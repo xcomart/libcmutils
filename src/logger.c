@@ -519,6 +519,16 @@ typedef struct CMUTIL_LogAppderAsyncItem {
     CMUTIL_Mem *memst;
 } CMUTIL_LogAppderAsyncItem;
 
+
+CMUTIL_STATIC void CMUTIL_LogAppderAsyncItemDestroy(
+        CMUTIL_LogAppderAsyncItem *item)
+{
+    if (item) {
+        if (item->log) CMCall(item->log, Destroy);
+        item->memst->Free(item);
+    }
+}
+
 CMUTIL_STATIC void *CMUTIL_LogAppenderAsyncWriter(void *udata)
 {
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)udata;
@@ -567,15 +577,6 @@ CMUTIL_STATIC CMUTIL_LogAppderAsyncItem *CMUTIL_LogAppderAsyncItemCreate(
     return res;
 }
 
-CMUTIL_STATIC void CMUTIL_LogAppderAsyncItemDestroy(
-        CMUTIL_LogAppderAsyncItem *item)
-{
-    if (item) {
-        if (item->log) CMCall(item->log, Destroy);
-        item->memst->Free(item);
-    }
-}
-
 CMUTIL_STATIC void CMUTIL_LogAppenderBaseAppend(
     CMUTIL_LogAppender *appender,
     CMUTIL_Logger *logger,
@@ -621,7 +622,6 @@ CMUTIL_STATIC void CMUTIL_LogAppenderBaseAppend(
     }
     CMCall(iter, Destroy);
 
-    CMCall(iap->mutex, Lock);
     if (iap->isasync) {
         if (CMCall(iap->buffer, GetSize) >= iap->buffersz) {
             // CMCall(iap->mutex, Unlock);
@@ -633,12 +633,14 @@ CMUTIL_STATIC void CMUTIL_LogAppenderBaseAppend(
         CMCall(iap->buffer, AddTail,
             CMUTIL_LogAppderAsyncItemCreate(
                         iap->memst, param.dest, &currtm));
+        CMCall(iap->mutex, Unlock);
     }
     else {
+        CMCall(iap->mutex, Lock);
         CMCall(iap, Write, param.dest, &currtm);
+        CMCall(iap->mutex, Unlock);
         CMCall(param.dest, Destroy);
     }
-    CMCall(iap->mutex, Unlock);
 }
 
 CMUTIL_STATIC CMUTIL_LogAppenderFormatItem *CMUTIL_LogAppenderItemString(
@@ -1924,7 +1926,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureDefault(CMUTIL_Mem *memst)
     CMCall(g_cmutil_logsystem_mutex, Unlock);
 
     printf("logging system not initialized or invalid configuration. "
-              "using default configuraiton.\n");
+              "using default configuraiton."S_CRLF);
     return res;
 }
 
