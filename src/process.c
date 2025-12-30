@@ -162,9 +162,9 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
             CMUTIL_MapPair *pair = CMCall(pairs, GetAt, i);
             const char *skey = CMCall(pair, GetKey);
             const char *value = CMCall(pair, GetValue);
-            CMCall(envbuf, AddBytes, (uint8_t*)skey, strlen(skey));
+            CMCall(envbuf, AddBytes, (uint8_t*)skey, (uint32_t)strlen(skey));
             CMCall(envbuf, AddByte, '=');
-            CMCall(envbuf, AddBytes, (uint8_t*)value, strlen(value));
+            CMCall(envbuf, AddBytes, (uint8_t*)value, (uint32_t)strlen(value));
             CMCall(envbuf, AddByte, '\0');
         }
         CMCall(envbuf, AddByte, '\0');
