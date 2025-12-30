@@ -1967,6 +1967,41 @@ CMUTIL_API CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateEx(
 
 
 /**
+ * @typedef CMUTIL_MapPair Key-value pair for CMUTIL_Map.
+ */
+typedef struct CMUTIL_MapPair CMUTIL_MapPair;
+struct CMUTIL_MapPair {
+    /**
+     * @brief Retrieves the key from a given CMUTIL_MapPair instance.
+     *
+     * This function pointer is used to obtain the key associated with a
+     * CMUTIL_MapPair object. The key is represented as a constant character
+     * string and provides a means to identify the pair in the map structure.
+     *
+     * @param pair A pointer to the CMUTIL_MapPair instance from which the key
+     *             will be retrieved.
+     * @return A constant character pointer representing the key associated
+     *         with the given CMUTIL_MapPair.
+     */
+    const char *(*GetKey)(const CMUTIL_MapPair *pair);
+
+    /**
+     * @brief Retrieves the value from a given CMUTIL_MapPair instance.
+     *
+     * This function pointer is used to get the value associated with a
+     * CMUTIL_MapPair object. The value is represented as a void pointer and
+     * provides the data associated with the pair in the map structure.
+     *
+     * @param pair A pointer to the CMUTIL_MapPair instance from which the value
+     *             will be retrieved.
+     * @return A void pointer representing the value associated
+     *         with the given CMUTIL_MapPair.
+     */
+    void *(*GetValue)(const CMUTIL_MapPair *pair);
+};
+
+
+/**
  * @typedef CMUTIL_Map Hashmap type with item order preserved.
  */
 typedef struct CMUTIL_Map CMUTIL_Map;
@@ -1982,8 +2017,8 @@ struct CMUTIL_Map {
      * The order of the items in the map is preserved. If the key already exists,
      * the previous order is discarded and the new key-value pair is inserted at
      * the end of the map.
-     * If 70% of buckets are occupied, the map is rebuilt with 2 times
-     * the current size to reduce the collision rate.
+     * If the load factor ratio of buckets is occupied, the map is rebuilt with
+     * 2 times of the current size to reduce the collision rate.
      *
      * @param map A pointer to the map where the key-value pair should be inserted.
      * @param key The key associated with the value to insert or update in the map.
@@ -2054,6 +2089,21 @@ struct CMUTIL_Map {
      *         or nullptr if the map is empty.
      */
     CMUTIL_StringArray *(*GetKeys)(
+            const CMUTIL_Map *map);
+
+    /**
+     * @brief Function pointer that retrieves all key-value pairs from a map.
+     *
+     * This function pointer takes a constant CMUTIL_Map pointer and returns a
+     * CMUTIL_Array pointer containing all the key-value pairs
+     * with CMUTIL_MapPair form in the map. The CMUTIL library defines
+     * the structure and behavior of the map and the array.
+     *
+     * @param map A constant pointer to the map from which key-value pairs are to be retrieved.
+     * @return A pointer to a CMUTIL_Array containing the map's key-value pairs.
+     *         Do not destroy the returned array as it is managed by the map.
+     */
+    const CMUTIL_Array *(*GetPairs)(
             const CMUTIL_Map *map);
 
     /**
@@ -2174,17 +2224,20 @@ struct CMUTIL_Map {
  * Create a new map with default settings.
  */
 #define CMUTIL_MapCreate()  CMUTIL_MapCreateEx(\
-        CMUTIL_MAP_DEFAULT, CMFalse, NULL)
+        CMUTIL_MAP_DEFAULT, CMFalse, NULL, 0.75f)
 
 /**
  * @brief Create a new map with custom settings.
  * @param bucketsize The initial number of buckets for the map.
  * @param isucase Whether the key of the map should be case-insensitive.
  * @param freecb A callback function to free values when the map is destroyed.
+ * @param load_factor The load factor for the map,
+ *                    0.75 may appropriate for most use cases.
  * @return A pointer to the newly created map, or NULL on failure.
  */
 CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
-        uint32_t bucketsize, CMBool isucase, CMFreeCB freecb);
+        uint32_t bucketsize, CMBool isucase, CMFreeCB freecb,
+        float load_factor);
 
 
 /**

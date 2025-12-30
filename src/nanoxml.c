@@ -123,7 +123,8 @@ void CMUTIL_XmlInit()
 {
     const struct CMUTIL_EscapePair *pair = g_cmutil_xml_escapes;
     g_cmutil_xml_escape_map = CMUTIL_MapCreateInternal(
-                CMUTIL_GetMem(), 10, CMFalse, NULL);
+                CMUTIL_GetMem(), 10, CMFalse, NULL,
+                0.75f);
 
     while (pair->key) {
         CMCall(g_cmutil_xml_escape_map, Put, pair->key, pair->val, NULL);
@@ -249,20 +250,18 @@ CMUTIL_STATIC void CMUTIL_XmlBuildAttribute(
     if (CMCall(inode->attributes, GetSize) > 0) {
         uint32_t i;
         size_t len;
-        CMUTIL_StringArray *keys = CMCall(inode->attributes, GetKeys);
-        len = CMCall(keys, GetSize);
+        const CMUTIL_Array *pairs = CMCall(inode->attributes, GetPairs);
+        len = CMCall(pairs, GetSize);
         for (i=0; i<len; i++) {
-            const CMUTIL_String *key = CMCall(keys, GetAt, i);
-            const char *skey = CMCall(key, GetCString);
+            CMUTIL_MapPair *pair = (CMUTIL_MapPair*)CMCall(pairs, GetAt, i);
+            const char *skey = CMCall(pair, GetKey);
+            CMUTIL_String *sval = (CMUTIL_String*)CMCall(pair, GetValue);
             CMCall(buffer, AddChar, ' ');
-            CMCall(buffer, AddAnother, key);
+            CMCall(buffer, AddString, skey);
             CMCall(buffer, AddString, "=\"");
-            CMUTIL_XmlEscape(buffer, (CMUTIL_String*)
-                    CMCall(inode->attributes, Get, skey));
+            CMUTIL_XmlEscape(buffer, sval);
             CMCall(buffer, AddChar, '\"');
         }
-        if (keys)
-            CMCall(keys, Destroy);
     }
 }
 
@@ -394,9 +393,11 @@ CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLenInternal(
     res->tagname = CMUTIL_StringCreateInternal(memst, namelen, NULL);
     CMCall(res->tagname, AddNString, tagname, namelen);
     res->attributes = CMUTIL_MapCreateInternal(
-                memst, 50, CMFalse, CMUTIL_XmlStringDestroyer);
+                memst, 50, CMFalse,
+                CMUTIL_XmlStringDestroyer, 0.75f);
     res->children = CMUTIL_ArrayCreateInternal(
-                memst, 5, NULL, CMUTIL_XmlNodeDestroyer, CMFalse);
+                memst, 5, NULL,
+                CMUTIL_XmlNodeDestroyer, CMFalse);
     return (CMUTIL_XmlNode*)res;
 }
 

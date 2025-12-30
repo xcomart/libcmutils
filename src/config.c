@@ -262,12 +262,14 @@ CMUTIL_Config *CMUTIL_ConfigCreateInternal(CMUTIL_Mem *memst)
     memcpy(res, &g_cmutil_config, sizeof(CMUTIL_Config));
     res->memst = memst;
     res->confs = CMUTIL_MapCreateInternal(
-                memst, CMUTIL_MAP_DEFAULT, CMFalse, memst->Free);
+                memst, CMUTIL_MAP_DEFAULT, CMFalse,
+                memst->Free, 0.75f);
     res->sequence = CMUTIL_ArrayCreateInternal(
                 memst, 100, NULL,
                 CMUTIL_ConfItemDestroy, CMFalse);
     res->revconf = CMUTIL_MapCreateInternal(
-                memst, CMUTIL_MAP_DEFAULT, CMFalse, NULL);
+                memst, CMUTIL_MAP_DEFAULT, CMFalse, NULL,
+                0.75f);
     return (CMUTIL_Config*)res;
 }
 

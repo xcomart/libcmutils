@@ -407,7 +407,8 @@ void CMUTIL_LogInit()
 {
     int i;
     g_cmutil_log_item_map = CMUTIL_MapCreateInternal(
-                CMUTIL_GetMem(), 50, CMFalse, NULL);
+                CMUTIL_GetMem(), 50, CMFalse,
+                NULL, 0.75f);
     for (i = 0; i < LogType_Length; i++)
         g_cmutil_log_type_arr[i] = (CMUTIL_LogFormatType)i;
 
@@ -656,7 +657,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
 {
     CMUTIL_Map *map = CMUTIL_MapCreateInternal(
                 item->memst, 10, CMFalse,
-                CMUTIL_LogAppenderStringDestroyer);
+                CMUTIL_LogAppenderStringDestroyer, 0.75f);
     CMUTIL_StringArray *args = CMUTIL_StringSplitInternal(
                 item->memst, extra, ",");
     for (uint32_t i = 0; i < CMCall(args, GetSize); i++) {
@@ -1832,13 +1833,13 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemUpdateEnv(CMUTIL_LogSystem *lsys)
     CMUTIL_LogSystem_Internal *res = (CMUTIL_LogSystem_Internal*)lsys;
     CMBool ret = CMTrue;
     if (res->appenders) {
-        CMUTIL_StringArray *keys = CMCall(res->appenders, GetKeys);
-        for (int i = 0; i < CMCall(keys, GetSize); i++) {
-            const char *key = CMCall(keys, GetCString, i);
-            CMUTIL_LogAppenderBase *iap = CMCall(res->appenders, Get, key);
+        const CMUTIL_Array *pairs = CMCall(res->appenders, GetPairs);
+        for (uint32_t i=0; i<CMCall(pairs, GetSize); i++) {
+            CMUTIL_MapPair *pair = (CMUTIL_MapPair*)CMCall(pairs, GetAt, i);
+            CMUTIL_LogAppenderBase *iap =
+                (CMUTIL_LogAppenderBase*)CMCall(pair, GetValue);
             ret = ret &&CMUTIL_LogAppenderPatternRebuild(iap);
         }
-        CMCall(keys, Destroy);
     }
     return ret;
 }
@@ -1857,7 +1858,8 @@ CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem *memst)
     res->memst = memst;
     res->mutex = CMUTIL_MutexCreateInternal(memst);
     res->appenders = CMUTIL_MapCreateInternal(
-                memst, 256, CMFalse, CMUTIL_LogAppenderDestroyer);
+                memst, 256, CMFalse,
+                CMUTIL_LogAppenderDestroyer, 0.75f);
     res->cloggers = CMUTIL_ArrayCreateInternal(
                 memst, 5, CMUTIL_ConfLoggerComparator,
                 CMUTIL_ConfLoggerDestroyer, CMTrue);

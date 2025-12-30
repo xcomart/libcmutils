@@ -122,7 +122,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureFomJsonInternal(
 CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem *memst);
 
 CMUTIL_Map *CMUTIL_MapCreateInternal(CMUTIL_Mem *memst, uint32_t bucketsize,
-        CMBool isucase, CMFreeCB freecb);
+        CMBool isucase, CMFreeCB freecb, float load_factor);
 
 CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst);
 CMUTIL_JsonArray *CMUTIL_JsonArrayCreateInternal(CMUTIL_Mem *memst);
