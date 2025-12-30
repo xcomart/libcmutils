@@ -1967,6 +1967,41 @@ CMUTIL_API CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateEx(
 
 
 /**
+ * @typedef CMUTIL_MapPair Key-value pair for CMUTIL_Map.
+ */
+typedef struct CMUTIL_MapPair CMUTIL_MapPair;
+struct CMUTIL_MapPair {
+    /**
+     * @brief Retrieves the key from a given CMUTIL_MapPair instance.
+     *
+     * This function pointer is used to obtain the key associated with a
+     * CMUTIL_MapPair object. The key is represented as a constant character
+     * string and provides a means to identify the pair in the map structure.
+     *
+     * @param pair A pointer to the CMUTIL_MapPair instance from which the key
+     *             will be retrieved.
+     * @return A constant character pointer representing the key associated
+     *         with the given CMUTIL_MapPair.
+     */
+    const char *(*GetKey)(const CMUTIL_MapPair *pair);
+
+    /**
+     * @brief Retrieves the value from a given CMUTIL_MapPair instance.
+     *
+     * This function pointer is used to get the value associated with a
+     * CMUTIL_MapPair object. The value is represented as a void pointer and
+     * provides the data associated with the pair in the map structure.
+     *
+     * @param pair A pointer to the CMUTIL_MapPair instance from which the value
+     *             will be retrieved.
+     * @return A void pointer representing the value associated
+     *         with the given CMUTIL_MapPair.
+     */
+    void *(*GetValue)(const CMUTIL_MapPair *pair);
+};
+
+
+/**
  * @typedef CMUTIL_Map Hashmap type with item order preserved.
  */
 typedef struct CMUTIL_Map CMUTIL_Map;
@@ -1982,8 +2017,8 @@ struct CMUTIL_Map {
      * The order of the items in the map is preserved. If the key already exists,
      * the previous order is discarded and the new key-value pair is inserted at
      * the end of the map.
-     * If 70% of buckets are occupied, the map is rebuilt with 2 times
-     * the current size to reduce the collision rate.
+     * If the load factor ratio of buckets is occupied, the map is rebuilt with
+     * 2 times of the current size to reduce the collision rate.
      *
      * @param map A pointer to the map where the key-value pair should be inserted.
      * @param key The key associated with the value to insert or update in the map.
@@ -2054,6 +2089,21 @@ struct CMUTIL_Map {
      *         or nullptr if the map is empty.
      */
     CMUTIL_StringArray *(*GetKeys)(
+            const CMUTIL_Map *map);
+
+    /**
+     * @brief Function pointer that retrieves all key-value pairs from a map.
+     *
+     * This function pointer takes a constant CMUTIL_Map pointer and returns a
+     * CMUTIL_Array pointer containing all the key-value pairs
+     * with CMUTIL_MapPair form in the map. The CMUTIL library defines
+     * the structure and behavior of the map and the array.
+     *
+     * @param map A constant pointer to the map from which key-value pairs are to be retrieved.
+     * @return A pointer to a CMUTIL_Array containing the map's key-value pairs.
+     *         Do not destroy the returned array as it is managed by the map.
+     */
+    const CMUTIL_Array *(*GetPairs)(
             const CMUTIL_Map *map);
 
     /**
@@ -2174,17 +2224,20 @@ struct CMUTIL_Map {
  * Create a new map with default settings.
  */
 #define CMUTIL_MapCreate()  CMUTIL_MapCreateEx(\
-        CMUTIL_MAP_DEFAULT, CMFalse, NULL)
+        CMUTIL_MAP_DEFAULT, CMFalse, NULL, 0.75f)
 
 /**
  * @brief Create a new map with custom settings.
  * @param bucketsize The initial number of buckets for the map.
  * @param isucase Whether the key of the map should be case-insensitive.
  * @param freecb A callback function to free values when the map is destroyed.
+ * @param load_factor The load factor for the map,
+ *                    0.75 may appropriate for most use cases.
  * @return A pointer to the newly created map, or NULL on failure.
  */
 CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
-        uint32_t bucketsize, CMBool isucase, CMFreeCB freecb);
+        uint32_t bucketsize, CMBool isucase, CMFreeCB freecb,
+        float load_factor);
 
 
 /**
@@ -3932,6 +3985,20 @@ struct CMUTIL_LogSystem {
      * @param logsys A pointer to the CMUTIL_LogSystem object to be destroyed.
      */
     void(*Destroy)(CMUTIL_LogSystem *logsys);
+
+    /**
+     * @brief Function for updating the environment of the log system.
+     *
+     * This function is used to update or reconfigure the environment
+     * of a given log system. It allows dynamic changes to the log system's
+     * environment settings.
+     * Use when a new process is created using a fork.
+     *
+     * @param logsys A pointer to the CMUTIL_LogSystem object whose environment
+     *               should be updated.
+     * @return CMTrue on success, CMFalse on failure.
+     */
+    CMBool (*UpdateEnv)(CMUTIL_LogSystem *logsys);
 };
 
 /**
@@ -5195,26 +5262,35 @@ CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
  */
 typedef enum CMProcStreamType {
     /**
-     * Process with no stream. stdout and stderr of the child process
+     * Process with no stream. The stdout and stderr of the child process
      * will be redirected to the current process's stdout and stderr
      */
     CMProcStreamNone = 0,
     /**
      * Process with read stream.
-     * Current process can read from child process's stdout using Read method.
+     * The current process can read from the child process's stdout
+     * using the Read method.
      */
     CMProcStreamRead = 1,
     /**
      * Process with writing stream.
-     * Current process can write to child process's stdin using Write method
+     * The current process can write to the child process's stdin
+     * using Write method
      */
     CMProcStreamWrite = 2,
     /**
      * Process with read and write streams.
-     * Current process can read from child process's stdout
-     * and write to child process's stdin.
+     * The current process can read from the child process's stdout
+     * and write to the child process's stdin.
+     * This is the same as `CMProcStreamRead | CMProcStreamWrite`.
      */
-    CMProcStreamReadWrite = 3
+    CMProcStreamReadWrite = 3,
+    /**
+     * Process with read the error streams.
+     * The current process can read from the child process's stderr
+     * using the ReadErr method.
+     */
+    CMProcStreamReadErr = 4
 } CMProcStreamType;
 
 /**
@@ -5228,7 +5304,7 @@ struct CMUTIL_Process {
      * If the process is already running, this function will return CMFalse.
      *
      * @param proc The process to start.
-     * @param type The type of stream to use for the process.
+     * @param type The combination of the type of stream to use for the process.
      * @return CMTrue if the process started successfully, CMFalse otherwise.
      */
     CMBool (*Start)(CMUTIL_Process *proc, CMProcStreamType type);
@@ -5399,10 +5475,28 @@ struct CMUTIL_Process {
      * @param proc The process whose resources should be freed.
      */
     void (*Destroy)(CMUTIL_Process *proc);
+
+    /**
+     * @brief Read data from the process's stderr.
+     *
+     * If the process is not running, or the stream type does
+     * not contain CMProcStreamReadErr flag,
+     * this function will return -1.
+     *
+     * @param proc The process to read from.
+     * @param buf The buffer to store the read data.
+     * @param count The maximum number of bytes to read.
+     * @return The number of bytes read, or -1 on error.
+     */
+    ssize_t (*ReadErr)(CMUTIL_Process *proc, CMUTIL_ByteBuffer *buf, size_t count);
 };
 
 /**
- * @brief Creates a new process with the specified command and stream type.
+ * @brief Creates a new process with the specified command and arguments.
+ *
+ * Sets working directory, environment variables, command, and arguments
+ * for the new process. Same as `CMUTIL_ProcessCreate` macro, but
+ * the last parameter must be NULL.
  *
  * @param cwd The working directory for the new process.
  * @param env The environment variables for the new process.
@@ -5418,7 +5512,11 @@ CMUTIL_API CMUTIL_Process *CMUTIL_ProcessCreateEx(
         ...);
 
 /**
- * @brief Creates a new process with the specified command and stream type.
+ * @brief Creates a new process with the specified command and arguments.
+ *
+ * Sets working directory, environment variables, command, and arguments
+ * for the new process.
+ * This macro adds NULL as the last argument to `CMUTIL_ProcessCreateEx`.
  *
  * @param cwd The working directory for the new process.
  * @param env The environment variables for the new process.

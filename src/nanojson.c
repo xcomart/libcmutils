@@ -220,16 +220,15 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonObjectClone(const CMUTIL_Json *json)
             (const CMUTIL_JsonObject_Internal*)json;
     CMUTIL_JsonObject_Internal *res = (CMUTIL_JsonObject_Internal*)
             CMUTIL_JsonObjectCreateInternal(iobj->memst);
-    CMUTIL_StringArray *keys = CMCall(iobj->map, GetKeys);
+    const CMUTIL_Array *pairs = CMCall(iobj->map, GetPairs);
     uint32_t i;
-    for (i=0; i<CMCall(keys, GetSize); i++) {
-        const CMUTIL_String *key = CMCall(keys, GetAt, i);
-        const char *skey = CMCall(key, GetCString);
-        const CMUTIL_Json* val = CMCall(&iobj->base, Get, skey);
+    for (i=0; i<CMCall(pairs, GetSize); i++) {
+        CMUTIL_MapPair *pair = (CMUTIL_MapPair*)CMCall(pairs, GetAt, i);
+        const char *skey = CMCall(pair, GetKey);
+        const CMUTIL_Json* val = CMCall(pair, GetValue);
         CMUTIL_Json* dup = CMCall(val, Clone);
         CMCall(&res->base, Put, skey, dup);
     }
-    CMCall(keys, Destroy);
     return (CMUTIL_Json*)res;
 }
 
@@ -588,7 +587,8 @@ CMUTIL_JsonObject *CMUTIL_JsonObjectCreateInternal(CMUTIL_Mem *memst)
     memcpy(res, &g_cmutil_jsonobject, sizeof(CMUTIL_JsonObject));
     res->memst = memst;
     res->map = CMUTIL_MapCreateInternal(
-                memst, 256, CMFalse, CMUTIL_JsonDestroyInternal);
+                memst, 256, CMFalse,
+                CMUTIL_JsonDestroyInternal, 0.75f);
     res->keys = CMUTIL_ArrayCreateInternal(
                 memst, 10, (int(*)(const void*,const void*))strcmp,
                 memst->Free, CMFalse);

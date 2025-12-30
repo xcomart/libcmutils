@@ -31,10 +31,11 @@ CMUTIL_LogDefine("cmutil.maps")
 //*****************************************************************************
 
 typedef struct CMUTIL_MapItem {
-    char        *key;
-    void        *value;
-    uint32_t    hash;
-    int         order;
+    CMUTIL_MapPair  base;
+    char            *key;
+    void            *value;
+    uint32_t        hash;
+    int             order;
 } CMUTIL_MapItem;
 
 typedef struct CMUTIL_Map_Internal {
@@ -44,10 +45,11 @@ typedef struct CMUTIL_Map_Internal {
     CMUTIL_Array    *keyset;
     void            (*freecb)(void*);
     CMUTIL_Mem      *memst;
-    CMBool          isucase;
-    uint32_t        bucketsize;
-    uint32_t        usecount;
+    CMBool          is_ucase;
+    uint32_t        bucket_size;
+    uint32_t        use_count;
     int             order_seq;
+    float           load_factor;
 } CMUTIL_Map_Internal;
 
 CMUTIL_STATIC uint32_t CMUTIL_MapHash(const char *in)
@@ -99,7 +101,7 @@ CMUTIL_STATIC int CMUTIL_MapComparator(const void *a, const void *b)
 CMUTIL_STATIC void CMUTIL_MapRebuild(CMUTIL_Map_Internal *imap)
 {
     uint32_t i;
-    uint32_t newbucketsize = imap->bucketsize * 2;
+    uint32_t newbucketsize = imap->bucket_size * 2;
     CMUTIL_Array **newbuckets =
         imap->memst->Alloc(sizeof(CMUTIL_Array*) * newbucketsize);
     memset(newbuckets, 0x0, sizeof(CMUTIL_Array*) * newbucketsize);
@@ -118,7 +120,7 @@ CMUTIL_STATIC void CMUTIL_MapRebuild(CMUTIL_Map_Internal *imap)
         CMCall(bucket, Add, item, NULL);
     }
 
-    for (i=0; i<imap->bucketsize; i++) {
+    for (i=0; i<imap->bucket_size; i++) {
         CMUTIL_Array *bucket = imap->buckets[i];
         if (bucket) {
             CMCall(bucket, Destroy);
@@ -126,16 +128,26 @@ CMUTIL_STATIC void CMUTIL_MapRebuild(CMUTIL_Map_Internal *imap)
     }
     imap->memst->Free(imap->buckets);
     imap->buckets = newbuckets;
-    imap->bucketsize = newbucketsize;
+    imap->bucket_size = newbucketsize;
+}
+
+CMUTIL_STATIC const char *CMUTIL_MapPairGetKey(const CMUTIL_MapPair *pair)
+{
+    return ((CMUTIL_MapItem*)pair)->key;
+}
+
+CMUTIL_STATIC void *CMUTIL_MapPairGetValue(const CMUTIL_MapPair *pair)
+{
+    return ((CMUTIL_MapItem*)pair)->value;
 }
 
 CMUTIL_STATIC CMUTIL_MapItem *CMUTIL_MapPutBase(
         CMUTIL_Map_Internal *imap, const char* key, void* value, void **prev)
 {
-    uint32_t hash = imap->isucase?
+    uint32_t hash = imap->is_ucase?
                 CMUTIL_MapHashUpper(key) :
                 CMUTIL_MapHash(key);
-    uint32_t index = hash % imap->bucketsize;
+    uint32_t index = hash % imap->bucket_size;
     CMUTIL_Array *bucket = imap->buckets[index];
     CMUTIL_MapItem *item = imap->memst->Alloc(sizeof(CMUTIL_MapItem));
     CMUTIL_MapItem *ires = NULL;
@@ -143,15 +155,17 @@ CMUTIL_STATIC CMUTIL_MapItem *CMUTIL_MapPutBase(
         *prev = NULL;
 
     memset(item, 0x0, sizeof(CMUTIL_MapItem));
+    item->base.GetKey = CMUTIL_MapPairGetKey;
+    item->base.GetValue = CMUTIL_MapPairGetValue;
 
     if (!bucket) {
-        imap->usecount++;
-        if ((double)imap->usecount / (double)imap->bucketsize > 0.7) {
+        imap->use_count++;
+        if ((double)imap->use_count / (double)imap->bucket_size > imap->load_factor) {
             // Rebuild the map to reduce the collision rate
             CMLogTrace("Map bucket size is %u, used count is %u, rebuild",
-                imap->bucketsize, imap->usecount);
+                imap->bucket_size, imap->use_count);
             CMUTIL_MapRebuild(imap);
-            index = hash % imap->bucketsize;
+            index = hash % imap->bucket_size;
         }
         bucket = CMUTIL_ArrayCreateInternal(
                     imap->memst, 5, CMUTIL_MapComparator,
@@ -161,7 +175,7 @@ CMUTIL_STATIC CMUTIL_MapItem *CMUTIL_MapPutBase(
 
     item->hash = hash;
     item->key = imap->memst->Strdup(key);
-    if (imap->isucase)
+    if (imap->is_ucase)
         CMUTIL_MapToUpper(item->key);
     item->value = value;
     item->order = imap->order_seq++;
@@ -200,14 +214,12 @@ CMUTIL_STATIC void CMUTIL_MapPutAll(
         CMUTIL_Map *map, const CMUTIL_Map *src)
 {
     const CMUTIL_Map_Internal *imap = (const CMUTIL_Map_Internal*)map;
-    CMUTIL_StringArray *keys = CMCall(src, GetKeys);
+    CMUTIL_Map_Internal *smap = (CMUTIL_Map_Internal*)src;
     uint32_t i;
-    for (i=0; i<CMCall(keys, GetSize); i++) {
-        const CMUTIL_String *skey = CMCall(keys, GetAt, i);
-        const char *key = CMCall(skey, GetCString);
-        void *val = CMCall(src, Get, key);
+    for (i=0; i<CMCall(smap->keyset, GetSize); i++) {
+        const CMUTIL_MapItem *item = CMCall(smap->keyset, GetAt, i);
         void *prev = NULL;
-        CMCall(map, Put, key, val, &prev);
+        CMCall(map, Put, item->key, item->value, &prev);
         if (prev) {
             if (imap->freecb)
                 imap->freecb(prev);
@@ -216,24 +228,23 @@ CMUTIL_STATIC void CMUTIL_MapPutAll(
             }
         }
     }
-    CMCall(keys, Destroy);
 }
 
 CMUTIL_STATIC void *CMUTIL_MapGet(const CMUTIL_Map *map, const char* key)
 {
     const CMUTIL_Map_Internal *imap = (const CMUTIL_Map_Internal*)map;
-    uint32_t hash = imap->isucase?
+    uint32_t hash = imap->is_ucase?
                 CMUTIL_MapHashUpper(key) :
                 CMUTIL_MapHash(key);
-    uint32_t index = hash % imap->bucketsize;
+    uint32_t index = hash % imap->bucket_size;
     CMUTIL_Array *bucket = imap->buckets[index];
     void *res = NULL;
 
     if (bucket) {
-        CMUTIL_MapItem item = {(char*)key, NULL};
+        CMUTIL_MapItem item = {{}, (char*)key, NULL};
         uint32_t idx = 0;
         CMUTIL_MapItem *ires = NULL;
-        if (imap->isucase) {
+        if (imap->is_ucase) {
             char *skey = imap->memst->Strdup(key);
             CMUTIL_MapToUpper(skey);
             item.key = skey;
@@ -253,17 +264,17 @@ CMUTIL_STATIC void *CMUTIL_MapGet(const CMUTIL_Map *map, const char* key)
 CMUTIL_STATIC void *CMUTIL_MapRemove(CMUTIL_Map *map, const char* key)
 {
     CMUTIL_Map_Internal *imap = (CMUTIL_Map_Internal*)map;
-    uint32_t hash = imap->isucase?
+    uint32_t hash = imap->is_ucase?
                 CMUTIL_MapHashUpper(key) :
                 CMUTIL_MapHash(key);
-    uint32_t index = hash % imap->bucketsize;
+    uint32_t index = hash % imap->bucket_size;
     CMUTIL_Array *bucket = imap->buckets[index];
     void *res = NULL;
 
     if (bucket) {
         CMUTIL_MapItem *ires = NULL;
-        CMUTIL_MapItem item = {(char*)key, NULL, 0};
-        if (imap->isucase) {
+        CMUTIL_MapItem item = {{}, (char*)key, NULL, 0};
+        if (imap->is_ucase) {
             char *skey = imap->memst->Strdup(key);
             CMUTIL_MapToUpper(skey);
             item.key = skey;
@@ -300,6 +311,12 @@ CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_MapGetKeys(const CMUTIL_Map *map)
     return res;
 }
 
+CMUTIL_STATIC const CMUTIL_Array *CMUTIL_MapGetPairs(const CMUTIL_Map *map)
+{
+    const CMUTIL_Map_Internal *imap = (const CMUTIL_Map_Internal*)map;
+    return imap->keyset;
+}
+
 CMUTIL_STATIC size_t CMUTIL_MapGetSize(const CMUTIL_Map *map)
 {
     const CMUTIL_Map_Internal *imap = (const CMUTIL_Map_Internal*)map;
@@ -309,23 +326,23 @@ CMUTIL_STATIC size_t CMUTIL_MapGetSize(const CMUTIL_Map *map)
 typedef struct CMUTIL_MapIter_st {
     CMUTIL_Iterator             base;
     const CMUTIL_Map_Internal   *imap;
-    CMUTIL_StringArray          *keys;
-    CMUTIL_Iterator             *keyiter;
+    uint32_t                    index;
 } CMUTIL_MapIter_st;
 
 CMUTIL_STATIC CMBool CMUTIL_MapIterHasNext(const CMUTIL_Iterator *iter)
 {
     const CMUTIL_MapIter_st *iiter = (const CMUTIL_MapIter_st*)iter;
-    return CMCall(iiter->keyiter, HasNext);
+    return iiter->index < CMCall(iiter->imap->keyset, GetSize) ?
+            CMTrue : CMFalse;
 }
 
 CMUTIL_STATIC void *CMUTIL_MapIterNext(CMUTIL_Iterator *iter)
 {
     CMUTIL_MapIter_st *iiter = (CMUTIL_MapIter_st*)iter;
-    CMUTIL_String *key = (CMUTIL_String*)CMCall(iiter->keyiter, Next);
-    if (key) {
-        const char *skey = CMCall(key, GetCString);
-        return CMCall((const CMUTIL_Map*)iiter->imap, Get, skey);
+    CMUTIL_MapItem *item = CMCall(iiter->imap->keyset, GetAt, iiter->index);
+    if (item) {
+        iiter->index++;
+        return item->value;
     }
     return NULL;
 }
@@ -333,8 +350,6 @@ CMUTIL_STATIC void *CMUTIL_MapIterNext(CMUTIL_Iterator *iter)
 CMUTIL_STATIC void CMUTIL_MapIterDestroy(CMUTIL_Iterator *iter)
 {
     CMUTIL_MapIter_st *iiter = (CMUTIL_MapIter_st*)iter;
-    CMCall(iiter->keyiter, Destroy);
-    CMCall(iiter->keys, Destroy);
     iiter->imap->memst->Free(iiter);
 }
 
@@ -351,8 +366,7 @@ CMUTIL_STATIC CMUTIL_Iterator *CMUTIL_MapIterator(const CMUTIL_Map *map)
     memset(res, 0x0, sizeof(CMUTIL_MapIter_st));
     memcpy(res, &g_cmutil_map_iterator, sizeof(CMUTIL_Iterator));
     res->imap = imap;
-    res->keys = CMCall(map, GetKeys);
-    res->keyiter = CMCall(res->keys, Iterator);
+    res->index = 0;
 
     return (CMUTIL_Iterator*)res;
 }
@@ -362,7 +376,7 @@ CMUTIL_STATIC void CMUTIL_MapClearBase(CMUTIL_Map *map, CMBool freedata)
     CMUTIL_Map_Internal *imap = (CMUTIL_Map_Internal*)map;
     uint32_t i, j;
 
-    for (i=0; i<imap->bucketsize; i++) {
+    for (i=0; i<imap->bucket_size; i++) {
         CMUTIL_Array *bucket = imap->buckets[i];
         if (bucket) {
             for (j=0; j<CMCall(bucket, GetSize); j++) {
@@ -396,7 +410,7 @@ CMUTIL_STATIC void CMUTIL_MapDestroy(CMUTIL_Map *map)
     CMUTIL_Map_Internal *imap = (CMUTIL_Map_Internal*)map;
     uint32_t i, j;
 
-    for (i=0; i<imap->bucketsize; i++) {
+    for (i=0; i<imap->bucket_size; i++) {
         CMUTIL_Array *bucket = imap->buckets[i];
         if (bucket) {
             for (j=0; j<CMCall(bucket, GetSize); j++) {
@@ -424,10 +438,10 @@ CMUTIL_STATIC void CMUTIL_MapPrintTo(const CMUTIL_Map *map, CMUTIL_String *out, 
     for (i=0; i<CMCall(imap->keyset, GetSize); i++) {
         CMUTIL_String *sv = NULL;
         const char *v = NULL;
-        CMUTIL_MapItem *item =
+        const CMUTIL_MapItem *item =
                 (CMUTIL_MapItem*)CMCall(imap->keyset, GetAt, i);
-        if (CMCall(out, GetSize) > 1)
-            CMCall(out, AddChar, ',');
+        if (i > 0)
+            CMCall(out, AddString, ", ");
         CMCall(out, AddString, item->key);
         CMCall(out, AddChar, '=');
         void *val = CMCall(map, Get, item->key);
@@ -474,6 +488,7 @@ static CMUTIL_Map g_cmutil_map = {
     CMUTIL_MapGet,
     CMUTIL_MapRemove,
     CMUTIL_MapGetKeys,
+    CMUTIL_MapGetPairs,
     CMUTIL_MapGetSize,
     CMUTIL_MapIterator,
     CMUTIL_MapClear,
@@ -491,7 +506,7 @@ CMUTIL_STATIC int CMUTIL_MapCompareOrder(const void *a, const void *b)
 
 CMUTIL_Map *CMUTIL_MapCreateInternal(
         CMUTIL_Mem *memst, uint32_t bucketsize,
-        CMBool isucase, CMFreeCB freecb)
+        CMBool isucase, CMFreeCB freecb, float load_factor)
 {
     CMUTIL_Map_Internal *imap = memst->Alloc(sizeof(CMUTIL_Map_Internal));
     memset(imap, 0x0, sizeof(CMUTIL_Map_Internal));
@@ -499,8 +514,9 @@ CMUTIL_Map *CMUTIL_MapCreateInternal(
     memcpy(imap, &g_cmutil_map, sizeof(CMUTIL_Map));
     imap->buckets = memst->Alloc(sizeof(CMUTIL_Array)*bucketsize);
     memset(imap->buckets, 0x0, sizeof(CMUTIL_Array)*bucketsize);
-    imap->bucketsize = bucketsize;
-    imap->isucase = isucase;
+    imap->bucket_size = bucketsize;
+    imap->is_ucase = isucase;
+    imap->load_factor = load_factor;
     imap->keyset = CMUTIL_ArrayCreateInternal(
                 memst, bucketsize, CMUTIL_MapCompareOrder,
                 NULL, CMTrue);
@@ -511,9 +527,9 @@ CMUTIL_Map *CMUTIL_MapCreateInternal(
 }
 
 CMUTIL_Map *CMUTIL_MapCreateEx(
-        uint32_t bucketsize, CMBool isucase, CMFreeCB freecb)
+        uint32_t bucketsize, CMBool isucase, CMFreeCB freecb, float load_factor)
 {
     return CMUTIL_MapCreateInternal(
-                CMUTIL_GetMem(), bucketsize, isucase, freecb);
+                CMUTIL_GetMem(), bucketsize, isucase, freecb, load_factor);
 }
 

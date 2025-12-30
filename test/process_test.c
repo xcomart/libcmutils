@@ -15,12 +15,18 @@ int main() {
 
     CMUTIL_Process *proc = NULL;
     CMUTIL_Map *env = NULL;
+    CMUTIL_String *pathstr = NULL;
 
-    env = CMUTIL_MapCreateEx(CMUTIL_MAP_DEFAULT, CMFalse, CMFree);
+    env = CMUTIL_MapCreateEx(
+        CMUTIL_MAP_DEFAULT, CMFalse, CMFree, 0.75f);
 
     const char *path = getenv("PATH");
-    CMUTIL_String *pathstr = CMUTIL_StringCreateEx(0, path);
+    pathstr = CMUTIL_StringCreateEx(0, path);
+#if defined(MSWIN)
+    CMCall(pathstr, AddString, ";/opt/homebrew/bin");
+#else
     CMCall(pathstr, AddString, ":/opt/homebrew/bin");
+#endif
     path = CMCall(pathstr, GetCString);
     CMCall(env, Put, "PATH", CMStrdup(path), NULL);
 
