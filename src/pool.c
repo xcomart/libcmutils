@@ -42,6 +42,7 @@ typedef struct CMUTIL_Pool_Internal {
     CMBool              intimer;
     uint32_t            totcnt;
     uint32_t            maxcnt;
+    uint32_t            mincnt;
     CMBool              testonb;
 } CMUTIL_Pool_Internal;
 
@@ -56,27 +57,29 @@ CMUTIL_STATIC void *CMUTIL_PoolCheckOut(
             res = CMCall(ipool->avail, RemoveFront);
         } else {
             res = ipool->createf(ipool->udata);
-            if (res == NULL)
-                CMLogError("resource creation failed.");
-            else
+            if (res != NULL)
                 ipool->totcnt++;
         }
         CMCall(ipool->avlmtx, Unlock);
-        if (res && ipool->testonb) {
-            if (!ipool->testf(res, ipool->udata)) {
-                ipool->destroyf(res, ipool->udata);
-                res = ipool->createf(ipool->udata);
-                if (res == NULL) {
-                    CMCall(ipool->semp, Release);
-                    CMLogError("resource creation failed.");
+        if (res) {
+            if (ipool->testonb) {
+                if (!ipool->testf(res, ipool->udata)) {
+                    ipool->destroyf(res, ipool->udata);
+                    res = ipool->createf(ipool->udata);
+                    if (res == NULL) {
+                        CMCall(ipool->semp, Release);
+                        CMLogError("resource creation failed.");
+                    }
                 }
             }
+        } else {
+            CMCall(ipool->semp, Release);
+            CMLogError("resource creation failed.");
         }
         return res;
-    } else {
-        CMLogWarn("resource get timed out.");
-        return NULL;
     }
+    CMLogWarn("resource get timed out.");
+    return NULL;
 }
 
 CMUTIL_STATIC void CMUTIL_PoolRelease(
@@ -178,6 +181,7 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
     CMUTIL_Pool_Internal *res = memst->Alloc(sizeof(CMUTIL_Pool_Internal));
     memset(res, 0x0, sizeof(CMUTIL_Pool_Internal));
     memcpy(res, &g_cmutil_pool, sizeof(CMUTIL_Pool));
+    res->memst = memst;
     res->avail = CMUTIL_ListCreateInternal(memst, NULL);
     for (i=0; i<initcnt; i++)
         CMCall(res->avail, AddTail, createproc(udata));
@@ -189,7 +193,11 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
     res->pingintv = pinginterval;
     res->testonb = testonborrow;
     res->udata = udata;
-    res->maxcnt = maxcnt;
+    res->mincnt = initcnt;
+    if (initcnt > maxcnt)
+        res->maxcnt = initcnt;
+    else
+        res->maxcnt = maxcnt;
     if (timer)
         res->timer = timer;
     else {
