@@ -192,7 +192,8 @@ void CMUTIL_StringBaseInit()
 {
 #if defined(_MSC_VER)
     struct CMUTIL_CSPair *pair = NULL;
-    g_cmutil_csmap = CMUTIL_MapCreateEx(CMUTIL_MAP_DEFAULT, CMTrue, NULL);
+    g_cmutil_csmap = CMUTIL_MapCreateEx(
+        CMUTIL_MAP_DEFAULT, CMTrue, NULL, 0.75f);
     pair = g_msvc_cspiars;
     while (pair->csname) {
         CMCall(g_cmutil_csmap, Put, pair->csname, pair, NULL);
