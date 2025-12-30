@@ -156,21 +156,19 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
         CMLogDebug("Working directory: %s", cwd);
     }
     if (ip->env) {
-        CMUTIL_StringArray *keys = CMCall(ip->env, GetKeys);
+        const CMUTIL_Array *pairs = CMCall(ip->env, GetPairs);
         envbuf = CMUTIL_ByteBufferCreateInternal(ip->memst, 512);
-        for (i=0; i<CMCall(keys, GetSize); i++) {
-            const CMUTIL_String *key = CMCall(keys, GetAt, i);
-            const char *skey = CMCall(key, GetCString);
-            const char *value = CMCall(ip->env, Get, skey);
-            uint32_t len = CMCall(key, GetSize);
-            CMCall(envbuf, AddBytes, (const uint8_t*)skey, len);
+        for (i=0; i<CMCall(pairs, GetSize); i++) {
+            CMUTIL_MapPair *pair = CMCall(pairs, GetAt, i);
+            const char *skey = CMCall(pair, GetKey);
+            const char *value = CMCall(pair, GetValue);
+            CMCall(envbuf, AddBytes, (uint8_t*)skey, strlen(skey));
             CMCall(envbuf, AddByte, '=');
             CMCall(envbuf, AddBytes, (uint8_t*)value, strlen(value));
             CMCall(envbuf, AddByte, '\0');
         }
         CMCall(envbuf, AddByte, '\0');
         env = (char*)CMCall(envbuf, GetBytes);
-        CMCall(keys, Destroy);
         if (CMLogIsEnabled(CMLogLevel_Debug)) {
             CMUTIL_String *buf = CMUTIL_StringCreate();
             CMCall(ip->env, PrintTo, buf, NULL);
@@ -229,7 +227,7 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
     CMStream p1[2], p2[2], p3[2];
     int i;
     pid_t pid;
-    CMUTIL_StringArray *keys = NULL;
+    const CMUTIL_Array *pairs = NULL;
 
     if (ip->type & CMProcStreamWrite && pipe(p1) == -1)
         goto err_pipe1;
@@ -276,14 +274,13 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
 
     // set environment variables
     if (ip->env) {
-        keys = CMCall(ip->env, GetKeys);
-        for (i = 0; i < CMCall(keys, GetSize); i++) {
-            const CMUTIL_String *key = CMCall(keys, GetAt, i);
-            const char *skey = CMCall(key, GetCString);
-            const char *value = CMCall(ip->env, Get, skey);
+        pairs = CMCall(ip->env, GetPairs);
+        for (i = 0; i < CMCall(pairs, GetSize); i++) {
+            CMUTIL_MapPair *pair = (CMUTIL_MapPair*)CMCall(pairs, GetAt, i);
+            const char *skey = CMCall(pair, GetKey);
+            const char *value = CMCall(pair, GetValue);
             setenv(skey, value, 1);
         }
-        CMCall(keys, Destroy);
         if (CMLogIsEnabled(CMLogLevel_Debug)) {
             CMUTIL_String *buf = CMUTIL_StringCreate();
             CMCall(ip->env, PrintTo, buf, NULL);
