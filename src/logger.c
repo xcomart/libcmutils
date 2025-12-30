@@ -93,6 +93,7 @@ struct CMUTIL_LogAppenderBase {
                                  CMUTIL_String *logmsg,
                                  struct tm *logtm);
     char                *name;
+    char                *spattern;
     CMUTIL_List         *pattern;
     CMUTIL_List         *buffer;
     CMUTIL_List         *flush_buffer;
@@ -406,7 +407,8 @@ void CMUTIL_LogInit()
 {
     int i;
     g_cmutil_log_item_map = CMUTIL_MapCreateInternal(
-                CMUTIL_GetMem(), 50, CMFalse, NULL);
+                CMUTIL_GetMem(), 50, CMFalse,
+                NULL, 0.75f);
     for (i = 0; i < LogType_Length; i++)
         g_cmutil_log_type_arr[i] = (CMUTIL_LogFormatType)i;
 
@@ -519,6 +521,16 @@ typedef struct CMUTIL_LogAppderAsyncItem {
     CMUTIL_Mem *memst;
 } CMUTIL_LogAppderAsyncItem;
 
+
+CMUTIL_STATIC void CMUTIL_LogAppderAsyncItemDestroy(
+        CMUTIL_LogAppderAsyncItem *item)
+{
+    if (item) {
+        if (item->log) CMCall(item->log, Destroy);
+        item->memst->Free(item);
+    }
+}
+
 CMUTIL_STATIC void *CMUTIL_LogAppenderAsyncWriter(void *udata)
 {
     CMUTIL_LogAppenderBase *iap = (CMUTIL_LogAppenderBase*)udata;
@@ -567,15 +579,6 @@ CMUTIL_STATIC CMUTIL_LogAppderAsyncItem *CMUTIL_LogAppderAsyncItemCreate(
     return res;
 }
 
-CMUTIL_STATIC void CMUTIL_LogAppderAsyncItemDestroy(
-        CMUTIL_LogAppderAsyncItem *item)
-{
-    if (item) {
-        if (item->log) CMCall(item->log, Destroy);
-        item->memst->Free(item);
-    }
-}
-
 CMUTIL_STATIC void CMUTIL_LogAppenderBaseAppend(
     CMUTIL_LogAppender *appender,
     CMUTIL_Logger *logger,
@@ -621,24 +624,22 @@ CMUTIL_STATIC void CMUTIL_LogAppenderBaseAppend(
     }
     CMCall(iter, Destroy);
 
-    CMCall(iap->mutex, Lock);
     if (iap->isasync) {
-        if (CMCall(iap->buffer, GetSize) >= iap->buffersz) {
-            // CMCall(iap->mutex, Unlock);
-            // CMCall(param.dest, Destroy);
-            // printf("Warning! '%s' async buffer is full.\n", iap->name);
-            // return;
-            CMCall(appender, Flush);
-        }
+        CMCall(iap->mutex, Lock);
         CMCall(iap->buffer, AddTail,
             CMUTIL_LogAppderAsyncItemCreate(
                         iap->memst, param.dest, &currtm));
+        if (CMCall(iap->buffer, GetSize) >= iap->buffersz) {
+            CMCall(appender, Flush);
+        }
+        CMCall(iap->mutex, Unlock);
     }
     else {
+        CMCall(iap->mutex, Lock);
         CMCall(iap, Write, param.dest, &currtm);
+        CMCall(iap->mutex, Unlock);
         CMCall(param.dest, Destroy);
     }
-    CMCall(iap->mutex, Unlock);
 }
 
 CMUTIL_STATIC CMUTIL_LogAppenderFormatItem *CMUTIL_LogAppenderItemString(
@@ -656,7 +657,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternLogLevelParse(
 {
     CMUTIL_Map *map = CMUTIL_MapCreateInternal(
                 item->memst, 10, CMFalse,
-                CMUTIL_LogAppenderStringDestroyer);
+                CMUTIL_LogAppenderStringDestroyer, 0.75f);
     CMUTIL_StringArray *args = CMUTIL_StringSplitInternal(
                 item->memst, extra, ",");
     for (uint32_t i = 0; i < CMCall(args, GetSize); i++) {
@@ -984,6 +985,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogAppenderBaseInit(
 {
     iap->pattern = CMUTIL_ListCreateInternal(
                 iap->memst, CMUTIL_LogAppenderFormatItemDestroy);
+    iap->spattern = iap->memst->Strdup(pattern);
     if (!CMUTIL_LogPatternParse(iap->memst, iap->pattern, pattern))
         return CMFalse;
     iap->Write = WriteFn;
@@ -995,6 +997,15 @@ CMUTIL_STATIC CMBool CMUTIL_LogAppenderBaseInit(
     iap->base.Flush = FlushFn;
     iap->base.Destroy = DestroyFn;
     return CMTrue;
+}
+
+CMUTIL_STATIC CMBool CMUTIL_LogAppenderPatternRebuild(
+    CMUTIL_LogAppenderBase *iap)
+{
+    if (iap->pattern) CMCall(iap->pattern, Destroy);
+    iap->pattern = CMUTIL_ListCreateInternal(
+                iap->memst, CMUTIL_LogAppenderFormatItemDestroy);
+    return CMUTIL_LogPatternParse(iap->memst, iap->pattern, iap->spattern);
 }
 
 CMUTIL_STATIC CMUTIL_Mem *CMUTIL_LogAppenderBaseClean(
@@ -1011,6 +1022,8 @@ CMUTIL_STATIC CMUTIL_Mem *CMUTIL_LogAppenderBaseClean(
             iap->isasync = CMFalse;
             CMCall(iap->writer, Join);
         }
+        if (iap->spattern)
+            res->Free(iap->spattern);
         if (iap->buffer)
             CMCall(iap->buffer, Destroy);
         if (iap->flush_buffer)
@@ -1394,12 +1407,12 @@ CMUTIL_STATIC void CMUTIL_LogSocketAppenderWrite(
     uint32_t i;
     CMUTIL_LogSocketAppender *iap = (CMUTIL_LogSocketAppender*)appender;
     CMSync(iap->base.mutex, {
-        for (i = 0; i < CMCall(iap->clients, GetSize); i++) {
+        for (i = 0; i < (uint32_t)CMCall(iap->clients, GetSize); i++) {
             CMUTIL_Socket *cli = (CMUTIL_Socket*)
                     CMCall(iap->clients, GetAt, i);
             const char *msg = CMCall(logmsg, GetCString);
             size_t size = CMCall(logmsg, GetSize);
-            if (CMCall(cli, Write, msg, size, 1000) != CMSocketOk) {
+            if (CMCall(cli, Write, msg, (uint32_t)size, 1000) != CMSocketOk) {
                 CMCall(iap->clients, RemoveAt, i);
                 i--;
                 CMCall(cli, Close);
@@ -1815,6 +1828,22 @@ CMBool CMUTIL_LogIsEnabled(CMUTIL_Logger *logger, CMLogLevel level)
     return CMFalse;
 }
 
+CMUTIL_STATIC CMBool CMUTIL_LogSystemUpdateEnv(CMUTIL_LogSystem *lsys)
+{
+    CMUTIL_LogSystem_Internal *res = (CMUTIL_LogSystem_Internal*)lsys;
+    CMBool ret = CMTrue;
+    if (res->appenders) {
+        const CMUTIL_Array *pairs = CMCall(res->appenders, GetPairs);
+        for (uint32_t i=0; i<CMCall(pairs, GetSize); i++) {
+            CMUTIL_MapPair *pair = (CMUTIL_MapPair*)CMCall(pairs, GetAt, i);
+            CMUTIL_LogAppenderBase *iap =
+                (CMUTIL_LogAppenderBase*)CMCall(pair, GetValue);
+            ret = ret &&CMUTIL_LogAppenderPatternRebuild(iap);
+        }
+    }
+    return ret;
+}
+
 CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem *memst)
 {
     int i;
@@ -1825,10 +1854,12 @@ CMUTIL_LogSystem *CMUTIL_LogSystemCreateInternal(CMUTIL_Mem *memst)
     res->base.CreateLogger = CMUTIL_LogSystemCreateLogger;
     res->base.GetLogger = CMUTIL_LogSystemGetLogger;
     res->base.Destroy = CMUTIL_LogSystemDestroy;
+    res->base.UpdateEnv = CMUTIL_LogSystemUpdateEnv;
     res->memst = memst;
     res->mutex = CMUTIL_MutexCreateInternal(memst);
     res->appenders = CMUTIL_MapCreateInternal(
-                memst, 256, CMFalse, CMUTIL_LogAppenderDestroyer);
+                memst, 256, CMFalse,
+                CMUTIL_LogAppenderDestroyer, 0.75f);
     res->cloggers = CMUTIL_ArrayCreateInternal(
                 memst, 5, CMUTIL_ConfLoggerComparator,
                 CMUTIL_ConfLoggerDestroyer, CMTrue);
@@ -1924,7 +1955,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureDefault(CMUTIL_Mem *memst)
     CMCall(g_cmutil_logsystem_mutex, Unlock);
 
     printf("logging system not initialized or invalid configuration. "
-              "using default configuraiton.\n");
+              "using default configuraiton."S_CRLF);
     return res;
 }
 
@@ -2165,8 +2196,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
             uint32_t i;
             for (i=0; i<CMCall(jarr, GetSize); i++) {
                 CMUTIL_Json *item = CMCall(jarr, Get, i);
-                CMJsonType type = CMCall(item, GetType);
-                if (type == CMJsonTypeArray) {
+                if (CMCall(item, GetType) == CMJsonTypeArray) {
                     printf("invalid appender reference in logger.\n");
                     return CMFalse;
                 }

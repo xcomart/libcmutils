@@ -46,7 +46,7 @@ int main() {
 
     CMCall(map, Destroy); map = NULL;
 
-    map = CMUTIL_MapCreateEx(20, CMTrue, CMUTIL_GetMem()->Free);
+    map = CMUTIL_MapCreateEx(20, CMTrue, CMUTIL_GetMem()->Free, 0.75f);
     ASSERT(map != NULL, "CMUTIL_MapCreateEx");
 
     for (int i = 0; i < 100; i++) {

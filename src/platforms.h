@@ -128,7 +128,7 @@ typedef int socklen_t;
 # define gethostbyname_r(n,p,b,s,l,e)   \
     memcpy(p,gethostbyname(n),sizeof(struct hostent))
 # define poll               WSAPoll
-# define localtime_r(a,b)   memcpy(b, localtime(a), sizeof(struct tm))
+# define localtime_r(a,b)   localtime_s(b, a)
 # define GETPID             (pid_t)GetCurrentProcessId
 # define S_CRLF             "\r\n"
 # define USLEEP(x)          Sleep((x) / 1000)
