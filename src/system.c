@@ -607,12 +607,13 @@ static CMUTIL_File g_cmutil_file = {
 CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path)
 {
     if (path) {
-        const char *p;
+        const char *p, *q;
         CMUTIL_File_Internal *res = memst->Alloc(sizeof(CMUTIL_File_Internal));
 
 #if defined(MSWIN)
         char rpath[2048] = {0,};
-        GetFullPathName(path, sizeof(rpath), rpath, NULL);
+        if (GetFullPathName(path, sizeof(rpath), rpath, NULL) == 0)
+            strcpy(rpath, path);
 #else
         char rpath[PATH_MAX] = {0,};
         // in some system needs the result buffer size is PATH_MAX,
@@ -626,8 +627,12 @@ CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path)
 
         res->memst = memst;
 
-        if ((p = strrchr(rpath, '/')) == NULL)
-            p = strrchr(rpath, '\\');
+        p = strrchr(rpath, '/');
+#if defined(MSWIN)
+        q = strrchr(rpath, '\\');
+        if (q && (!p || q > p))
+            p = q;
+#endif
 
         res->path = memst->Strdup(rpath);
         if (!p) {
@@ -666,11 +671,12 @@ CMBool CMUTIL_PathCreate(const char *path, uint32_t mode)
             return CMTrue;
 
         // no parent directory.
-        p = strrchr(path, '/'); q = strrchr(path, '\\');
-        if (p && q)
-            p = p > q? p:q;
-        else if (q)
+        p = strrchr(path, '/');
+#if defined(MSWIN)
+        q = strrchr(path, '\\');
+        if (q && (!p || q > p))
             p = q;
+#endif
         if (NULL == p)
             return CMFalse;
 
