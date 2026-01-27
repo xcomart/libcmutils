@@ -50,6 +50,17 @@ CMUTIL_LogDefine("cmutils.network")
 
 #define FD_CHECK_WITH_SELECT  1
 
+#if defined(MSWIN)
+#define LogAddr(m,a) do {\
+    if ((a)->ss_family == AF_INET) { \
+    char __host[128]; int __port;\
+    CMUTIL_SocketAddrGet((a), __host, &__port);\
+    CMLogTrace("%s %s:%d", m, __host, __port);\
+    } else { \
+    CMLogTrace("%s", m); \
+    } \
+    } while(0)
+#else
 #define LogAddr(m,a) do {\
     if ((a)->ss_family == AF_INET) { \
     char __host[128]; int __port;\
@@ -61,7 +72,7 @@ CMUTIL_LogDefine("cmutils.network")
     CMLogTrace("%s", m); \
     } \
     } while(0)
-
+#endif
 
 #if defined(MSWIN)
 #elif defined(APPLE)
@@ -303,6 +314,7 @@ CMSocketResult CMUTIL_SocketAddrSet(
             }
 #endif
         }
+#if !defined(MSWIN)
     } else if (port < 0) {
         struct sockaddr_un *sun = (struct sockaddr_un*)saddr;
         if (strlen(host) + 1 > sizeof(sun->sun_path)) {
@@ -312,6 +324,7 @@ CMSocketResult CMUTIL_SocketAddrSet(
         sun->sun_family = AF_UNIX;
         strcpy(sun->sun_path, host);
         return CMSocketOk;
+#endif
     }
     CMLogError("unsupported socket family. %s:%d", host, port);
     return CMSocketUnsupported;
@@ -740,8 +753,10 @@ CMUTIL_STATIC CMBool CMUTIL_SocketConnectByIP(
 
     if (addr->ss_family == AF_INET) {
         addrlen = sizeof(struct sockaddr_in);
+#if !defined(MSWIN)
     } else if (addr->ss_family == AF_UNIX) {
         addrlen = sizeof(struct sockaddr_un);
+#endif
     } else {
         CMLogError("unsupported socket family. %d", addr->ss_family);
         return CMFalse;
@@ -1168,9 +1183,17 @@ CMUTIL_STATIC CMSocketResult CMUTIL_ServerSocketAcceptInternal(
         len = sizeof(struct sockaddr_in);
         res->sock = accept(issock->ssock, (struct sockaddr*)&res->peer, &len);
     } else {
+#if defined(MSWIN)
+        if (issock->silent)
+            CMLogTrace("only AF_INET supported in windows");
+        else
+            CMLogError("only AF_INET supported in windows");
+        return CMSocketUnsupported;
+#else
         len = sizeof(struct sockaddr_un);
         res->sock = accept(issock->ssock, 0, 0);
         memcpy(&res->peer, &issock->addr, len);
+#endif
     }
     if (res->sock == INVALID_SOCKET) {
         if (issock->silent)

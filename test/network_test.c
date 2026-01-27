@@ -2,6 +2,7 @@
 // Created by 박성진 on 25. 12. 15..
 //
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -133,7 +134,15 @@ int main() {
     CMUTIL_ServerSocket *ssock = NULL;
     CMUTIL_Thread *svr_thread = NULL;
     CMUTIL_ThreadPool *pool = NULL;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) && !defined(__CYGWIN__)
+    const char *ipc_path = "9876";
+    const char *host = "127.0.0.1";
+    const int ipc_port = 9876;
+#else
     const char *ipc_path = "./unix_domain";
+    const char *host = ipc_path;
+    const int ipc_port = -1;
+#endif
     CMUTIL_SocketAddr addr;
 
     ssock = CMUTIL_ServerSocketCreate("0.0.0.0", 9999, 128);
@@ -168,7 +177,7 @@ int main() {
     CMCall(pool, Destroy); pool = NULL;
     pool = CMUTIL_ThreadPoolCreate(-1, NULL);
 
-    CMUTIL_SocketAddrSet(&addr, ipc_path, -1);
+    CMUTIL_SocketAddrSet(&addr, host, ipc_port);
     CMCall(pool, Execute, client_proc, &addr);
 
     CMCall(pool, Wait);
