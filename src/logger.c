@@ -1494,7 +1494,7 @@ CMUTIL_LogAppender *CMUTIL_LogSocketAppenderCreateInternal(
         return NULL;
     }
     res->listener = CMUTIL_ServerSocketCreateInternal(
-                memst, accept_host, listen_port, 256, CMTrue);
+                memst, accept_host, listen_port, 256, CMTrue, CMFalse);
     if (!res->listener) goto FAILED;
     res->clients = CMUTIL_ArrayCreateInternal(
                 memst, 10, NULL,
