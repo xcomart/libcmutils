@@ -59,6 +59,7 @@ extern "C" {
 #endif
 
 #if defined(_MSC_VER)
+# include <winsock2.h>
 # include <windows.h>
 #else
 # include <sys/time.h>
