@@ -59,6 +59,7 @@ extern "C" {
 #endif
 
 #if defined(_MSC_VER)
+# include <winsock2.h>
 # include <windows.h>
 #else
 # include <sys/time.h>
@@ -1659,6 +1660,30 @@ struct CMUTIL_StringArray {
  */
 CMUTIL_API CMUTIL_StringArray *CMUTIL_StringArrayCreateEx(
         size_t initcapacity);
+
+
+/**
+ * @brief Create a new CMUTIL_StringArray object with initial elements.
+ *
+ * A convenient function to create a CMUTIL_StringArray with initial elements
+ * without the last NULL.
+ *
+ * @param s The first initial element of the array.
+ * @param ... Additional initial elements.
+ * @return A new CMUTIL_StringArray object with initial elements.
+ */
+#define CMUTIL_StringArrayCreateWith(s, ...) \
+        CMUTIL_StringArrayCreateWithEx(s, __VA_ARGS__, NULL)
+
+/**
+ * @brief Create a new CMUTIL_StringArray object with initial elements.
+ *
+ * @param str The first initial element of the array.
+ * @param ... Additional initial elements, the last element must be NULL.
+ * @return A new CMUTIL_StringArray object with initial elements.
+ */
+CMUTIL_API CMUTIL_StringArray *CMUTIL_StringArrayCreateWithEx(
+        const char *str, ...);
 
 /**
  * @brief Trim the right side of a c-style string.
@@ -4116,10 +4141,13 @@ typedef enum CMSocketResult {
 /**
  * @typedef CMUTIL_SocketAddr Socket address object.
  */
-typedef struct sockaddr_in CMUTIL_SocketAddr;
+typedef struct sockaddr_storage CMUTIL_SocketAddr;
 
 /**
  * @brief Get the host and port from a socket address.
+ *
+ * If saddr is inet address, hostbuf and port are filled.
+ * If saddr is ipc address, hostbuf is filled with ipc path, port is set to -1.
  *
  * @param saddr Socket address object.
  * @param hostbuf Buffer to store the host string. If NULL, host is not retrieved.
@@ -4134,7 +4162,7 @@ CMUTIL_API CMSocketResult CMUTIL_SocketAddrGet(
  *
  * @param saddr Socket address object to be set.
  * @param host Host string to set.
- * @param port Port number to set.
+ * @param port Port number to set, if negative, make ipc address.
  * @return CMSocketResult indicating success or failure.
  */
 CMUTIL_API CMSocketResult CMUTIL_SocketAddrSet(
@@ -4263,8 +4291,9 @@ struct CMUTIL_Socket {
      *
      * @param socket The socket object to get the remote address from.
      * @param addr Pointer to the CMUTIL_SocketAddr object to store the address.
+     * @return CMSocketResult indicating success or failure.
      */
-    void (*GetRemoteAddr)(
+    CMSocketResult (*GetRemoteAddr)(
             const CMUTIL_Socket *socket, CMUTIL_SocketAddr *addr);
 
     /**
@@ -4311,6 +4340,9 @@ struct CMUTIL_Socket {
      */
     CMSocketResult (*WriteByte)(
             const CMUTIL_Socket *socket, uint8_t c);
+
+    void (*SetSilent)(
+            CMUTIL_Socket *socket, CMBool silent);
 };
 
 /**
@@ -4335,6 +4367,20 @@ CMUTIL_API CMUTIL_Socket *CMUTIL_SocketConnect(
  */
 CMUTIL_API CMUTIL_Socket *CMUTIL_SocketConnectWithAddr(
         const CMUTIL_SocketAddr *saddr, long timeout);
+
+/**
+ * @brief Create a new socket which connected to the given ipc path.
+ *
+ * In windows <code>ipc_path</code> must be a string representation of port number.
+ * In xnix systems <code>ipc_path</code> must be a valid unix domain socket path.
+ *
+ * @param ipc_path unix domain socket path(xnix) or port number(windows) where connect to.
+ * @param timeout connect timeout in milliseconds.
+ * @return A connected socket if succeeded it must be closed after use.
+ *      NULL if connect failed.
+ */
+CMUTIL_API CMUTIL_Socket *CMUTIL_SocketConnectIPC(
+        const char *ipc_path, long timeout);
 
 /**
  * @brief Create a new SSL socket which connected to the given endpoint.
@@ -4401,6 +4447,10 @@ struct CMUTIL_ServerSocket {
      * @param server The server socket object to be closed.
      */
     void (*Close)(CMUTIL_ServerSocket *server);
+
+    void (*SetSilent)(
+            CMUTIL_ServerSocket *socket, CMBool silent);
+
 };
 
 /**
@@ -4413,7 +4463,21 @@ struct CMUTIL_ServerSocket {
  *      NULL if failed.
  */
 CMUTIL_API CMUTIL_ServerSocket *CMUTIL_ServerSocketCreate(
-        const char *host, int port, int qcnt);
+        const char *host, int port, int qcnt, CMBool silent);
+
+/**
+ * @brief Create a new server socket which listens on the given ipc path.
+ *
+ * In windows <code>ipc_path</code> must be a string representation of port number.
+ * In xnix systems <code>ipc_path</code> must be a valid unix domain socket path.
+ *
+ * @param ipc_path unix domain socket path(xnix) or port number(windows) to listen on.
+ * @param qcnt The maximum length of the queue of pending connections.
+ * @return A server socket if succeeded it must be closed after use.
+ *      NULL if failed.
+ */
+CMUTIL_API CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateIPC(
+        const char *ipc_path, int qcnt, CMBool silent);
 
 /**
  * @brief Create a new SSL server socket which listens on the given host and port.
