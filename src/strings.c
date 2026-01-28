@@ -865,7 +865,19 @@ CMUTIL_StringArray *CMUTIL_StringArrayCreateEx(size_t initcapacity)
     return CMUTIL_StringArrayCreateInternal(CMUTIL_GetMem(), initcapacity);
 }
 
-
+CMUTIL_StringArray *CMUTIL_StringArrayCreateWithEx(const char *str, ...)
+{
+    va_list ap;
+    va_start(ap, str);
+    CMUTIL_StringArray *res = CMUTIL_StringArrayCreateInternal(
+            CMUTIL_GetMem(), 5);
+    while (str) {
+        CMCall(res, AddCString, str);
+        str = va_arg(ap, const char*);
+    }
+    va_end(ap);
+    return res;
+}
 
 //*****************************************************************************
 // CMUTIL_CSConv implementation
