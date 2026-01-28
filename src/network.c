@@ -418,8 +418,9 @@ CMSocketResult CMUTIL_SocketCheckBase(
     if (pfd.revents & evt) {
         return CMSocketOk;
     }
-    CMLogError("poll failed. unsupported operation");
-    return CMSocketUnsupported;
+    if (!silent)
+        CMLogError("poll failed. unsupported operation");
+    return CMSocketPollFailed;
 #endif
 }
 
@@ -1093,12 +1094,16 @@ CMUTIL_STATIC CMBool CMUTIL_SocketConnectIPCInternal(
     CMUTIL_SocketAddrSet(sin, "127.0.0.1", port);
 #else
     struct sockaddr_un *sun = (struct sockaddr_un*)&ss;
+    if (strlen(ipc_path) >= sizeof(sun->sun_path) - 1) {
+        CMLogErrorS("IPC path too long: %s", ipc_path);
+        return CMFalse;
+    }
     sun->sun_family = AF_UNIX;
     strcpy(sun->sun_path, ipc_path);
 #endif
     if (CMUTIL_SocketConnectByAddr(is, &ss, timeout, silent))
         return CMTrue;
-    CMLogErrorS("CMUTIL_SocketConnectBase failed.");
+    CMLogErrorS("CMUTIL_SocketConnectByAddr failed.");
     return CMFalse;
 }
 
@@ -1405,22 +1410,22 @@ CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateInternal(
 }
 
 CMUTIL_ServerSocket *CMUTIL_ServerSocketCreate(
-        const char *host, int port, int qcnt)
+        const char *host, int port, int qcnt, CMBool silent)
 {
     return CMUTIL_ServerSocketCreateInternal(
-                CMUTIL_GetMem(), host, port, qcnt, CMTrue, CMFalse);
+                CMUTIL_GetMem(), host, port, qcnt, silent, CMFalse);
 }
 
 CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateIPC(
-        const char *ipc_path, int qcnt)
+        const char *ipc_path, int qcnt, CMBool silent)
 {
 #if defined(MSWIN)
     long port = strtol(ipc_path, NULL, 10);
     return CMUTIL_ServerSocketCreateInternal(
-        CMUTIL_GetMem(), NULL, (int)port, qcnt, CMTrue, CMTrue);
+        CMUTIL_GetMem(), NULL, (int)port, qcnt, silent, CMTrue);
 #else
     return CMUTIL_ServerSocketCreateInternal(
-                CMUTIL_GetMem(), ipc_path, 0, qcnt, CMTrue, CMTrue);
+                CMUTIL_GetMem(), ipc_path, 0, qcnt, silent, CMTrue);
 #endif
 }
 
