@@ -139,13 +139,13 @@ int main() {
     const char *host = "127.0.0.1";
     const int ipc_port = 9876;
 #else
-    const char *ipc_path = "./unix_domain";
+    const char *ipc_path = "/tmp/cmutil_network_test.sock";
     const char *host = ipc_path;
     const int ipc_port = -1;
 #endif
     CMUTIL_SocketAddr addr;
 
-    ssock = CMUTIL_ServerSocketCreate("0.0.0.0", 9999, 128);
+    ssock = CMUTIL_ServerSocketCreate("0.0.0.0", 9999, 128, CMFalse);
     ASSERT(ssock != NULL, "ServerSocketCreate");
     CMCall(ssock, SetSilent, CMTrue);
 
@@ -167,7 +167,7 @@ int main() {
     CMCall(svr_thread, Join); svr_thread = NULL;
 
     g_running = CMTrue;
-    ssock = CMUTIL_ServerSocketCreateIPC(ipc_path, 10);
+    ssock = CMUTIL_ServerSocketCreateIPC(ipc_path, 10, CMFalse);
     ASSERT(ssock != NULL, "ServerSocketCreateIPC");
     svr_thread = CMUTIL_ThreadCreate(server_proc, ssock, "ipc server");
     ASSERT(svr_thread != NULL, "IPC Server ThreadCreate");

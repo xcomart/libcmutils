@@ -4463,7 +4463,7 @@ struct CMUTIL_ServerSocket {
  *      NULL if failed.
  */
 CMUTIL_API CMUTIL_ServerSocket *CMUTIL_ServerSocketCreate(
-        const char *host, int port, int qcnt);
+        const char *host, int port, int qcnt, CMBool silent);
 
 /**
  * @brief Create a new server socket which listens on the given ipc path.
@@ -4477,7 +4477,7 @@ CMUTIL_API CMUTIL_ServerSocket *CMUTIL_ServerSocketCreate(
  *      NULL if failed.
  */
 CMUTIL_API CMUTIL_ServerSocket *CMUTIL_ServerSocketCreateIPC(
-        const char *ipc_path, int qcnt);
+        const char *ipc_path, int qcnt, CMBool silent);
 
 /**
  * @brief Create a new SSL server socket which listens on the given host and port.
