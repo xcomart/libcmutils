@@ -58,6 +58,8 @@ void CMUTIL_StringBaseInit(void);
 void CMUTIL_StringBaseClear(void);
 void CMUTIL_MemDebugInit(CMMemOper memoper);
 CMBool CMUTIL_MemDebugClear(void);
+void CMUTIL_HttpInit(void);
+void CMUTIL_HttpClear(void);
 
 
 CMUTIL_Array *CMUTIL_ArrayCreateInternal(CMUTIL_Mem *mem,
@@ -205,6 +207,8 @@ CMUTIL_Library *CMUTIL_LibraryCreateInternal(
         CMUTIL_Mem *memst, const char *path);
 CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path);
 
+CMUTIL_HttpClient *CMUTIL_HttpClientCreateInternal(
+    CMUTIL_Mem *memst, const char *urlprefix);
 
 #endif // FUNCTIONS_H__
 

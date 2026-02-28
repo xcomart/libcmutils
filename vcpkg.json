@@ -6,6 +6,9 @@
     "name" : "libiconv",
     "version>=" : "1.18#3"
   }, {
+    "name" : "libz",
+    "version>=" : "1.2.12"
+  }, {
     "name" : "openssl",
     "version>=" : "3.6.0#3"
   }, {
