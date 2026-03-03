@@ -38,6 +38,7 @@ static int g_cmutil_init_cnt = 0;
 void CMUTIL_Init(CMMemOper memoper)
 {
     if (g_cmutil_init_cnt == 0) {
+        const CMUTIL_LogSystem *log_system = NULL;
         CMUTIL_CallStackInit();
         CMUTIL_MemDebugInit(memoper);
         CMUTIL_ThreadInit();
@@ -45,7 +46,8 @@ void CMUTIL_Init(CMMemOper memoper)
         CMUTIL_XmlInit();
         CMUTIL_NetworkInit();
         CMUTIL_LogInit();
-        CMUTIL_LogSystem *log_system = CMUTIL_LogSystemGet();
+        CMUTIL_HttpInit();
+        log_system = CMUTIL_LogSystemGet();
         if (log_system) {
             CMUTIL_Logger *log = CMCall(log_system, GetLogger, "cmutils");
             if (log) {
@@ -67,6 +69,7 @@ CMBool CMUTIL_Clear()
     if (g_cmutil_init_cnt > 0) {
         g_cmutil_init_cnt--;
         if (g_cmutil_init_cnt == 0) {
+            CMUTIL_HttpClear();
             CMUTIL_LogClear();
             CMUTIL_NetworkClear();
             CMUTIL_XmlClear();

@@ -2,8 +2,8 @@
 // Created by 박성진 on 25. 12. 15..
 //
 
+#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "libcmutils.h"
 #include "test.h"
@@ -60,11 +60,14 @@ void *server_proc(void* udata) {
         CMSocketResult sr = CMCall(ssock, Accept, &csock, 1000);
         if (sr == CMSocketOk) {
             CMUTIL_SocketAddr caddr;
-            char host[128];
-            int port;
-            CMCall(csock, GetRemoteAddr, &caddr);
-            CMUTIL_SocketAddrGet(&caddr, host, &port);
-            CMLogInfo("client connected %s:%d", host, port);
+            if (CMCall(csock, GetRemoteAddr, &caddr) == CMSocketOk) {
+                char host[128];
+                int port;
+                CMUTIL_SocketAddrGet(&caddr, host, &port);
+                CMLogInfo("client connected %s:%d", host, port);
+            } else {
+                CMLogInfo("client connected");
+            }
             CMCall(pool, Execute, client_handler, csock);
             csock = NULL;
         } else if (sr != CMSocketTimeout)
@@ -129,21 +132,52 @@ int main() {
     CMUTIL_Init(CMUTIL_MEM_TYPE);
     CMUTIL_ServerSocket *ssock = NULL;
     CMUTIL_Thread *svr_thread = NULL;
-    CMUTIL_ThreadPool *pool = CMUTIL_ThreadPoolCreate(-1, NULL);
+    CMUTIL_ThreadPool *pool = NULL;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) && !defined(__CYGWIN__)
+    const char *ipc_path = "9876";
+    const char *host = "127.0.0.1";
+    const int ipc_port = 9876;
+#else
+    const char *ipc_path = "/tmp/cmutil_network_test.sock";
+    const char *host = ipc_path;
+    const int ipc_port = -1;
+#endif
+    CMUTIL_SocketAddr addr;
 
-    ssock = CMUTIL_ServerSocketCreate("0.0.0.0", 9999, 128);
+    ssock = CMUTIL_ServerSocketCreate("0.0.0.0", 9999, 128, CMFalse);
     ASSERT(ssock != NULL, "ServerSocketCreate");
+    CMCall(ssock, SetSilent, CMTrue);
 
     svr_thread = CMUTIL_ThreadCreate(server_proc, ssock, "server");
     ASSERT(svr_thread != NULL, "Server ThreadCreate");
     CMCall(svr_thread, Start);
 
-    CMUTIL_SocketAddr addr;
     CMUTIL_SocketAddrSet(&addr, "127.0.0.1", 9999);
 
+    pool = CMUTIL_ThreadPoolCreate(-1, NULL);
     for (int i=0; i<10; i++) {
         CMCall(pool, Execute, client_proc, &addr);
     }
+
+    CMCall(pool, Wait);
+
+    g_running = CMFalse;
+    CMCall(ssock, Close); ssock = NULL;
+    CMCall(svr_thread, Join); svr_thread = NULL;
+
+    g_running = CMTrue;
+    ssock = CMUTIL_ServerSocketCreateIPC(ipc_path, 10, CMFalse);
+    ASSERT(ssock != NULL, "ServerSocketCreateIPC");
+    svr_thread = CMUTIL_ThreadCreate(server_proc, ssock, "ipc server");
+    ASSERT(svr_thread != NULL, "IPC Server ThreadCreate");
+    CMCall(svr_thread, Start);
+
+
+    CMCall(pool, Destroy); pool = NULL;
+    pool = CMUTIL_ThreadPoolCreate(-1, NULL);
+
+    CMUTIL_SocketAddrSet(&addr, host, ipc_port);
+    CMCall(pool, Execute, client_proc, &addr);
 
     CMCall(pool, Wait);
 

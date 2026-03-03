@@ -305,13 +305,25 @@ CMUTIL_STATIC ssize_t CMUTIL_StringAddVPrint(
         CMUTIL_String *string, const char *fmt, va_list args)
 {
     if (fmt) {
-        char buf[4096];
-        ssize_t len = vsnprintf(buf, sizeof(buf), fmt, args);
+        //char buf[4096];
+        CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
+        char *buf = NULL;
+        va_list args_copy;
+        va_copy(args_copy, args);
+        ssize_t len = vsnprintf(NULL, 0, fmt, args_copy);
+        va_end(args_copy);
         if (len < 0) {
             CMLogErrorS("vsnprintf failed. %d:%s", errno, strerror(errno));
             return -1;
         }
+        buf = malloc(len+1);
+        if (buf == NULL) {
+            CMLogErrorS("memory allocation failed. %d:%s", errno, strerror(errno));
+            return -1;
+        }
+        len = vsnprintf(buf, len+1, fmt, args);
         len = CMCall(string, AddNString, buf, len);
+        free(buf);
         if (len < 0)
             CMLogError("CMUTIL_String AddNString failed");
         return len;
@@ -865,7 +877,19 @@ CMUTIL_StringArray *CMUTIL_StringArrayCreateEx(size_t initcapacity)
     return CMUTIL_StringArrayCreateInternal(CMUTIL_GetMem(), initcapacity);
 }
 
-
+CMUTIL_StringArray *CMUTIL_StringArrayCreateWithEx(const char *str, ...)
+{
+    va_list ap;
+    va_start(ap, str);
+    CMUTIL_StringArray *res = CMUTIL_StringArrayCreateInternal(
+            CMUTIL_GetMem(), 5);
+    while (str) {
+        CMCall(res, AddCString, str);
+        str = va_arg(ap, const char*);
+    }
+    va_end(ap);
+    return res;
+}
 
 //*****************************************************************************
 // CMUTIL_CSConv implementation
