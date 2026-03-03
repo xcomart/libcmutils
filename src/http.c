@@ -271,12 +271,14 @@ CMUTIL_STATIC CMBool CMUTIL_HttpClientReadLine(
         if (b > -1) {
             if (b == '\n') {
                 buf[i] = '\0';
-                CMLogDebug("Read -> %s", buf);
+                CMLogTrace("Read -> %s", buf);
                 return CMTrue;
             }
             if (b != '\r')
                 buf[i++] = (char)b;
         } else {
+            buf[i] = '\0';
+            CMLogError("Read timeout: [%s]", buf);
             return CMFalse;
         }
     }
@@ -309,7 +311,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_HttpClientWriteLine(
         sr = CMCall(sock, Write, line, strlen(line), timeout);
     if (sr == CMSocketOk)
         sr = CMCall(sock, Write, "\r\n", 2, timeout);
-    CMLogDebug("Write -> %s", line);
+    CMLogTrace("Write -> %s", line);
     return sr;
 }
 
