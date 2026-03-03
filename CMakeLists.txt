@@ -36,6 +36,7 @@ SET ( LIB_SRCS
     src/network.c
     src/pattern.c
     src/pool.c
+    src/http.c
     src/process.c
     src/strings.c
     src/system.c )
@@ -51,6 +52,16 @@ ELSE ()
     TARGET_LINK_LIBRARIES ( cmutils -lm )
     TARGET_LINK_LIBRARIES ( cmutilsStatic -lm )
 ENDIF ()
+
+FIND_PACKAGE( ZLIB REQUIRED )
+TARGET_LINK_LIBRARIES ( cmutils ${ZLIB_LIBRARIES} )
+TARGET_LINK_DIRECTORIES( cmutils PUBLIC ${ZLIB_LIBRARY_DIR} )
+TARGET_INCLUDE_DIRECTORIES( cmutils PUBLIC ${ZLIB_INCLUDE_DIRS} )
+TARGET_COMPILE_OPTIONS( cmutils PUBLIC ${ZLIB_CFLAGS_OTHER} )
+TARGET_LINK_LIBRARIES ( cmutilsStatic ${ZLIB_LIBRARIES} )
+TARGET_LINK_DIRECTORIES( cmutilsStatic PUBLIC ${ZLIB_LIBRARY_DIR} )
+TARGET_INCLUDE_DIRECTORIES( cmutilsStatic PUBLIC ${ZLIB_INCLUDE_DIRS} )
+TARGET_COMPILE_OPTIONS( cmutilsStatic PUBLIC ${ZLIB_CFLAGS_OTHER} )
 
 IF ( SUPPORT_SSL )
 
