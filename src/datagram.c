@@ -95,9 +95,13 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketConnect(
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
     if (idsock->connected)
         CMCall(dsock, Disconnect);
+    if (saddr->ss_family != AF_INET) {
+        CMLogError("datagram socket connect address family is not AF_INET");
+        return CMSocketUnsupported;
+    }
     if (connect(idsock->sock, (struct sockaddr*)saddr,
-                sizeof(CMUTIL_SocketAddr)) < 0) {
-        CMLogErrorS("connect failed: %s", strerror(errno));
+                sizeof(struct sockaddr_in)) < 0) {
+        CMLogError("connect failed: %s", strerror(errno));
         return CMSocketConnectFailed;
     }
     memcpy(&(idsock->raddr), saddr, sizeof(CMUTIL_SocketAddr));
@@ -186,12 +190,16 @@ CMUTIL_STATIC CMSocketResult CMUTIL_DGramSocketSendTo(
     CMSocketResult sr = CMUTIL_SocketCheckBase(
                 idsock->sock, timeout, CMFalse, CMFalse);
     if (sr == CMSocketOk) {
+        if (saddr->ss_family != AF_INET) {
+            CMLogError("datagram socket sendto address family is not AF_INET");
+            return CMSocketUnsupported;
+        }
         size = sendto(idsock->sock,
                 (const char*)CMCall(buf, GetBytes), (int)CMCall(buf, GetSize),
                 0, (struct sockaddr*)saddr,
-                sizeof(CMUTIL_SocketAddr));
+                sizeof(struct sockaddr_in));
         if (size < (ssize_t)CMCall(buf, GetSize)) {
-            CMLogErrorS("sendto() failed: %s", strerror(errno));
+            CMLogError("sendto() failed: %s", strerror(errno));
             return CMSocketSendFailed;
         }
     }
