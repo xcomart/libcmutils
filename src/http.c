@@ -27,6 +27,10 @@ SOFTWARE.
 #include "functions.h"
 #if defined(APPLE)
 #include <sys/syslimits.h>
+#elif defined(MSWIN)
+#define PATH_MAX MAX_PATH
+#elif defined(LINUX)
+#include <limits.h>
 #endif
 
 CMUTIL_LogDefine("cmutils.http")
