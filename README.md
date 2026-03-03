@@ -20,6 +20,7 @@
   - SSL/TLS support (OpenSSL backend)
   - ServerSocket and ClientSocket implementations
   - Datagram (UDP) support
+  - Simple HTTP client implementation
 - **Serialization**: JSON and XML support.
   - JSON parser/builder with comment support
   - XML parser/builder
@@ -40,6 +41,7 @@
 - **Package Manager**: vcpkg (recommended)
 - **Dependencies**:
   - `libiconv`
+  - `libz`
   - `openssl` (optional, for SSL support)
 
 ## Installation & Setup

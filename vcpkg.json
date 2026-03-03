@@ -1,10 +1,13 @@
 {
   "name" : "libcmutils",
-  "version-string" : "0.6.1",
+  "version-string" : "0.6.2",
   "builtin-baseline" : "594ad8871e1e8e45f8e626c015fd611163430207",
   "dependencies" : [ {
     "name" : "libiconv",
     "version>=" : "1.18#3"
+  }, {
+    "name" : "libz",
+    "version>=" : "1.2.12"
   }, {
     "name" : "openssl",
     "version>=" : "3.6.0#3"

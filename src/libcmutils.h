@@ -4324,10 +4324,11 @@ struct CMUTIL_Socket {
      * This function reads a single byte from the specified socket.
      *
      * @param socket The socket object to read from.
+     * @param timeout Timeout in milliseconds for the read operation.
      * @return The byte read from the socket, or -1 on failure.
      */
     int (*ReadByte)(
-            const CMUTIL_Socket *socket);
+            const CMUTIL_Socket *socket, long timeout);
 
     /**
      * @brief Write a single byte to the socket.
@@ -4336,10 +4337,11 @@ struct CMUTIL_Socket {
      *
      * @param socket The socket object to write to.
      * @param c The byte to be written.
+     * @param timeout Timeout in milliseconds for the write operation.
      * @return CMSocketResult indicating success or failure.
      */
     CMSocketResult (*WriteByte)(
-            const CMUTIL_Socket *socket, uint8_t c);
+            const CMUTIL_Socket *socket, uint8_t c, long timeout);
 
     void (*SetSilent)(
             CMUTIL_Socket *socket, CMBool silent);
@@ -4658,6 +4660,47 @@ CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreate(void);
 CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreateBind(
         CMUTIL_SocketAddr *addr);
 
+
+typedef struct CMUTIL_HttpClient CMUTIL_HttpClient;
+struct CMUTIL_HttpClient {
+    CMBool (*SetVerify)(
+            CMUTIL_HttpClient *client,
+            CMBool verify_host,
+            CMBool verify_peer);
+    CMBool (*SetSSLCert)(
+            CMUTIL_HttpClient *client,
+            const char *certfile,
+            const char *keyfile,
+            const char *cafile );
+    void (*SetKeepAlive)(
+            CMUTIL_HttpClient *client,
+            CMBool keepalive);
+    CMUTIL_ByteBuffer *(*Request)(
+            CMUTIL_HttpClient *client,
+            const char *method,
+            CMUTIL_Map *headers,
+            const char *uri,
+            CMUTIL_ByteBuffer *body,
+            int *status,
+            long timeout);
+    CMUTIL_ByteBuffer *(*Get)(
+            CMUTIL_HttpClient *client,
+            CMUTIL_Map *headers,
+            const char *uri,
+            int *status,
+            long timeout);
+    CMUTIL_ByteBuffer *(*Post)(
+            CMUTIL_HttpClient *client,
+            CMUTIL_Map *headers,
+            const char *uri,
+            CMUTIL_ByteBuffer *body,
+            int *status,
+            long timeout);
+    void (*Destroy)(
+            CMUTIL_HttpClient *client);
+};
+
+CMUTIL_API CMUTIL_HttpClient *CMUTIL_HttpClientCreate(const char *urlprefix);
 
 /**
  * @typedef CMJsonType JSON value types.
@@ -5320,6 +5363,33 @@ CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
  */
 CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
+
+
+
+typedef struct CMUTIL_RestClient CMUTIL_RestClient;
+struct CMUTIL_RestClient {
+    CMUTIL_HttpClient base;
+    CMUTIL_Json *(*Get)(
+            CMUTIL_RestClient *client,
+            CMUTIL_Map *headers,
+            const char *uri);
+    CMUTIL_Json *(*Post)(
+            CMUTIL_RestClient *client,
+            CMUTIL_Map *headers,
+            const char *uri,
+            CMUTIL_Json *data);
+    CMBool (*Put)(
+            CMUTIL_RestClient *client,
+            CMUTIL_Map *headers,
+            const char *uri,
+            CMUTIL_Json *data);
+    void (*Delete)(
+        CMUTIL_RestClient *client,
+        CMUTIL_Map *headers,
+        const char *uri);
+};
+
+CMUTIL_API CMUTIL_RestClient *CMUTIL_RestClientCreate(const char *urlprefix);
 
 /**
  * @typedef Enumeration of process stream types.
