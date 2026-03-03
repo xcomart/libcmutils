@@ -15,12 +15,12 @@ int main() {
     CMUTIL_HttpClient *client = NULL;
     CMUTIL_ByteBuffer *buffer = NULL;
     int status = 0;
-    CMUTIL_Init(CMMemDebug);
+    CMUTIL_Init(CMMemRecycle);
     client = CMUTIL_HttpClientCreate("https://aihouse.synology.me:5001");
     // client = CMUTIL_HttpClientCreate("https://www.naver.com");
     ASSERT(client != NULL, "CMUTIL_HttpClientCreate");
 
-    CMCall(client, SetKeepAlive, CMTrue);
+    CMCall(client, SetKeepAlive, CMFalse);
 
     buffer = CMCall(client, Get, NULL, "/", &status, 5000);
     ASSERT(buffer != NULL, "CMUTIL_HttpClientGet");
