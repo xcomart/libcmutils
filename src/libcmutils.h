@@ -5661,6 +5661,75 @@ CMUTIL_API CMUTIL_Process *CMUTIL_ProcessCreateEx(
 #define CMUTIL_ProcessCreate(cwd, env, command, ...) \
         CMUTIL_ProcessCreateEx(cwd, env, command, ##__VA_ARGS__, NULL)
 
+
+typedef struct CMUTIL_BlockCrypto CMUTIL_BlockCrypto;
+struct CMUTIL_BlockCrypto {
+    CMUTIL_String *(*Encrypt)(
+            CMUTIL_BlockCrypto *crypto,
+            CMUTIL_String *plain);
+    CMUTIL_String *(*Decrypt)(
+            CMUTIL_BlockCrypto *crypto,
+            CMUTIL_String *encrypted);
+    void (*Destroy)(
+            CMUTIL_BlockCrypto *crypto);
+};
+
+CMUTIL_API CMUTIL_BlockCrypto *CMUTIL_BlockCryptoCreate(
+        const char *algo, const char *mode, const char *padding,
+        int key_bits, const uint8_t *key, const uint8_t *iv);
+
+typedef struct CMUTIL_PrivateKey CMUTIL_PrivateKey;
+struct CMUTIL_PrivateKey {
+        void (*Destroy)(CMUTIL_PrivateKey *key);
+};
+typedef struct CMUTIL_PublicKey CMUTIL_PublicKey;
+struct CMUTIL_PublicKey {
+        void (*Destroy)(CMUTIL_PublicKey *key);
+};
+
+CMUTIL_API CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateFromPEM(
+        const char *pem);
+CMUTIL_API CMUTIL_PublicKey *CMUTIL_PublicKeyCreateFromPEM(
+        const char *pem);
+CMUTIL_API CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateFromFile(
+        const char *file_path);
+CMUTIL_API CMUTIL_PublicKey *CMUTIL_PublicKeyCreateFromFile(
+        const char *file_path);
+
+typedef struct CMUTIL_RSACrypto CMUTIL_RSACrypto;
+struct CMUTIL_RSACrypto {
+    CMUTIL_String *(*EncryptWithPublicKey)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *plain,
+            CMUTIL_PublicKey *pubKey);
+    CMUTIL_String *(*EncryptWithPrivateKey)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *plain,
+            CMUTIL_PrivateKey *privKey);
+    CMUTIL_String *(*DecryptWithPublicKey)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *encrypted,
+            CMUTIL_PublicKey *pubKey);
+    CMUTIL_String *(*DecryptWithPrivateKey)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *encrypted,
+            CMUTIL_PrivateKey *privKey);
+    CMUTIL_String *(*Sign)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *plain,
+            CMUTIL_PrivateKey *privKey);
+    CMUTIL_String *(*VerifySignature)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *signature,
+            CMUTIL_PublicKey *pubKey);
+    void (*Destroy)(
+            CMUTIL_RSACrypto *crypto);
+};
+
+CMUTIL_API CMUTIL_RSACrypto *CMUTIL_RSACryptoCreate(void);
+
+CMUTIL_API void CMUTIL_CryptoRandom(uint8_t *buf, size_t len);
+
 #ifdef __cplusplus
 }
 #endif
