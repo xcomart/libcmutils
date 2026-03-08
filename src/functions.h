@@ -210,5 +210,17 @@ CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path);
 CMUTIL_HttpClient *CMUTIL_HttpClientCreateInternal(
     CMUTIL_Mem *memst, const char *urlprefix);
 
+CMUTIL_BlockCrypto *CMUTIL_BlockCryptoCreateInternal(
+        CMUTIL_Mem *memst, const char *algo, const char *mode,
+        const char *padding, int key_bits,
+        const uint8_t *key, const uint8_t *iv);
+
+CMUTIL_PublicKey *CMUTIL_PublicKeyCreateInternal(
+        CMUTIL_Mem *memst, const char *data, CMBool is_file);
+CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateInternal(
+        CMUTIL_Mem *memst, const char *data, CMBool is_file);
+
+CMUTIL_RSACrypto *CMUTIL_RSACryptoCreateInternal(CMUTIL_Mem *memst);
+
 #endif // FUNCTIONS_H__
 
