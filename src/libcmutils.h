@@ -5661,6 +5661,211 @@ CMUTIL_API CMUTIL_Process *CMUTIL_ProcessCreateEx(
 #define CMUTIL_ProcessCreate(cwd, env, command, ...) \
         CMUTIL_ProcessCreateEx(cwd, env, command, ##__VA_ARGS__, NULL)
 
+
+/**
+ * @struct CMUTIL_BlockCrypto
+ * @brief Block cipher encryption/decryption object.
+ */
+typedef struct CMUTIL_BlockCrypto CMUTIL_BlockCrypto;
+struct CMUTIL_BlockCrypto {
+    /**
+     * @brief Encrypts plain text with the specified key and IV.
+     * @param crypto The block crypto object.
+     * @param plain The plain text to encrypt.
+     * @param key The encryption key.
+     * @param iv The initialization vector.
+     * @return The encrypted data as a CMUTIL_String object, or NULL on failure.
+     *         Returned object must be destroyed by calling Destroy member.
+     */
+    CMUTIL_String *(*Encrypt)(
+            CMUTIL_BlockCrypto *crypto,
+            CMUTIL_String *plain,
+            const uint8_t *key, const uint8_t *iv);
+    /**
+     * @brief Decrypts encrypted data with the specified key and IV.
+     * @param crypto The block crypto object.
+     * @param encrypted The encrypted data to decrypt.
+     * @param key The decryption key.
+     * @param iv The initialization vector.
+     * @return The decrypted data as a CMUTIL_String object, or NULL on failure.
+     *         Returned object must be destroyed by calling Destroy member.
+     */
+    CMUTIL_String *(*Decrypt)(
+            CMUTIL_BlockCrypto *crypto,
+            CMUTIL_String *encrypted,
+            const uint8_t *key, const uint8_t *iv);
+    /**
+     * @brief Destroys the block crypto object.
+     * @param crypto The block crypto object to destroy.
+     */
+    void (*Destroy)(
+            CMUTIL_BlockCrypto *crypto);
+};
+
+/**
+ * @brief Creates a new block crypto object.
+ * @param algo The encryption algorithm (e.g., "AES").
+ * @param mode The encryption mode (e.g., "CBC").
+ * @param padding The padding scheme (e.g., "PKCS5Padding").
+ * @param key_bits The key size in bits.
+ * @return A pointer to the newly created block crypto object, or NULL on failure.
+ */
+CMUTIL_API CMUTIL_BlockCrypto *CMUTIL_BlockCryptoCreate(
+        const char *algo, const char *mode, const char *padding,
+        int key_bits);
+
+
+/**
+ * @struct CMUTIL_RSAKey
+ * @brief RSA key object (can be either a private or public key).
+ */
+typedef struct CMUTIL_RSAKey CMUTIL_RSAKey;
+typedef CMUTIL_RSAKey CMUTIL_PrivateKey;
+typedef CMUTIL_RSAKey CMUTIL_PublicKey;
+struct CMUTIL_RSAKey {
+    /**
+     * @brief Gets the encoded representation of the RSA key.
+     * @param key The RSA key object.
+     * @return The encoded key as a CMUTIL_String object, or NULL on failure.
+     *         Returned object must be destroyed by calling Destroy member.
+     */
+    CMUTIL_String *(*GetEncoded)(CMUTIL_RSAKey *key);
+    /**
+     * @brief Destroys the RSA key object.
+     * @param key The RSA key object to destroy.
+     */
+    void (*Destroy)(CMUTIL_RSAKey *key);
+};
+
+/**
+ * @brief Creates a private key object from a PEM-formatted string.
+ * @param pem The PEM-formatted private key string.
+ * @param passphrase The passphrase for the private key, or NULL if none.
+ * @return A pointer to the newly created private key object, or NULL on failure.
+ */
+CMUTIL_API CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateFromPEM(
+        const char *pem, const uint8_t *passphrase);
+
+/**
+ * @brief Creates a public key object from a PEM-formatted string.
+ * @param pem The PEM-formatted public key string.
+ * @return A pointer to the newly created public key object, or NULL on failure.
+ */
+CMUTIL_API CMUTIL_PublicKey *CMUTIL_PublicKeyCreateFromPEM(
+        const char *pem);
+
+/**
+ * @brief Creates a private key object from a PEM-formatted file.
+ * @param file_path The path to the PEM-formatted private key file.
+ * @param passphrase The passphrase for the private key, or NULL if none.
+ * @return A pointer to the newly created private key object, or NULL on failure.
+ */
+CMUTIL_API CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateFromFile(
+        const char *file_path, const uint8_t *passphrase);
+
+/**
+ * @brief Creates a public key object from a PEM-formatted file.
+ * @param file_path The path to the PEM-formatted public key file.
+ * @return A pointer to the newly created public key object, or NULL on failure.
+ */
+CMUTIL_API CMUTIL_PublicKey *CMUTIL_PublicKeyCreateFromFile(
+        const char *file_path);
+
+/**
+ * @struct CMUTIL_RSACrypto
+ * @brief RSA encryption/decryption and signature object.
+ */
+typedef struct CMUTIL_RSACrypto CMUTIL_RSACrypto;
+struct CMUTIL_RSACrypto {
+    /**
+     * @brief Encrypts plain text using an RSA public key.
+     * @param crypto The RSA crypto object.
+     * @param plain The plain text to encrypt.
+     * @param pubKey The public key to use for encryption.
+     * @return The encrypted data as a CMUTIL_String object, or NULL on failure.
+     */
+    CMUTIL_String *(*EncryptWithPublicKey)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *plain,
+            CMUTIL_PublicKey *pubKey);
+    /**
+     * @brief Encrypts plain text using an RSA private key.
+     * @param crypto The RSA crypto object.
+     * @param plain The plain text to encrypt.
+     * @param privKey The private key to use for encryption.
+     * @return The encrypted data as a CMUTIL_String object, or NULL on failure.
+     */
+    CMUTIL_String *(*EncryptWithPrivateKey)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *plain,
+            CMUTIL_PrivateKey *privKey);
+    /**
+     * @brief Decrypts data using an RSA public key.
+     * @param crypto The RSA crypto object.
+     * @param encrypted The encrypted data to decrypt.
+     * @param pubKey The public key to use for decryption.
+     * @return The decrypted data as a CMUTIL_String object, or NULL on failure.
+     */
+    CMUTIL_String *(*DecryptWithPublicKey)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *encrypted,
+            CMUTIL_PublicKey *pubKey);
+    /**
+     * @brief Decrypts data using an RSA private key.
+     * @param crypto The RSA crypto object.
+     * @param encrypted The encrypted data to decrypt.
+     * @param privKey The private key to use for decryption.
+     * @return The decrypted data as a CMUTIL_String object, or NULL on failure.
+     */
+    CMUTIL_String *(*DecryptWithPrivateKey)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *encrypted,
+            CMUTIL_PrivateKey *privKey);
+    /**
+     * @brief Digitally signs plain text using an RSA private key.
+     * @param crypto The RSA crypto object.
+     * @param plain The data to sign.
+     * @param privKey The private key to use for signing.
+     * @return The digital signature as a CMUTIL_String object, or NULL on failure.
+     */
+    CMUTIL_String *(*Sign)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *plain,
+            CMUTIL_PrivateKey *privKey);
+    /**
+     * @brief Verifies a digital signature using an RSA public key.
+     * @param crypto The RSA crypto object.
+     * @param plain The original data that was signed.
+     * @param signature The signature to verify.
+     * @param pubKey The public key to use for verification.
+     * @return CMTrue if the signature is valid, CMFalse otherwise.
+     */
+    CMBool (*VerifySignature)(
+            CMUTIL_RSACrypto *crypto,
+            CMUTIL_String *plain,
+            CMUTIL_String *signature,
+            CMUTIL_PublicKey *pubKey);
+    /**
+     * @brief Destroys the RSA crypto object.
+     * @param crypto The RSA crypto object to destroy.
+     */
+    void (*Destroy)(
+            CMUTIL_RSACrypto *crypto);
+};
+
+/**
+ * @brief Creates a new RSA crypto object.
+ * @return A pointer to the newly created RSA crypto object, or NULL on failure.
+ */
+CMUTIL_API CMUTIL_RSACrypto *CMUTIL_RSACryptoCreate(void);
+
+/**
+ * @brief Generates cryptographically strong random bytes.
+ * @param buf The buffer to store the random bytes.
+ * @param len The number of bytes to generate.
+ */
+CMUTIL_API void CMUTIL_CryptoRandom(uint8_t *buf, size_t len);
+
 #ifdef __cplusplus
 }
 #endif
