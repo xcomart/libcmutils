@@ -222,6 +222,7 @@ CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateInternal(
         const uint8_t *passphrase, CMBool is_file);
 
 CMUTIL_RSACrypto *CMUTIL_RSACryptoCreateInternal(CMUTIL_Mem *memst);
+CMUTIL_String *CMUTIL_CryptoToBase64Internal(CMUTIL_Mem *memst, const uint8_t *data, size_t len);
 
 #endif // FUNCTIONS_H__
 

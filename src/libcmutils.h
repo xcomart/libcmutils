@@ -5866,6 +5866,21 @@ CMUTIL_API CMUTIL_RSACrypto *CMUTIL_RSACryptoCreate(void);
  */
 CMUTIL_API void CMUTIL_CryptoRandom(uint8_t *buf, size_t len);
 
+/**
+ * @brief Encodes data to Base64 string.
+ * @param data The data to encode.
+ * @param len The length of the data.
+ * @return The Base64 encoded string, or NULL on failure.
+ */
+CMUTIL_API CMUTIL_String *CMUTIL_CryptoToBase64(const uint8_t *data, size_t len);
+
+/**
+ * @brief Decodes Base64-encoded data.
+ * @param base64 The Base64-encoded data.
+ * @return The decoded data as a CMUTIL_String object, or NULL on failure.
+ */
+CMUTIL_API CMUTIL_String *CMUTIL_CryptoFromBase64(const char *base64);
+
 #ifdef __cplusplus
 }
 #endif

@@ -34,7 +34,7 @@ static EVP_CIPHER *CMUTIL_BlockCryptoGetCipher(
 {
     char name[128];
 
-    if (strncasecmp(algo, "AES", 3) == 0) {
+    if (strcasecmp(algo, "AES") == 0) {
         if (strcasecmp(mode, "CBC") == 0) {
             snprintf(name, sizeof(name), "aes-%d-cbc", bits);
         } else if (strcasecmp(mode, "GCM") == 0) {
@@ -804,4 +804,52 @@ CMUTIL_RSACrypto *CMUTIL_RSACryptoCreate(void) {
 void CMUTIL_CryptoRandom(uint8_t *buf, size_t len)
 {
     RAND_bytes(buf, (int)len);
+}
+
+CMUTIL_String *CMUTIL_CryptoToBase64Internal(
+    CMUTIL_Mem *memst, const uint8_t *data, size_t len)
+{
+    if (!data || len == 0) return NULL;
+    size_t out_len = ((len + 2) / 3) * 4;
+    CMUTIL_String *res = CMUTIL_StringCreateInternal(
+        memst, out_len + 1, NULL);
+    if (!res) return NULL;
+
+    int encoded_len = EVP_EncodeBlock(
+        (uint8_t*)CMCall(res, GetCString), data, (int)len);
+    if (encoded_len < 0) {
+        CMCall(res, Destroy);
+        return NULL;
+    }
+    CMUTIL_StringSetSizeInternal(res, (size_t)encoded_len);
+    return res;
+}
+
+CMUTIL_String *CMUTIL_CryptoToBase64(const uint8_t *data, size_t len)
+{
+    return CMUTIL_CryptoToBase64Internal(CMUTIL_GetMem(), data, len);
+}
+
+CMUTIL_String *CMUTIL_CryptoFromBase64Internal(
+    CMUTIL_Mem *memst, const char *data)
+{
+    if (!data) return NULL;
+    size_t len = strlen(data);
+    if (len == 0) return NULL;
+    CMUTIL_String *res = CMUTIL_StringCreateInternal(
+        memst, (len * 3 / 4 + 1), NULL);
+    if (!res) return NULL;
+    int decoded_len = EVP_DecodeBlock(
+        (uint8_t*)CMCall(res, GetCString), (const uint8_t*)data, len);
+    if (decoded_len < 0) {
+        CMLogError("EVP_DecodeBlock() failed");
+        CMCall(res, Destroy);
+        return NULL;
+    }
+    CMUTIL_StringSetSizeInternal(res, (size_t)decoded_len);
+    return res;
+}
+
+CMUTIL_String *CMUTIL_CryptoFromBase64(const char *base64) {
+    return CMUTIL_CryptoFromBase64Internal(CMUTIL_GetMem(), base64);
 }
