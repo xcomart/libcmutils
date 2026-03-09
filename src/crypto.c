@@ -121,8 +121,8 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_BlockCryptoEncrypt(
         return NULL;
     }
     int olen = 0, total = 0;
-    CMUTIL_String *res = CMUTIL_StringCreateEx(
-        CMCall(plain, GetSize)+(ibc->key_bits/8), NULL);
+    CMUTIL_String *res = CMUTIL_StringCreateInternal(
+        ibc->memst, CMCall(plain, GetSize)+(ibc->key_bits/8), NULL);
 
     if (!CMUTIL_BlockCryptoInit(bc, key, iv, CMTrue)) {
         CMLogError("CMUTIL_BlockCryptoInit() failed");
@@ -156,7 +156,8 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_BlockCryptoDecrypt(
         return NULL;
     }
     int olen = 0, total = 0;
-    CMUTIL_String *res = CMUTIL_StringCreateEx(CMCall(plain, GetSize)+(ibc->key_bits/8), NULL);
+    CMUTIL_String *res = CMUTIL_StringCreateInternal(
+        ibc->memst, CMCall(plain, GetSize)+(ibc->key_bits/8), NULL);
 
     if (!CMUTIL_BlockCryptoInit(bc, key, iv, CMFalse)) {
         CMLogError("CMUTIL_BlockCryptoInit() failed");
@@ -237,7 +238,6 @@ CMUTIL_BlockCrypto *CMUTIL_BlockCryptoCreate(
         CMUTIL_GetMem(), algo, mode, padding, key_bits);
 }
 
-#define CMUTIL_RSA_USE_EVP  1
 
 typedef struct CMUTIL_RSAKey_Internal {
     CMUTIL_RSAKey  base;
@@ -269,7 +269,7 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_RSAKeyGetEncoded(CMUTIL_RSAKey *key) {
         CMLogError("OpenSSL error: %s", ERR_error_string(ERR_get_error(), NULL));
         return NULL;
     }
-    str = CMUTIL_StringCreateEx(len, NULL);
+    str = CMUTIL_StringCreateInternal(ik->memst, len, NULL);
     uint8_t *buf = (uint8_t*)CMCall(str, GetCString);
     int rc = i2d_PUBKEY(ik->key, &buf);
     if (rc <= 0) {
@@ -283,7 +283,7 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_RSAKeyGetEncoded(CMUTIL_RSAKey *key) {
         CMLogError("OpenSSL error: %s", ERR_error_string(ERR_get_error(), NULL));
         return NULL;
     }
-    str = CMUTIL_StringCreateEx(len, NULL);
+    str = CMUTIL_StringCreateInternal(ik->memst, len, NULL);
     uint8_t *buf = (uint8_t*)CMCall(str, GetCString);
     int rc = i2d_RSA_PUBKEY(ik->key, &buf);
     if (rc <= 0) {
@@ -345,7 +345,7 @@ CMUTIL_PublicKey *CMUTIL_PublicKeyCreateInternal(
             goto FAILED;
         }
     } else {
-        str = CMUTIL_StringCreateEx(strlen(data), data);
+        str = CMUTIL_StringCreateInternal(ik->memst, strlen(data), data);
     }
     const char *buf = CMCall(str, GetCString);
     if (strncmp(buf, "-----BEGIN PUBLIC KEY-----", 25) != 0) {
@@ -431,7 +431,7 @@ CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateInternal(
     ik->base = g_cmutil_rsa_key;
     ik->is_private = CMTrue;
     ik->memst = memst;
-    CMUTIL_String *pwdstr = CMUTIL_StringCreateEx(
+    CMUTIL_String *pwdstr = CMUTIL_StringCreateInternal(ik->memst,
         strlen((const char*)passphrase), (const char*)passphrase);
     CMUTIL_String *str = NULL;
     if (is_file) {
@@ -447,7 +447,7 @@ CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateInternal(
             goto FAILED;
         }
     } else {
-        str = CMUTIL_StringCreateEx(strlen(data), data);
+        str = CMUTIL_StringCreateInternal(ik->memst, strlen(data), data);
     }
     const char *buf = CMCall(str, GetCString);
     BIO *bio = BIO_new_mem_buf((void*)CMCall(str, GetCString), -1);
@@ -508,7 +508,7 @@ static CMUTIL_String *CMUTIL_RSACryptoEncrypt(
     rc = EVP_PKEY_encrypt(ctx, NULL, &olen,
         (uint8_t*)CMCall(plain, GetCString), CMCall(plain, GetSize));
     CHECK_ERR(rc);
-    res = CMUTIL_StringCreateEx(olen, NULL);
+    res = CMUTIL_StringCreateInternal(ik->memst, olen, NULL);
     rc = EVP_PKEY_encrypt(ctx, (uint8_t*)CMCall(res, GetCString), &olen,
         (uint8_t*)CMCall(plain, GetCString), CMCall(plain, GetSize));
     CHECK_ERR(rc);
@@ -520,9 +520,9 @@ static CMUTIL_String *CMUTIL_RSACryptoEncrypt(
     size_t modlen = ilen % blen;
     size_t olen = (ilen / blen) * blen;
     if (modlen) {
-        olen += (blen - modlen);
+        olen = ilen + blen - modlen;
     }
-    res = CMUTIL_StringCreateEx(olen, NULL);
+    res = CMUTIL_StringCreateInternal(ik->memst, olen, NULL);
     if (key_is_public) {
         olen = RSA_public_encrypt(
             CMCall(plain, GetSize), (uint8_t*)CMCall(plain, GetCString),
@@ -573,7 +573,7 @@ static CMUTIL_String *CMUTIL_RSACryptoDecrypt(
     rc = EVP_PKEY_decrypt(ctx, NULL, &olen,
         (uint8_t*)CMCall(encrypted, GetCString), CMCall(encrypted, GetSize));
     CHECK_ERR(rc);
-    res = CMUTIL_StringCreateEx(olen, NULL);
+    res = CMUTIL_StringCreateInternal(ik->memst, olen, NULL);
     rc = EVP_PKEY_decrypt(ctx, (uint8_t*)CMCall(res, GetCString), &olen,
         (uint8_t*)CMCall(encrypted, GetCString), CMCall(encrypted, GetSize));
     CHECK_ERR(rc);
@@ -585,9 +585,9 @@ static CMUTIL_String *CMUTIL_RSACryptoDecrypt(
     size_t modlen = ilen % blen;
     size_t olen = (ilen / blen) * blen;
     if (modlen) {
-        olen += (blen - modlen);
+        olen = ilen + blen - modlen;
     }
-    res = CMUTIL_StringCreateEx(olen, NULL);
+    res = CMUTIL_StringCreateInternal(ik->memst, olen, NULL);
     if (key_is_public) {
         olen = RSA_public_decrypt(
             CMCall(encrypted, GetSize), (uint8_t*)CMCall(encrypted, GetCString),
@@ -616,7 +616,7 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_RSACryptoEncryptWithPublicKey(
         CMUTIL_String *plain, CMUTIL_PublicKey *pub_key)
 {
     CMUTIL_String *res = CMUTIL_RSACryptoEncrypt(
-        crypto, plain, pub_key, true);
+        crypto, plain, pub_key, CMTrue);
     if (!res) {
         CMLogError("CMUTIL_RSACryptoEncrypt() failed");
         return NULL;
@@ -629,7 +629,7 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_RSACryptoEncryptWithPrivateKey(
         CMUTIL_String *plain, CMUTIL_PrivateKey *pri_key)
 {
     CMUTIL_String *res = CMUTIL_RSACryptoEncrypt(
-        crypto, plain, pri_key, false);
+        crypto, plain, pri_key, CMFalse);
     if (!res) {
         CMLogError("CMUTIL_RSACryptoEncrypt() failed");
         return NULL;
@@ -642,7 +642,7 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_RSACryptoDecryptWithPublicKey(
         CMUTIL_String *plain, CMUTIL_PublicKey *pub_key)
 {
     CMUTIL_String *res = CMUTIL_RSACryptoDecrypt(
-        crypto, plain, pub_key, true);
+        crypto, plain, pub_key, CMTrue);
     if (!res) {
         CMLogError("CMUTIL_RSACryptoDecrypt() failed");
         return NULL;
@@ -655,7 +655,7 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_RSACryptoDecryptWithPrivateKey(
         CMUTIL_String *plain, CMUTIL_PrivateKey *pri_key)
 {
     CMUTIL_String *res = CMUTIL_RSACryptoDecrypt(
-        crypto, plain, pri_key, false);
+        crypto, plain, pri_key, CMFalse);
     if (!res) {
         CMLogError("CMUTIL_RSACryptoDecrypt() failed");
         return NULL;
@@ -671,13 +671,15 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_RSACryptoSign(
     CMUTIL_RSAKey_Internal *ik = (CMUTIL_RSAKey_Internal*)pri_key;
 
     CMUTIL_String *res = NULL;
+    int rc = 0;
+#if defined(CMUTIL_RSA_USE_EVP)
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
     if (ctx == NULL) {
         CMLogError("OpenSSL error: %s", ERR_error_string(ERR_get_error(), NULL));
         CMLogError("EVP_MD_CTX_new() failed");
         return NULL;
     }
-    int rc = EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, ik->key);
+    rc = EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, ik->key);
     CHECK_ERR(rc);
     rc = EVP_DigestSignUpdate(ctx,
         (uint8_t*)CMCall(plain, GetCString), CMCall(plain, GetSize));
@@ -686,16 +688,32 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_RSACryptoSign(
 
     rc = EVP_DigestSignFinal(ctx, NULL, &olen);
     CHECK_ERR(rc);
-    res = CMUTIL_StringCreateEx(olen, NULL);
+    res = CMUTIL_StringCreateInternal(ik->memst, olen, NULL);
     rc = EVP_DigestSignFinal(ctx, (uint8_t*)CMCall(res, GetCString), &olen);
     CHECK_ERR(rc);
     CMUTIL_StringSetSizeInternal(res, olen);
 
     EVP_MD_CTX_free(ctx);
+#else
+    uint32_t siglen = (uint32_t)RSA_size(ik->key);
+    unsigned char digest[SHA256_DIGEST_LENGTH];
+    if (!SHA256((uint8_t*)CMCall(plain, GetCString),
+        CMCall(plain, GetSize), digest)) {
+        CMLogError("SHA256() failed");
+        goto FAILED;
+    }
+    res = CMUTIL_StringCreateInternal(ik->memst, siglen, NULL);
+    rc = RSA_sign(NID_sha256, digest, SHA256_DIGEST_LENGTH,
+        (uint8_t*)CMCall(res, GetCString), &siglen, ik->key);
+    CHECK_ERR(rc);
+    CMUTIL_StringSetSizeInternal(res, siglen);
+#endif
     return res;
 FAILED:
     if (res) CMCall(res, Destroy);
+#if defined(CMUTIL_RSA_USE_EVP)
     EVP_MD_CTX_free(ctx);
+#endif
     return NULL;
 }
 
@@ -706,13 +724,15 @@ CMUTIL_STATIC CMBool CMUTIL_RSACryptoVerifySignature(
     CMUTIL_RSACrypto_Internal *ic = (CMUTIL_RSACrypto_Internal*)crypto;
     CMUTIL_RSAKey_Internal *ik = (CMUTIL_RSAKey_Internal*)pub_key;
 
+    int rc = 0;
+#if defined(CMUTIL_RSA_USE_EVP)
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
     if (ctx == NULL) {
         CMLogError("OpenSSL error: %s", ERR_error_string(ERR_get_error(), NULL));
         CMLogError("EVP_MD_CTX_new() failed");
         return CMFalse;
     }
-    int rc = EVP_DigestVerifyInit(ctx, NULL, EVP_sha256(), NULL, ik->key);
+    rc = EVP_DigestVerifyInit(ctx, NULL, EVP_sha256(), NULL, ik->key);
     CHECK_ERR(rc);
     rc = EVP_DigestVerifyUpdate(ctx,
         (uint8_t*)CMCall(plain, GetCString), CMCall(plain, GetSize));
@@ -720,9 +740,24 @@ CMUTIL_STATIC CMBool CMUTIL_RSACryptoVerifySignature(
     rc = EVP_DigestVerifyFinal(ctx,
         (uint8_t*)CMCall(signature, GetCString), CMCall(signature, GetSize));
     CHECK_ERR(rc);
-    return rc == 1 ? CMTrue : CMFalse;
-FAILED:
     EVP_MD_CTX_free(ctx);
+#else
+    unsigned char digest[SHA256_DIGEST_LENGTH];
+    if (!SHA256((uint8_t*)CMCall(plain, GetCString),
+        CMCall(plain, GetSize), digest)) {
+        CMLogError("SHA256() failed");
+        goto FAILED;
+        }
+    rc = RSA_verify(NID_sha256, digest, SHA256_DIGEST_LENGTH,
+        (uint8_t*)CMCall(signature, GetCString), CMCall(signature, GetSize),
+        ik->key);
+    CHECK_ERR(rc);
+#endif
+    return CMTrue;
+FAILED:
+#if defined(CMUTIL_RSA_USE_EVP)
+    EVP_MD_CTX_free(ctx);
+#endif
     return CMFalse;
 }
 
