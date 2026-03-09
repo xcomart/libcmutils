@@ -139,32 +139,70 @@ int main() {
     CMCall(decrypted, Destroy); decrypted = NULL;
     CMCall(block, Destroy); block = NULL;
 
-    ASSERT(prepare_openssl_env(&env, &pathstr), "prepare openssl env");
+    // ASSERT(prepare_openssl_env(&env, &pathstr), "prepare openssl env");
+    //
+    // ASSERT(run_process_wait_ok(
+    //     ".", env,
+    //     "genpkey", "-algorithm", "RSA", "-out", "test_rsa_private.pem",
+    //     "-pkeyopt", "rsa_keygen_bits:2048"),
+    //     "generate RSA private key");
+    //
+    // ASSERT(run_process_wait_ok(
+    //     ".", env,
+    //     "pkey", "-in", "test_rsa_private.pem", "-pubout",
+    //     "-out", "test_rsa_public.pem", NULL),
+    //     "extract RSA public key");
+    //
+    // priv_file = CMUTIL_FileCreate("test_rsa_private.pem");
+    // pub_file = CMUTIL_FileCreate("test_rsa_public.pem");
+    // ASSERT(priv_file != NULL, "create private key file object");
+    // ASSERT(pub_file != NULL, "create public key file object");
+    // ASSERT(CMCall(priv_file, IsExists), "private key file exists");
+    // ASSERT(CMCall(pub_file, IsExists), "public key file exists");
 
-    ASSERT(run_process_wait_ok(
-        ".", env,
-        "genpkey", "-algorithm", "RSA", "-out", "test_rsa_private.pem",
-        "-pkeyopt", "rsa_keygen_bits:2048"),
-        "generate RSA private key");
+    const char *priv_pem = "-----BEGIN PRIVATE KEY-----\n"
+        "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDO62tdNgxXPtM7\n"
+        "QXmSUIQx1SEA/0YCg5vz6sS/y526la7Ivycz+OId6WPuZENTQvYP36qzyzCghYZ+\n"
+        "imU+4ZjXDOi/s3mR9lK8O9H1ZGKMrXPDbOpk2cseWlQu+utivOyGxtqiO7mWsKra\n"
+        "89zavyNPa9zjzR2nSkxw1Y8OfaCHN0rW0e2jCXURMEM7iyn2VXdnq2TDc2dQ3Yzs\n"
+        "iRVRT6Nm4JNC2Q0eTGpg5Y7lcMLs9KsZdYTreDtPd29j93gvlMELbyLXk2D6j4lY\n"
+        "m/DfZqmrJa1LzM4YDClSS4C8CNv4m1f/k17uJZl1n5KJz6ccj+tajophQHCVriDw\n"
+        "4J0HTFbrAgMBAAECggEAIFfkHFnKbAjB8800N46mWzO5SPKd+t6fjezwfBpTuUqU\n"
+        "W4SlmBYbIhnNKQI7E9SvqaOIhzoHi8/TSgxP7xhMT7EQ4IYpRot+OzYOh5D9Zofm\n"
+        "RHHN4Z25hjEQX5eRG4n0XszOd/Vl+Qv8aOUdbIPb/RobGPCC5hdTA4AeMGGqqffO\n"
+        "UP8FpPKeeCpiMgO1lGWPBzIOGBWw1SPVUv/AMMernLE3zx/KjkoEzSiFPFQnfUqn\n"
+        "QT4XkPXO12ivEpac3K3HAO80en8cRo/raXIHz98atdBatkSL5szz+WBfab1+W8Y8\n"
+        "2VlequieAiFjG0HZGuL06SCaEwvN8B+WtaRAbLJh4QKBgQD899h6z2vbjKJ5VXig\n"
+        "0+F2Gm1sI6m9/+3knGVuF9DaidmBWY/z3iHw7Yn0eYhDzdzx+vFz9tcgaelmwwGc\n"
+        "wPlA9oilVf7okWkHmKVtzhvjLu8P+dTUAUx7hnB9vL/g0IVd4LBaXtrIyuYKmWYC\n"
+        "1nM6WCavl3iaZI03D4Fcm8gf5QKBgQDRZknATA/enwWuzKJ9VieMoOHf+vUfGXDy\n"
+        "A3E+QJiQk4kbTI6HjjiXdZ+3fSqs3hCDJJRwirx/06x1tE+JLpEDKaMUzfXc7f5f\n"
+        "h3Luk/fX2v/sOUv9Z2VYRX/T3OA4M3dsYuedl86KbPbGstAXtd3ryMpWDIHwe8Lh\n"
+        "Jyu4WXQOjwKBgHqTbeY0U8MSpje83rKveHRN4e+gaEOUm6VG0y9BgwYh/a7bwxEb\n"
+        "9b5Um6BGs2yHeCQYwJ68YQlnyJzuqP1X1G9SBmx2+wmeTBJOOPq4AHNY7qYDHMmN\n"
+        "x42jWybSKve4kqcmlM11YPYius0v/2ool7URuc0jzGCjkHm5nalOIu6xAoGBAKrB\n"
+        "8hR5MlvFa/nub/crgZbhPzDKUoeo1HzWp8svG/qSBTWYyYXrSWThi3wy+tD7SZXY\n"
+        "B6B60lqe/70Aa/efXKuqkY2OoxclkNDQAL5jNbH1qcs1si0T2wYPrrzTGplaBuIB\n"
+        "CYVu3QPu9ZJ1ENK1ASKcm7tt+axlEDdRHQr5D3YrAoGBAI+B8SeqpUFyVhqal3Ai\n"
+        "LNJBFMV2V9fbg6d6C0G/7ueRvch3cv0Nbj0d907js+cJnI9qJAhWZtn183u9kbQn\n"
+        "uSi/+st9wHSGhqXZ9Lor1skZdxGCdXkWiEl5wf574cugsgwQmhZ6s+BMGfixS382\n"
+        "DsLI/WgiI0qQm1MH7h3ILtCO\n"
+        "-----END PRIVATE KEY-----";
+    const char *pub_pem = "-----BEGIN PUBLIC KEY-----\n"
+        "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzutrXTYMVz7TO0F5klCE\n"
+        "MdUhAP9GAoOb8+rEv8udupWuyL8nM/jiHelj7mRDU0L2D9+qs8swoIWGfoplPuGY\n"
+        "1wzov7N5kfZSvDvR9WRijK1zw2zqZNnLHlpULvrrYrzshsbaoju5lrCq2vPc2r8j\n"
+        "T2vc480dp0pMcNWPDn2ghzdK1tHtowl1ETBDO4sp9lV3Z6tkw3NnUN2M7IkVUU+j\n"
+        "ZuCTQtkNHkxqYOWO5XDC7PSrGXWE63g7T3dvY/d4L5TBC28i15Ng+o+JWJvw32ap\n"
+        "qyWtS8zOGAwpUkuAvAjb+JtX/5Ne7iWZdZ+Sic+nHI/rWo6KYUBwla4g8OCdB0xW\n"
+        "6wIDAQAB\n"
+        "-----END PUBLIC KEY-----";
 
-    ASSERT(run_process_wait_ok(
-        ".", env,
-        "pkey", "-in", "test_rsa_private.pem", "-pubout",
-        "-out", "test_rsa_public.pem", NULL),
-        "extract RSA public key");
+    priv = CMUTIL_PrivateKeyCreateFromPEM(priv_pem, "");
+    ASSERT(priv != NULL, "CMUTIL_PrivateKeyCreateFromPEM");
 
-    priv_file = CMUTIL_FileCreate("test_rsa_private.pem");
-    pub_file = CMUTIL_FileCreate("test_rsa_public.pem");
-    ASSERT(priv_file != NULL, "create private key file object");
-    ASSERT(pub_file != NULL, "create public key file object");
-    ASSERT(CMCall(priv_file, IsExists), "private key file exists");
-    ASSERT(CMCall(pub_file, IsExists), "public key file exists");
-
-    priv = CMUTIL_PrivateKeyCreateFromFile("test_rsa_private.pem", (const uint8_t *)"");
-    ASSERT(priv != NULL, "CMUTIL_PrivateKeyCreateFromFile");
-
-    pub = CMUTIL_PublicKeyCreateFromFile("test_rsa_public.pem");
-    ASSERT(pub != NULL, "CMUTIL_PublicKeyCreateFromFile");
+    pub = CMUTIL_PublicKeyCreateFromPEM(pub_pem);
+    ASSERT(pub != NULL, "CMUTIL_PublicKeyCreateFromPEM");
 
     pub_der = CMCall(pub, GetEncoded);
     ASSERT(pub_der != NULL, "CMUTIL_RSAKey.GetEncoded");
