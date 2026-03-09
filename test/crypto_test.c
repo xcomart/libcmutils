@@ -96,6 +96,8 @@ int main() {
     CMUTIL_String *pub_der = NULL;
     CMUTIL_File *priv_file = NULL;
     CMUTIL_File *pub_file = NULL;
+    CMUTIL_String *b64 = NULL;
+    CMUTIL_String *b64_decoded = NULL;
 
     uint8_t aes_key[32] = {
         0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
@@ -204,6 +206,17 @@ int main() {
     ASSERT(memcmp(rnd1, rnd2, sizeof(rnd1)) != 0,
         "CMUTIL_CryptoRandom returns different buffers");
 
+    b64 = CMUTIL_CryptoToBase64((const uint8_t*)"hello", 5);
+    ASSERT(b64 != NULL, "CMUTIL_CryptoToBase64");
+    ASSERT(strcmp(CMCall(b64, GetCString), "aGVsbG8=") == 0, "Base64 encoding correct");
+    CMLogInfo("Base64 encoding: %s", CMCall(b64, GetCString));
+
+    b64_decoded = CMUTIL_CryptoFromBase64(CMCall(b64, GetCString));
+    ASSERT(b64_decoded != NULL, "CMUTIL_CryptoFromBase64");
+    ASSERT(strcmp(CMCall(b64_decoded, GetCString), "hello") == 0, "Base64 decoding correct");
+    CMLogInfo("Base64 decoding: %s", CMCall(b64_decoded, GetCString));
+
+
     ir = 0;
 END_POINT:
     if (priv_file) CMCall(priv_file, Destroy);
@@ -219,6 +232,8 @@ END_POINT:
     if (block) CMCall(block, Destroy);
     if (pathstr) CMCall(pathstr, Destroy);
     if (env) CMCall(env, Destroy);
+    if (b64) CMCall(b64, Destroy);
+    if (b64_decoded) CMCall(b64_decoded, Destroy);
     if (!CMUTIL_Clear()) ir = -1;
     return ir;
 }
