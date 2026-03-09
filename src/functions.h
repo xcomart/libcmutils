@@ -202,6 +202,7 @@ CMUTIL_CSConv *CMUTIL_CSConvCreateInternal(
         CMUTIL_Mem *memst, const char *fromcs, const char *tocs);
 CMUTIL_StringArray *CMUTIL_StringSplitInternal(
         CMUTIL_Mem *memst, const char *haystack, const char *needle);
+void CMUTIL_StringSetSizeInternal(CMUTIL_String *str, size_t newsize);
 
 CMUTIL_Library *CMUTIL_LibraryCreateInternal(
         CMUTIL_Mem *memst, const char *path);
@@ -212,13 +213,13 @@ CMUTIL_HttpClient *CMUTIL_HttpClientCreateInternal(
 
 CMUTIL_BlockCrypto *CMUTIL_BlockCryptoCreateInternal(
         CMUTIL_Mem *memst, const char *algo, const char *mode,
-        const char *padding, int key_bits,
-        const uint8_t *key, const uint8_t *iv);
+        const char *padding, int key_bits);
 
 CMUTIL_PublicKey *CMUTIL_PublicKeyCreateInternal(
         CMUTIL_Mem *memst, const char *data, CMBool is_file);
 CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateInternal(
-        CMUTIL_Mem *memst, const char *data, CMBool is_file);
+        CMUTIL_Mem *memst, const char *data,
+        const uint8_t *passphrase, CMBool is_file);
 
 CMUTIL_RSACrypto *CMUTIL_RSACryptoCreateInternal(CMUTIL_Mem *memst);
 
