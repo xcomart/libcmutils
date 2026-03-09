@@ -41,8 +41,8 @@
 - **Package Manager**: vcpkg (recommended)
 - **Dependencies**:
   - `libiconv`
-  - `libz`
-  - `openssl` (optional, for SSL support)
+  - `zlib`
+  - `openssl`
 
 ## Installation & Setup
 
@@ -50,7 +50,7 @@
 
 1. Install dependencies:
    ```bash
-   vcpkg install libiconv openssl
+   vcpkg install libiconv openssl zlib
    ```
 
 2. Configure and build:

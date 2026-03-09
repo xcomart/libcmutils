@@ -17,8 +17,12 @@ MESSAGE ( STATUS "Configuring cmutils version ${VERSION_MAJOR}.${VERSION_MINOR}.
 SET ( LIB_VERSION_STRING ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH} )
 ADD_COMPILE_DEFINITIONS( LIBCMUTIL_VERSION_STRING="${LIB_VERSION_STRING}" )
 
-OPTION ( SUPPORT_SSL "Support SSL in networking" ON )
 OPTION ( BUILD_TESTS "Build tests" ON )
+OPTION ( CMUTIL_RSA_USE_EVP "Use OpenSSL EVP API in RSA operations" ON )
+
+IF (CMUTIL_RSA_USE_EVP)
+    ADD_COMPILE_DEFINITIONS( CMUTIL_RSA_USE_EVP="1" )
+ENDIF (CMUTIL_RSA_USE_EVP)
 
 SET ( LIB_SRCS
     src/arrays.c
@@ -39,7 +43,9 @@ SET ( LIB_SRCS
     src/http.c
     src/process.c
     src/strings.c
-    src/system.c )
+    src/system.c
+    src/crypto.c
+)
 
 ADD_LIBRARY ( cmutils SHARED ${LIB_SRCS} )
 ADD_LIBRARY ( cmutilsStatic STATIC ${LIB_SRCS} )
@@ -63,57 +69,54 @@ TARGET_LINK_DIRECTORIES( cmutilsStatic PUBLIC ${ZLIB_LIBRARY_DIR} )
 TARGET_INCLUDE_DIRECTORIES( cmutilsStatic PUBLIC ${ZLIB_INCLUDE_DIRS} )
 TARGET_COMPILE_OPTIONS( cmutilsStatic PUBLIC ${ZLIB_CFLAGS_OTHER} )
 
-IF ( SUPPORT_SSL )
+SET (OPENSSL_PREFIX "" CACHE PATH "The path to the prefix of a OpenSSL installation")
 
-    SET (OPENSSL_PREFIX "" CACHE PATH "The path to the prefix of a OpenSSL installation")
+FIND_LIBRARY ( OPENSSL_LIBRARY NAMES ssl
+    PATHS ${OPENSSL_PREFIX}/lib /usr/lib /usr/local/lib /usr/local/opt/openssl/lib )
+MESSAGE ( "SSL library found: ${OPENSSL_LIBRARY}")
 
-    FIND_LIBRARY ( OPENSSL_LIBRARY NAMES ssl
+FIND_LIBRARY ( CRYPTO_LIBRARY NAMES crypto
         PATHS ${OPENSSL_PREFIX}/lib /usr/lib /usr/local/lib /usr/local/opt/openssl/lib )
-    MESSAGE ( "SSL library found: ${OPENSSL_LIBRARY}")
+MESSAGE ( "Crypto library found: ${CRYPTO_LIBRARY}")
 
-    FIND_LIBRARY ( CRYPTO_LIBRARY NAMES crypto
-            PATHS ${OPENSSL_PREFIX}/lib /usr/lib /usr/local/lib /usr/local/opt/openssl/lib )
-    MESSAGE ( "Crypto library found: ${CRYPTO_LIBRARY}")
+FIND_PATH ( OPENSSL_INCLUDE_DIRS NAMES ssl.h
+    PATHS ${OPENSSL_PREFIX}/include /usr/include /usr/local/include /usr/local/opt/openssl/include
+    PATH_SUFFIXES openssl )
+MESSAGE ( "OpenSSL header found: ${OPENSSL_INCLUDE_DIRS}")
 
-    FIND_PATH ( OPENSSL_INCLUDE_DIRS NAMES ssl.h
-        PATHS ${OPENSSL_PREFIX}/include /usr/include /usr/local/include /usr/local/opt/openssl/include
-        PATH_SUFFIXES openssl )
-    MESSAGE ( "OpenSSL header found: ${OPENSSL_INCLUDE_DIRS}")
-    
-    IF ( OPENSSL_INCLUDE_DIRS AND OPENSSL_LIBRARY )
-        # get directory path
-        GET_FILENAME_COMPONENT ( OPENSSL_LIBRARY_DIR ${OPENSSL_LIBRARY} PATH )
-        # remove suffix 'openssl'
-        GET_FILENAME_COMPONENT ( OPENSSL_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIRS} PATH )
-        SET ( OPENSSL_LIBRARIES SSL_LIB CRYPTO_LIB )
-        IF ( ${CMAKE_SYSTEM_NAME} STREQUAL "Windows" )
-            # get filename without extension
-            GET_FILENAME_COMPONENT ( SSL_LIB ${OPENSSL_LIBRARY} NAME_WE )
-            # get filename without extension
-            GET_FILENAME_COMPONENT ( CRYPTO_LIB ${CRYPTO_LIBRARY} NAME_WE )
-            SET ( OPENSSL_LIBRARIES ${SSL_LIB} ${CRYPTO_LIB} )
-        ELSE ()
-            SET ( OPENSSL_LIBRARIES ssl crypto )
-        ENDIF ()
-        SET ( OPENSSL_FOUND TRUE )
+IF ( OPENSSL_INCLUDE_DIRS AND OPENSSL_LIBRARY )
+    # get directory path
+    GET_FILENAME_COMPONENT ( OPENSSL_LIBRARY_DIR ${OPENSSL_LIBRARY} PATH )
+    # remove suffix 'openssl'
+    GET_FILENAME_COMPONENT ( OPENSSL_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIRS} PATH )
+    SET ( OPENSSL_LIBRARIES SSL_LIB CRYPTO_LIB )
+    IF ( ${CMAKE_SYSTEM_NAME} STREQUAL "Windows" )
+        # get filename without extension
+        GET_FILENAME_COMPONENT ( SSL_LIB ${OPENSSL_LIBRARY} NAME_WE )
+        # get filename without extension
+        GET_FILENAME_COMPONENT ( CRYPTO_LIB ${CRYPTO_LIBRARY} NAME_WE )
+        SET ( OPENSSL_LIBRARIES ${SSL_LIB} ${CRYPTO_LIB} )
+    ELSE ()
+        SET ( OPENSSL_LIBRARIES ssl crypto )
     ENDIF ()
+    SET ( OPENSSL_FOUND TRUE )
+ENDIF ()
 
-    IF ( OPENSSL_FOUND )
-        MESSAGE ( STATUS "Found OpenSSL: ${OPENSSL_LIBRARY}" )
-    ELSEIF ( OPENSSL_FOUND )
-        MESSAGE ( FATAL_ERROR "Could not find OpenSSL" )
-    ENDIF ()
+IF ( OPENSSL_FOUND )
+    MESSAGE ( STATUS "Found OpenSSL: ${OPENSSL_LIBRARY}" )
+ELSEIF ( OPENSSL_FOUND )
+    MESSAGE ( FATAL_ERROR "Could not find OpenSSL" )
+ENDIF ()
 
-    TARGET_LINK_LIBRARIES ( cmutils ${OPENSSL_LIBRARIES} )
-    TARGET_LINK_DIRECTORIES( cmutils PUBLIC ${OPENSSL_LIBRARY_DIR} )
-    TARGET_INCLUDE_DIRECTORIES( cmutils PUBLIC ${OPENSSL_INCLUDE_DIRS} )
-    TARGET_COMPILE_OPTIONS( cmutils PUBLIC ${OPENSSL_CFLAGS_OTHER} )
-    TARGET_LINK_LIBRARIES ( cmutilsStatic ${OPENSSL_LIBRARIES} )
-    TARGET_LINK_DIRECTORIES( cmutilsStatic PUBLIC ${OPENSSL_LIBRARY_DIR} )
-    TARGET_INCLUDE_DIRECTORIES( cmutilsStatic PUBLIC ${OPENSSL_INCLUDE_DIRS} )
-    TARGET_COMPILE_OPTIONS( cmutilsStatic PUBLIC ${OPENSSL_CFLAGS_OTHER} )
-    ADD_DEFINITIONS ( -DCMUTIL_SUPPORT_SSL -DCMUTIL_SSL_USE_OPENSSL)
-ENDIF ( SUPPORT_SSL )
+TARGET_LINK_LIBRARIES ( cmutils ${OPENSSL_LIBRARIES} )
+TARGET_LINK_DIRECTORIES( cmutils PUBLIC ${OPENSSL_LIBRARY_DIR} )
+TARGET_INCLUDE_DIRECTORIES( cmutils PUBLIC ${OPENSSL_INCLUDE_DIRS} )
+TARGET_COMPILE_OPTIONS( cmutils PUBLIC ${OPENSSL_CFLAGS_OTHER} )
+TARGET_LINK_LIBRARIES ( cmutilsStatic ${OPENSSL_LIBRARIES} )
+TARGET_LINK_DIRECTORIES( cmutilsStatic PUBLIC ${OPENSSL_LIBRARY_DIR} )
+TARGET_INCLUDE_DIRECTORIES( cmutilsStatic PUBLIC ${OPENSSL_INCLUDE_DIRS} )
+TARGET_COMPILE_OPTIONS( cmutilsStatic PUBLIC ${OPENSSL_CFLAGS_OTHER} )
+ADD_DEFINITIONS ( -DCMUTIL_SUPPORT_SSL -DCMUTIL_SSL_USE_OPENSSL)
 
 SET_TARGET_PROPERTIES ( cmutils PROPERTIES VERSION ${LIB_VERSION_STRING} )
 IF ( ${CMAKE_SYSTEM_NAME} STREQUAL "Windows" )
