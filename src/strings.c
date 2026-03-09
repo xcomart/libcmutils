@@ -715,7 +715,21 @@ CMUTIL_String *CMUTIL_StringCreateEx(
     return res;
 }
 
-
+void CMUTIL_StringSetSizeInternal(CMUTIL_String *str, size_t newsize) {
+    CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)str;
+    if (newsize > istr->capacity) {
+        size_t newcapacity = newsize;
+        char *newdata = istr->memst->Realloc(istr->data, newcapacity+1);
+        if (!newdata) {
+            CMLogError("memory reallocation failed");
+            return;
+        }
+        istr->data = newdata;
+        istr->capacity = newcapacity+1;
+    }
+    istr->data[newsize] = '\0';
+    istr->size = newsize;
+}
 
 
 //*****************************************************************************
