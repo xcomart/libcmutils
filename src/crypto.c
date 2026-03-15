@@ -64,6 +64,19 @@ static EVP_CIPHER *CMUTIL_BlockCryptoGetCipher(
             CMLogError("unsupported cipher mode: %s", mode);
             return NULL;
         }
+    } else if (strcasecmp(algo, "SEED") == 0) {
+        if (strcasecmp(mode, "CBC") == 0) {
+            strcpy(name, "seed-cbc");
+        } else if (strcasecmp(mode, "ECB") == 0) {
+            strcpy(name, "seed-ecb");
+        } else if (strcasecmp(mode, "CFB") == 0) {
+            strcpy(name, "seed-cfb");
+        } else if (strcasecmp(mode, "OFB") == 0) {
+            strcpy(name, "seed-ofb");
+        } else {
+            CMLogError("unsupported cipher mode: %s", mode);
+            return NULL;
+        }
     } else if (strcasecmp(algo, "DESede") == 0 || strcasecmp(algo, "TripleDES") == 0) {
         if (strcasecmp(mode, "CBC") == 0) {
             strcpy(name, "des-ede3-cbc");
