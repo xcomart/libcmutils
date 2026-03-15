@@ -3753,7 +3753,7 @@ CMUTIL_API CMBool CMUTIL_LogIsEnabled(
  * @return CMTrue if logging is enabled for the specified level,
  *         CMFalse otherwise.
  */
-#define CMLogIsEnabled(level) CMUTIL_LogIsEnabled(__CMUTIL_GetLogger(),level)
+#define CMLogIsEnabled(level) CMUTIL_LogIsEnabled(g__CMUTIL_GetLogger(),level)
 
 /**
  * @brief Log a message with the specified log level and stack trace option.
