@@ -3717,16 +3717,16 @@ CMUTIL_API void CMUTIL_LogFallback(CMLogLevel level,
  *
  * @param name The name of the logger.
  */
-#define CMUTIL_LogDefine(name)                                          \
-    static CMUTIL_Logger *___logger = NULL;                             \
-    static CMUTIL_LogSystem *__lsys = NULL;                             \
-    static CMUTIL_Logger *__CMUTIL_GetLogger() {                        \
-        if (___logger == NULL || __lsys != CMUTIL_LogSystemGet()) {     \
-            __lsys = CMUTIL_LogSystemGet();                             \
-            if (__lsys) ___logger = CMCall(__lsys, GetLogger, name);    \
-            else ___logger = NULL;                                      \
-        }                                                               \
-        return ___logger;                                               \
+#define CMUTIL_LogDefine(name)                                           \
+    static CMUTIL_Logger *l___logger = NULL;                             \
+    static CMUTIL_LogSystem *s__lsys = NULL;                             \
+    static CMUTIL_Logger *g__CMUTIL_GetLogger() {                        \
+        if (l___logger == NULL || s__lsys != CMUTIL_LogSystemGet()) {    \
+            s__lsys = CMUTIL_LogSystemGet();                             \
+            if (s__lsys) l___logger = CMCall(s__lsys, GetLogger, name);  \
+            else l___logger = NULL;                                      \
+        }                                                                \
+        return l___logger;                                               \
     }
 
 /**
@@ -3766,14 +3766,14 @@ CMUTIL_API CMBool CMUTIL_LogIsEnabled(
  * @param f The format string for the log message.
  * @param ... Additional arguments for the format string.
  */
-#define CMUTIL_Log__(level,stack,f,...) do {                            \
-    CMUTIL_Logger *__logger = __CMUTIL_GetLogger();                     \
-    if (__logger)                                                       \
-        __logger->LogEx(__logger, CMLogLevel_##level,__FILE__,__LINE__, \
-                      CM##stack,f,##__VA_ARGS__);                       \
-    else                                                                \
-        CMUTIL_LogFallback(CMLogLevel_##level, __FILE__, __LINE__,      \
-                           f, ##__VA_ARGS__);                           \
+#define CMUTIL_Log__(level,stack,f,...) do {                              \
+    CMUTIL_Logger *g__logger = g__CMUTIL_GetLogger();                     \
+    if (g__logger)                                                        \
+        g__logger->LogEx(g__logger, CMLogLevel_##level,__FILE__,__LINE__, \
+                      CM##stack,f,##__VA_ARGS__);                         \
+    else                                                                  \
+        CMUTIL_LogFallback(CMLogLevel_##level, __FILE__, __LINE__,        \
+                           f, ##__VA_ARGS__);                             \
     } while(0)
 
 /**
@@ -3788,9 +3788,9 @@ CMUTIL_API CMBool CMUTIL_LogIsEnabled(
  * @param ... Additional arguments for the format string.
  */
 #define CMUTIL_Log2__(level,stack,f,...)    do {                        \
-    CMUTIL_Logger *__logger = __CMUTIL_GetLogger();                     \
-    if (__logger)                                                       \
-        __logger->LogEx(__logger, level,__FILE__,__LINE__,              \
+    CMUTIL_Logger *g__logger = g__CMUTIL_GetLogger();                   \
+    if (g__logger)                                                      \
+        g__logger->LogEx(g__logger, level,__FILE__,__LINE__,            \
                       CM##stack,f,##__VA_ARGS__);                       \
     else                                                                \
         CMUTIL_LogFallback(CMLogLevel_##level, __FILE__, __LINE__,      \
