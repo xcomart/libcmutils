@@ -25,6 +25,7 @@ SOFTWARE.
 #include "functions.h"
 
 #include <errno.h>
+#include <limits.h>
 
 #if defined(MSWIN)
 # include <process.h>
@@ -49,6 +50,7 @@ SOFTWARE.
 #  define COND_T            pthread_cond_t
 #  define COND_WAIT         pthread_cond_wait
 #  define COND_TIMEDWAIT    pthread_cond_timedwait
+#  define COND_TIMEDOUT     ETIMEDOUT
 #  define COND_SIGNAL       pthread_cond_signal
 #  define COND_DESTROY      pthread_cond_destroy
 #  define THREAD_T          pthread_t
@@ -63,6 +65,7 @@ SOFTWARE.
 #  define COND_T            cnd_t
 #  define COND_WAIT         cnd_wait
 #  define COND_TIMEDWAIT    cnd_timedwait
+#  define COND_TIMEDOUT     thrd_timedout
 #  define COND_SIGNAL       cnd_signal
 #  define COND_DESTROY      cnd_destroy
 #  define THREAD_T          thrd_t
@@ -141,12 +144,17 @@ CMUTIL_STATIC CMBool CMUTIL_CondTimedWait(
         struct timespec timeout;
         if (gettimeofday(&now, NULL) == 0) {
             int ir = 0;
-            timeout.tv_sec = now.tv_sec;
-            timeout.tv_nsec = (now.tv_usec + millisec * 1000) * 1000;
-            timeout.tv_sec += timeout.tv_nsec / ESDBC_ONE_SEC;
-            timeout.tv_nsec %= ESDBC_ONE_SEC;
+            // seconds and nanoseconds are calculated separately to avoid
+            // signed overflow on platforms with 32bit long.
+            long addnsec = (long)(millisec % 1000) * 1000000L;
+            timeout.tv_sec = now.tv_sec + (time_t)(millisec / 1000);
+            timeout.tv_nsec = (long)now.tv_usec * 1000L + addnsec;
+            if (timeout.tv_nsec >= ESDBC_ONE_SEC) {
+                timeout.tv_sec += timeout.tv_nsec / ESDBC_ONE_SEC;
+                timeout.tv_nsec %= ESDBC_ONE_SEC;
+            }
 
-            while (!icond->state && ir != ETIMEDOUT)
+            while (!icond->state && ir != COND_TIMEDOUT)
                 ir = COND_TIMEDWAIT(
                         &(icond->cond), &(icond->mutex), &timeout);
             if (icond->state)
@@ -187,8 +195,13 @@ CMUTIL_STATIC void CMUTIL_CondSet(CMUTIL_Cond *cond)
 #if defined(MSWIN)
     (void)SetEvent(icond->cond);
 #else
+    // state must be changed under the mutex, otherwise a waiter which
+    // already evaluated the predicate but not yet entered COND_WAIT
+    // would miss this signal.
+    MUTEX_LOCK(&(icond->mutex));
     icond->state = 1;
     COND_SIGNAL(&(icond->cond));
+    MUTEX_UNLOCK(&(icond->mutex));
 #endif
 }
 
@@ -210,7 +223,9 @@ CMUTIL_STATIC void CMUTIL_CondReset(CMUTIL_Cond *cond)
 #if defined(MSWIN)
     (void)ResetEvent(icond->cond);
 #else
+    MUTEX_LOCK(&(icond->mutex));
     icond->state = 0;
+    MUTEX_UNLOCK(&(icond->mutex));
 #endif
 }
 
@@ -577,12 +592,17 @@ CMUTIL_STATIC CMBool CMUTIL_ThreadStart(CMUTIL_Thread *thread)
     CMUTIL_Thread_Internal *ithread = (CMUTIL_Thread_Internal*)thread;
 
 #if defined(MSWIN)
-    unsigned int tid;
-    ithread->thread = (HANDLE)_beginthreadex(NULL, 0,
+    unsigned int tid = 0;
+    // _beginthreadex returns 0 (not INVALID_HANDLE_VALUE) on failure.
+    uintptr_t hthr = _beginthreadex(NULL, 0,
             (unsigned int(__stdcall*)(void*))CMUTIL_ThreadProc,
             ithread, 0, &tid);
-    if (ithread->thread == INVALID_HANDLE_VALUE)
+    if (hthr == 0 || (HANDLE)hthr == INVALID_HANDLE_VALUE) {
+        ithread->thread = NULL;
         ir = -1;
+    } else {
+        ithread->thread = (HANDLE)hthr;
+    }
     ithread->sysid = (uint64_t)tid;
 #else
 # if defined(USE_THREADS_H_)
@@ -795,22 +815,28 @@ CMUTIL_STATIC void *CMUTIL_ThreadPoolProc(void *vp) {
 CMUTIL_STATIC void CMUTIL_ThreadPoolExecute(
     CMUTIL_ThreadPool *tp, CMProcCB runnable, void *udata) {
     CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)tp;
+    CMBool need_thread = CMFalse;
     CMUTIL_ThreadPoolJob *job =
         pool->memst->Alloc(sizeof(CMUTIL_ThreadPoolJob));
-    // idle condition reset
-    CMCall(pool->idle_cond, Reset);
 
-    // add job to queue
     job->callback = runnable;
     job->udata = udata;
-    CMSync(pool->qmtx, CMCall(pool->jobq, AddTail, job););
 
-    // now this thread will work
-    CMSync(pool->tmtx, pool->idle_count--;);
+    // idle condition reset, job queueing and idle count decrement must be
+    // performed atomically, otherwise a worker finishing its previous job
+    // may signal 'all idle' while this job is not started yet.
+    CMSync(pool->tmtx, {
+        CMCall(pool->idle_cond, Reset);
+        CMSync(pool->qmtx, CMCall(pool->jobq, AddTail, job););
+        pool->idle_count--;
+        if (pool->idle_count <= 0 && pool->auto_increment)
+            need_thread = CMTrue;
+    });
 
     // release semaphore
     CMCall(pool->feed_sem, Release);
-    if (pool->idle_count == 0 && pool->auto_increment) {
+
+    if (need_thread) {
         // create new thread if no more idle thread
         CMSync(pool->tmtx, {
             char namebuf[256];
@@ -828,6 +854,17 @@ CMUTIL_STATIC void CMUTIL_ThreadPoolExecute(
 
 CMUTIL_STATIC void CMUTIL_ThreadPoolWait(CMUTIL_ThreadPool *tp) {
     const CMUTIL_ThreadPool_Internal *pool = (CMUTIL_ThreadPool_Internal*)tp;
+    CMBool alldone = CMFalse;
+    // idle_cond is only set by a worker which finished a job, so a pool
+    // which has nothing to do would block forever without this check.
+    CMSync(pool->tmtx, {
+        CMSync(pool->qmtx, {
+            if (pool->idle_count >= pool->pool_size &&
+                    CMCall(pool->jobq, GetSize) == 0)
+                alldone = CMTrue;
+        });
+    });
+    if (alldone) return;
     CMCall(pool->idle_cond, Wait);
 }
 
@@ -1011,7 +1048,7 @@ CMUTIL_Semaphore *CMUTIL_SemaphoreCreateInternal(
 
 #if defined(MSWIN)
     isem->semp = CreateSemaphore(
-            NULL, initcnt>1024? 1024:initcnt, 1024, NULL);
+            NULL, initcnt < 0? 0:(LONG)initcnt, LONG_MAX, NULL);
     if (isem->semp == NULL)
         ir = -1;
 #elif defined(APPLE)
@@ -1043,14 +1080,27 @@ CMUTIL_Semaphore *CMUTIL_SemaphoreCreate(int initcnt)
 // use internal read/write lock implementation to support recursive lock
 #define RWLOCK_USE_INTERNAL     1
 
+#if defined(RWLOCK_USE_INTERNAL)
+
+#define RWLOCK_HOLDER_INITCAP   8
+
+typedef struct CMUTIL_RWLockHolder {
+    uint64_t            tid;
+    int                 depth;
+    int                 dummy_padder;
+} CMUTIL_RWLockHolder;
+
+#endif
+
 typedef struct CMUTIL_RWLock_Internal {
     CMUTIL_RWLock       base;
 #if defined(RWLOCK_USE_INTERNAL)
     CMUTIL_Mutex        *rdcntmtx;
     CMUTIL_Mutex        *wrmtx;
     CMUTIL_Cond         *nordrs;
+    CMUTIL_RWLockHolder *holders;
     int                 rdcnt;
-    int                 dummy_padder;
+    int                 holdercap;
 #else
 #if defined(MSWIN)
     CRITICAL_SECTION    rdcntlock;
@@ -1065,12 +1115,80 @@ typedef struct CMUTIL_RWLock_Internal {
     CMUTIL_Mem          *memst;
 } CMUTIL_RWLock_Internal;
 
+#if defined(RWLOCK_USE_INTERNAL)
+
+// every holder table access must be guarded by rdcntmtx.
+
+CMUTIL_STATIC CMUTIL_RWLockHolder *CMUTIL_RWLockHolderGet(
+        CMUTIL_RWLock_Internal *irwlock, uint64_t tid)
+{
+    int i;
+    for (i = 0; i < irwlock->holdercap; i++) {
+        CMUTIL_RWLockHolder *holder = irwlock->holders + i;
+        if (holder->depth > 0 && holder->tid == tid)
+            return holder;
+    }
+    return NULL;
+}
+
+CMUTIL_STATIC CMUTIL_RWLockHolder *CMUTIL_RWLockHolderAdd(
+        CMUTIL_RWLock_Internal *irwlock, uint64_t tid)
+{
+    CMUTIL_RWLockHolder *holders;
+    int i, ncap = irwlock->holdercap;
+
+    for (i = 0; i < ncap; i++) {
+        if (irwlock->holders[i].depth == 0) {
+            irwlock->holders[i].tid = tid;
+            irwlock->holders[i].depth = 1;
+            return irwlock->holders + i;
+        }
+    }
+
+    ncap = ncap > 0 ? ncap * 2 : RWLOCK_HOLDER_INITCAP;
+    holders = irwlock->memst->Realloc(
+                irwlock->holders, sizeof(CMUTIL_RWLockHolder) * (size_t)ncap);
+    // holder tracking is only an optimization for reentrant read locking,
+    // the lock itself stays correct without it.
+    if (holders == NULL) return NULL;
+    memset(holders + irwlock->holdercap, 0x0,
+           sizeof(CMUTIL_RWLockHolder) * (size_t)(ncap - irwlock->holdercap));
+    i = irwlock->holdercap;
+    irwlock->holders = holders;
+    irwlock->holdercap = ncap;
+    holders[i].tid = tid;
+    holders[i].depth = 1;
+    return holders + i;
+}
+
+#endif
+
 CMUTIL_STATIC void CMUTIL_RWLockReadLock(CMUTIL_RWLock *rwlock)
 {
     CMUTIL_RWLock_Internal *irwlock = (CMUTIL_RWLock_Internal*)rwlock;
 #if defined(RWLOCK_USE_INTERNAL)
+    uint64_t tid = CMUTIL_ThreadSystemSelfId();
+    CMUTIL_RWLockHolder *holder;
+
+    CMCall(irwlock->rdcntmtx, Lock);
+    holder = CMUTIL_RWLockHolderGet(irwlock, tid);
+    if (holder) {
+        /*
+         * This thread already holds a read lock, so rdcnt is greater than
+         * zero and nordrs is already reset. Acquiring wrmtx here would
+         * deadlock against a writer which holds wrmtx while waiting for
+         * this thread to release its read lock.
+         */
+        holder->depth++;
+        irwlock->rdcnt++;
+        CMCall(irwlock->rdcntmtx, Unlock);
+        return;
+    }
+    CMCall(irwlock->rdcntmtx, Unlock);
+
     CMCall(irwlock->wrmtx, Lock);
     CMCall(irwlock->rdcntmtx, Lock);
+    CMUTIL_RWLockHolderAdd(irwlock, tid);
     if (++(irwlock->rdcnt) == 1)
         CMCall(irwlock->nordrs, Reset);
     CMCall(irwlock->rdcntmtx, Unlock);
@@ -1084,7 +1202,7 @@ CMUTIL_STATIC void CMUTIL_RWLockReadLock(CMUTIL_RWLock *rwlock)
      */
     EnterCriticalSection(&(irwlock->wrlock));
     EnterCriticalSection(&(irwlock->rdcntlock));
-    if (++(rwlock->rdcnt) == 1) {
+    if (++(irwlock->rdcnt) == 1) {
         ResetEvent(irwlock->nordrs);
     }
     LeaveCriticalSection(&irwlock->rdcntlock);
@@ -1099,7 +1217,12 @@ CMUTIL_STATIC void CMUTIL_RWLockReadUnlock(CMUTIL_RWLock *rwlock)
 {
     CMUTIL_RWLock_Internal *irwlock = (CMUTIL_RWLock_Internal*)rwlock;
 #if defined(RWLOCK_USE_INTERNAL)
+    CMUTIL_RWLockHolder *holder;
+
     CMCall(irwlock->rdcntmtx, Lock);
+    holder = CMUTIL_RWLockHolderGet(irwlock, CMUTIL_ThreadSystemSelfId());
+    if (holder && --(holder->depth) == 0)
+        holder->tid = 0;
     if ( (--irwlock->rdcnt) == 0)
         CMCall(irwlock->nordrs, Set);
     CMCall(irwlock->rdcntmtx, Unlock);
@@ -1156,6 +1279,8 @@ CMUTIL_STATIC void CMUTIL_RWLockDestroy(CMUTIL_RWLock *rwlock)
     CMCall(irwlock->nordrs, Destroy);
     CMCall(irwlock->rdcntmtx, Destroy);
     CMCall(irwlock->wrmtx, Destroy);
+    if (irwlock->holders)
+        irwlock->memst->Free(irwlock->holders);
 #else
 #if defined(MSWIN)
     WaitForSingleObject(irwlock->nordrs,INFINITE);
@@ -1222,6 +1347,9 @@ CMUTIL_RWLock *CMUTIL_RWLockCreate()
 // CMUTIL_Timer implements
 //*****************************************************************************
 
+// milliseconds a cancel waits for an already running task to finish.
+#define CMUTIL_TIMER_CANCEL_WAIT    5000
+
 typedef enum CMUTIL_TimerTaskType {
     TimerTask_OneTime,
     TimerTask_Repeat
@@ -1237,6 +1365,9 @@ typedef struct CMUTIL_TimerTask_Internal {
     CMProcCB                proc;       // task procedure
     void                    *param;     // procedure parameter
     CMUTIL_Timer            *timer;     // timer reference
+    CMBool                  dispatched; // handed to a worker, not finished yet
+    CMBool                  waiter;     // a canceller waits for this task
+    uint64_t                runner;     // system id of the executing thread
     CMUTIL_Mem              *memst;     // memory management context
 } CMUTIL_TimerTask_Internal;
 
@@ -1269,6 +1400,31 @@ CMUTIL_STATIC CMBool CMUTIL_TimerTaskCancelPrivate(
             isfree = CMTrue;
         } else {
             itask->canceled = CMTrue;
+        }
+    }
+    /*
+     * A task which is already running must be waited for, otherwise the
+     * caller could tear down resources the task procedure still uses.
+     * A task cancelling itself cannot wait for its own completion, and the
+     * worker frees it in that case.
+     */
+    if (!isfree && itask->dispatched &&
+            itask->runner != CMUTIL_ThreadSystemSelfId()) {
+        // bounded, a saturated worker pool must not hang the caller forever.
+        int remain = CMUTIL_TIMER_CANCEL_WAIT;
+        itask->waiter = CMTrue;
+        while (itask->dispatched && remain-- > 0) {
+            CMCall(itimer->mutex, Unlock);
+            USLEEP(1000);
+            CMCall(itimer->mutex, Lock);
+        }
+        if (itask->dispatched) {
+            // give the ownership back, the worker frees it when it finishes.
+            itask->waiter = CMFalse;
+            CMLogError("timer task is still running, cancel gave up waiting.");
+        } else {
+            // the worker left the task allocated for this canceller.
+            isfree = CMTrue;
         }
     }
     CMCall(itimer->mutex, Unlock);
@@ -1367,20 +1523,35 @@ CMUTIL_STATIC CMUTIL_TimerTask *CMUTIL_TimerScheduleDelayRepeat(
 CMUTIL_STATIC void CMUTIL_TimerPurge(CMUTIL_Timer *timer)
 {
     CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)timer;
-    uint32_t i;
+    CMUTIL_TimerTask **snapshot = NULL;
+    size_t i, cnt = 0;
     size_t len;
 
+    /*
+     * Cancelling waits for a running task, which needs the timer mutex to
+     * report its completion, so the tasks are collected first and cancelled
+     * with the mutex released. Marking them as waited for keeps the workers
+     * from freeing an entry of this snapshot.
+     */
     CMSync(itimer->mutex, {
         len = CMCall(itimer->alltasks, GetSize);
-        for (i=0; i<len; i++) {
-            CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)
-                    CMCall(itimer->alltasks, GetAt, i);
-            if (CMUTIL_TimerTaskCancelPrivate((CMUTIL_TimerTask*)itask)) {
-                len--;
-                i--;
+        if (len > 0)
+            snapshot = itimer->memst->Alloc(sizeof(CMUTIL_TimerTask*) * len);
+        if (snapshot) {
+            for (i=0; i<len; i++) {
+                CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)
+                        CMCall(itimer->alltasks, GetAt, (uint32_t)i);
+                itask->waiter = CMTrue;
+                snapshot[cnt++] = (CMUTIL_TimerTask*)itask;
             }
         }
     });
+
+    for (i=0; i<cnt; i++)
+        (void)CMUTIL_TimerTaskCancelPrivate(snapshot[i]);
+
+    if (snapshot)
+        itimer->memst->Free(snapshot);
 }
 
 CMUTIL_STATIC void CMUTIL_TimerDestroy(CMUTIL_Timer *timer)
@@ -1444,9 +1615,12 @@ CMUTIL_STATIC void CMUTIL_TimerWorker(void *param)
     CMUTIL_Array *addedto = NULL;
     CMBool isfree = CMFalse;
     CMUTIL_TimerTask_Internal *itask = (CMUTIL_TimerTask_Internal*)param;
-    CMUTIL_Timer_Internal *itimer = (CMUTIL_Timer_Internal*)itask->timer;
+    CMUTIL_Timer_Internal *itimer = NULL;
 
     if (itask == NULL) return;
+    itimer = (CMUTIL_Timer_Internal*)itask->timer;
+
+    CMSync(itimer->mutex, itask->runner = CMUTIL_ThreadSystemSelfId(););
 
     if (!itask->canceled) {
         itask->proc(itask->param);
@@ -1475,11 +1649,14 @@ CMUTIL_STATIC void CMUTIL_TimerWorker(void *param)
     CMCall(itimer->mutex, Lock);
     if (itask->canceled) {
         CMCall(itimer->alltasks, Remove, itask);
-        isfree = CMTrue;
+        // a waiting canceller takes over the ownership of this task.
+        isfree = itask->waiter? CMFalse:CMTrue;
     }
     else if (addedto) {
         CMCall(addedto, Add, itask, NULL);
     }
+    itask->runner = 0;
+    itask->dispatched = CMFalse;
     CMCall(itimer->mutex, Unlock);
 
     if (isfree)
@@ -1503,6 +1680,9 @@ CMUTIL_STATIC void *CMUTIL_TimerMainLoop(void *param)
                 task = (CMUTIL_TimerTask*)
                         CMCall(itimer->scheduled, RemoveAt, 0);
 
+                // marked before the handover so that a canceller can tell
+                // a running task from a merely scheduled one.
+                ((CMUTIL_TimerTask_Internal*)task)->dispatched = CMTrue;
                 CMCall(itimer->tpool, Execute, CMUTIL_TimerWorker, task);
             }
         });

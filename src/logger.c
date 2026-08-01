@@ -200,9 +200,13 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendPadding(
     const char *data, size_t length)
 {
     if (item->length > length) {
+        // g_cmutil_spaces is a fixed size buffer, never read beyond it.
+        size_t padsz = item->length - length;
+        if (padsz > (sizeof(g_cmutil_spaces) - 1))
+            padsz = sizeof(g_cmutil_spaces) - 1;
         if (item->padleft) {
             CMCall(dest, AddNString,
-                        g_cmutil_spaces, item->length - length);
+                        g_cmutil_spaces, padsz);
             CMCall(dest, AddNString,
                         data, length);
         }
@@ -210,7 +214,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendPadding(
             CMCall(dest, AddNString,
                         data, length);
             CMCall(dest, AddNString,
-                        g_cmutil_spaces, item->length - length);
+                        g_cmutil_spaces, padsz);
         }
     } else if (item->limit > 0 && item->limit < (ssize_t)length) {
         if (item->padleft) {
@@ -237,7 +241,7 @@ CMUTIL_STATIC void CMUTIL_LogPatternAppendDateTime(
 CMUTIL_STATIC void CMUTIL_LogPatternAppendMillisec(
     CMUTIL_LogPatternAppendFuncParam *params)
 {
-    CMCall(params->dest, AddPrint, "%03d", params->millis);
+    CMCall(params->dest, AddPrint, "%03ld", params->millis);
 }
 
 CMUTIL_STATIC void CMUTIL_LogPatternAppendString(
@@ -754,14 +758,16 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
             continue;
         }
         // check the padding length
-        if (strchr("+-0123456789", *q)) {
+        // strchr matches the terminating null, so *q must be checked too.
+        if (*q && strchr("+-0123456789", *q)) {
             char *br = buf;
+            const char *bend = buf + sizeof(buf) - 1;
             if (strchr("+-", *q)) {
                 if (*q == '-')
                     padleft = CMTrue;
                 q++;
             }
-            while (strchr("0123456789.", *q))
+            while (*q && br < bend && strchr("0123456789.", *q))
                 *br++ = *q++;
             *br = 0x0;
             br = strchr(buf, '.');
@@ -861,14 +867,21 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
             item = CMUTIL_LogAppenderItemCreate(
                         memst, LogFormatItem_LoggerName);
             if (hasext) {
+                // one more slot is written after this loop.
+                const uint32_t pmax = (uint32_t)(sizeof(item->precision) /
+                        sizeof(item->precision[0])) - 1;
                 r = p = buf;
-                while ((r = strchr(p, '.')) != NULL) {
+                while (item->precisioncnt < pmax &&
+                       (r = strchr(p, '.')) != NULL) {
                     char temp[10] = { 0, };
                     if (r == p) {
                         item->precision[item->precisioncnt] = 0;
                     }
                     else {
-                        strncat(temp, p, (size_t)(r - p));
+                        size_t tlen = (size_t)(r - p);
+                        if (tlen > (sizeof(temp) - 1))
+                            tlen = sizeof(temp) - 1;
+                        strncat(temp, p, tlen);
                         item->precision[item->precisioncnt] =
                                 (uint32_t)atoi(temp);
                     }
@@ -893,15 +906,15 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
             item->data = CMUTIL_StringCreateInternal(memst, 50, NULL);
             if (length != 0) {
                 if (zero) {
-                    sprintf(fmt, "%%0%dld", length);
+                    sprintf(fmt, "%%0%dld", (int)length);
                 } else {
-                    sprintf(fmt, "%%%s%dld", padleft ? "" : "-", length);
+                    sprintf(fmt, "%%%s%dld", padleft ? "" : "-", (int)length);
                 }
             }
             else {
                 strcpy(fmt, "%ld");
             }
-            CMCall(item->data, AddPrint, fmt, GETPID());
+            CMCall(item->data, AddPrint, fmt, (long)GETPID());
             break;
         case LogType_FileName:
             item = CMUTIL_LogAppenderItemCreate(memst, LogFormatItem_FileName);
@@ -924,12 +937,13 @@ CMUTIL_STATIC CMBool CMUTIL_LogPatternParse(
                             memst, LogFormatItem_String);
                 item->data = CMUTIL_StringCreateInternal(memst, 50, NULL);
                 if (length != 0) {
-                    sprintf(fmt, "%%%s%ds", padleft ? "" : "-", length);
+                    sprintf(fmt, "%%%s%ds", padleft ? "" : "-", (int)length);
                 }
                 else {
                     strcpy(fmt, "%s");
                 }
-                CMCall(item->data, AddPrint, fmt, getenv(buf));
+                const char *env = getenv(buf);
+                CMCall(item->data, AddPrint, fmt, env? env:"");
             }
             else {
                 // TODO: error report
@@ -983,11 +997,8 @@ CMUTIL_STATIC CMBool CMUTIL_LogAppenderBaseInit(
         void(*FlushFn)(CMUTIL_LogAppender *appender),
         void(*DestroyFn)(CMUTIL_LogAppender *appender))
 {
-    iap->pattern = CMUTIL_ListCreateInternal(
-                iap->memst, CMUTIL_LogAppenderFormatItemDestroy);
-    iap->spattern = iap->memst->Strdup(pattern);
-    if (!CMUTIL_LogPatternParse(iap->memst, iap->pattern, pattern))
-        return CMFalse;
+    // vtable must be filled before anything can fail, creators call
+    // Destroy on failure.
     iap->Write = WriteFn;
     iap->name = iap->memst->Strdup(name);
     iap->mutex = CMUTIL_MutexCreateInternal(iap->memst);
@@ -996,6 +1007,11 @@ CMUTIL_STATIC CMBool CMUTIL_LogAppenderBaseInit(
     iap->base.Append = CMUTIL_LogAppenderBaseAppend;
     iap->base.Flush = FlushFn;
     iap->base.Destroy = DestroyFn;
+    iap->pattern = CMUTIL_ListCreateInternal(
+                iap->memst, CMUTIL_LogAppenderFormatItemDestroy);
+    iap->spattern = iap->memst->Strdup(pattern);
+    if (!CMUTIL_LogPatternParse(iap->memst, iap->pattern, pattern))
+        return CMFalse;
     return CMTrue;
 }
 
@@ -1291,19 +1307,26 @@ CMUTIL_STATIC void CMUTIL_LogRollingFileAppenderFlush(
                 CMUTIL_LogRollingFileAppenderRolling(iap, &item->logtm);
             FILE *fp = fopen(iap->fpath, "ab");
             if (fp) {
-                if (CMCall(list, GetSize) > 0) {
-                    while (CMCall(list, GetSize) > 0) {
-                        item = (CMUTIL_LogAppderAsyncItem*)CMCall(list, RemoveFront);
-                        if (CMUTIL_LogRollingFileAppenderIsChanged(iap, &item->logtm)) {
-                            fclose(fp);
-                            CMUTIL_LogRollingFileAppenderRolling(iap, &item->logtm);
-                            fp = fopen(iap->fpath, "ab");
-                        }
-                        fprintf(fp, "%s", CMCall(item->log, GetCString));
-                        CMUTIL_LogAppderAsyncItemDestroy(item);
+                while (CMCall(list, GetSize) > 0) {
+                    item = (CMUTIL_LogAppderAsyncItem*)CMCall(list, RemoveFront);
+                    if (fp != NULL &&
+                        CMUTIL_LogRollingFileAppenderIsChanged(
+                            iap, &item->logtm)) {
+                        fclose(fp);
+                        CMUTIL_LogRollingFileAppenderRolling(
+                            iap, &item->logtm);
+                        // reopening may fail, remaining items are dropped
+                        // but every item must be consumed and released.
+                        fp = fopen(iap->fpath, "ab");
+                        if (fp == NULL)
+                            printf("cannot open log file '%s'.\n", iap->fpath);
                     }
+                    if (fp != NULL)
+                        fprintf(fp, "%s", CMCall(item->log, GetCString));
+                    CMUTIL_LogAppderAsyncItemDestroy(item);
                 }
-                fclose(fp);
+                if (fp != NULL)
+                    fclose(fp);
             }
         }
     });
@@ -1451,9 +1474,13 @@ CMUTIL_STATIC void CMUTIL_LogSocketAppenderDestroy(CMUTIL_LogAppender *appender)
         iap->isrunning = CMFalse;
         CMUTIL_Mem *memst =
                 CMUTIL_LogAppenderBaseClean((CMUTIL_LogAppenderBase*)iap);
-        CMCall(iap->listener, Close);
-        CMCall(iap->acceptor, Join);
-        CMCall(iap->clients, Destroy);
+        // creation may have failed halfway, every member can be null.
+        if (iap->listener)
+            CMCall(iap->listener, Close);
+        if (iap->acceptor)
+            CMCall(iap->acceptor, Join);
+        if (iap->clients)
+            CMCall(iap->clients, Destroy);
         memst->Free(iap);
     }
 }
@@ -1755,8 +1782,13 @@ CMUTIL_STATIC CMUTIL_Logger *CMUTIL_LogSystemGetLogger(
         for (i=0; i<CMCall(ilsys->cloggers, GetSize); i++) {
             CMUTIL_ConfLogger_Internal *cl = (CMUTIL_ConfLogger_Internal*)
                     CMCall(ilsys->cloggers, GetAt, i);
-            // adding root logger and parent loggers
-            if (strlen(cl->name) == 0 || strstr(name, cl->name) == 0) {
+            // adding root logger and parent loggers.
+            // parent means 'cl->name' is a name path prefix of 'name',
+            // so the following character must be a separator or the end.
+            const size_t clnlen = strlen(cl->name);
+            if (clnlen == 0 ||
+                (strncmp(name, cl->name, clnlen) == 0 &&
+                 (name[clnlen] == '\0' || name[clnlen] == '.'))) {
                 CMCall(res->logrefs, Add, cl, NULL);
                 if (res->minlevel > cl->level)
                     res->minlevel = cl->level;
@@ -2144,6 +2176,7 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
     CMBool res = CMTrue;
     CMUTIL_JsonObject *jobj = (CMUTIL_JsonObject*)json;
     const char *sname = NULL;
+    CMUTIL_String *cname = NULL;
     CMUTIL_ConfLogger *clogger = NULL;
     CMBool additivity = CMTrue;
     CMLogLevel level = CMLogLevel_Info;
@@ -2156,15 +2189,20 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
 
     if (CMCall(jobj, Get, "name")) {
         const CMUTIL_String *name = CMCall(jobj, GetString, "name");
-        CMUTIL_String *cname = CMCall(name, Clone);
+        if (name == NULL) {
+            printf("invalid name in logger.\n");
+            return CMFalse;
+        }
+        // sname refers to cname's internal buffer, so cname must be
+        // kept alive until CreateLogger is done with it.
+        cname = CMCall(name, Clone);
         CMCall(cname, SelfTrim);
         sname = CMCall(cname, GetCString);
         if (*sname == 0x0 && strcmp(stype, "root") != 0) {
             printf("Name must be specified except root logger.\n");
-            CMCall(cname, Destroy);
-            return CMFalse;
+            res = CMFalse;
+            goto ENDPOINT;
         }
-        CMCall(cname, Destroy);
     } else {
         if (strcmp(stype, "root") != 0) {
             printf("Name must be specified except root logger.\n");
@@ -2176,11 +2214,13 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
         const char *slevel = CMCall(jobj, GetCString, "level");
         if (!CMUTIL_LogStringToLevel(slevel, &level)) {
             printf("invalid log level in logger.\n");
-            return CMFalse;
+            res = CMFalse;
+            goto ENDPOINT;
         }
     } else {
         printf("level must be specified in logger.\n");
-        return CMFalse;
+        res = CMFalse;
+        goto ENDPOINT;
     }
     if (CMCall(jobj, Get, "additivity")) {
         additivity = CMCall(jobj, GetBoolean, "additivity");
@@ -2198,25 +2238,30 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessOneLogger(
                 CMUTIL_Json *item = CMCall(jarr, Get, i);
                 if (CMCall(item, GetType) == CMJsonTypeArray) {
                     printf("invalid appender reference in logger.\n");
-                    return CMFalse;
+                    res = CMFalse;
+                    goto ENDPOINT;
                 }
                 res = CMUTIL_LogSystemProcessAppenderRef(
                             lsys, clogger, item, level);
                 if (!res) {
                     printf("invalid appender reference in logger.\n");
-                    return res;
+                    goto ENDPOINT;
                 }
             }
             break;
         }
         case CMJsonTypeValue:
-            return CMUTIL_LogSystemProcessAppenderRef(
+            res = CMUTIL_LogSystemProcessAppenderRef(
                         lsys, clogger, apref, level);
+            goto ENDPOINT;
         default:
             break;
         }
     }
-    return CMTrue;
+    res = CMTrue;
+ENDPOINT:
+    if (cname) CMCall(cname, Destroy);
+    return res;
 }
 
 CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessItems(
@@ -2244,6 +2289,10 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessItems(
         }
         oitem = (CMUTIL_JsonObject*)item;
         type = CMCall(oitem, GetString, "type");
+        if (type == NULL) {
+            printf("invalid configuration structure.\n");
+            goto ENDPOINT;
+        }
         ctype = CMCall(type, Clone);
         CMCall(ctype, SelfToLower);
         stype = CMCall(ctype, GetCString);
@@ -2332,22 +2381,19 @@ CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem *memst)
 {
     if (__cmutil_logsystem) return __cmutil_logsystem;
 
-    CMBool initialize = CMFalse;
+    // this mutex is recursive, so configuring inside the lock is safe and
+    // makes concurrent callers wait for the result instead of getting null.
     CMCall(g_cmutil_logsystem_mutex, Lock);
-    if (!g_logsystem_initialized) {
-        initialize = CMTrue;
-        g_logsystem_initialized = CMTrue;
-    }
-    CMCall(g_cmutil_logsystem_mutex, Unlock);
-
-    if (__cmutil_logsystem == NULL && initialize) {
+    if (__cmutil_logsystem == NULL && !g_logsystem_initialized) {
         // try to read cmutil_log.json
         char *conf = getenv("CMUTIL_LOG_CONFIG");
+        g_logsystem_initialized = CMTrue;
         if (!conf) conf = CMUTIL_LOG_CONFIG_DEFAULT;
-        __cmutil_logsystem = CMUTIL_LogSystemConfigureFomJsonInternal(memst, conf);
-        return __cmutil_logsystem;
+        __cmutil_logsystem = CMUTIL_LogSystemConfigureFomJsonInternal(
+                    memst, conf);
     }
-    return NULL;
+    CMCall(g_cmutil_logsystem_mutex, Unlock);
+    return __cmutil_logsystem;
 }
 
 CMUTIL_LogSystem *CMUTIL_LogSystemGet()

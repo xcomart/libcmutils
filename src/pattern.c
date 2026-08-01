@@ -125,7 +125,7 @@
 #if UNIX
 #define lowercase(c)    (c)
 #else /*DOS*/
-#define lowercase(c)    tolower(c)
+#define lowercase(c)    tolower((unsigned char)(c))
 #endif
 
 
@@ -304,6 +304,8 @@ CMUTIL_STATIC CMBool CMUTIL_PatternSubmatch(
 
         case FPAT_SET_L:
             /* Match char set/range */
+            if (fch == '\0')
+                return CMFalse;
             yes = CMTrue;
             if (*pat == FPAT_SET_NOT)
             {

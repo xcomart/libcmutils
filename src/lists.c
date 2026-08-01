@@ -24,6 +24,8 @@ SOFTWARE.
 
 #include "functions.h"
 
+CMUTIL_LogDefine("cmutil.list")
+
 //*****************************************************************************
 // CMUTIL_List implementation
 //*****************************************************************************
@@ -47,6 +49,10 @@ CMUTIL_STATIC void CMUTIL_ListAddFront(CMUTIL_List *list, void *data)
 {
     CMUTIL_List_Internal *ilist = (CMUTIL_List_Internal*)list;
     CMUTIL_ListItem *item = ilist->memst->Alloc(sizeof(CMUTIL_ListItem));
+    if (!item) {
+        CMLogError("Failed to allocate memory for list item.");
+        return;
+    }
     memset(item, 0x0, sizeof(CMUTIL_ListItem));
     item->data = data;
     item->prev = NULL;
@@ -63,6 +69,10 @@ CMUTIL_STATIC void CMUTIL_ListAddTail(CMUTIL_List *list, void *data)
 {
     CMUTIL_List_Internal *ilist = (CMUTIL_List_Internal*)list;
     CMUTIL_ListItem *item = ilist->memst->Alloc(sizeof(CMUTIL_ListItem));
+    if (!item) {
+        CMLogError("Failed to allocate memory for list item.");
+        return;
+    }
     memset(item, 0x0, sizeof(CMUTIL_ListItem));
     item->data = data;
     item->prev = ilist->tail;
@@ -143,6 +153,7 @@ CMUTIL_STATIC void *CMUTIL_ListRemove(CMUTIL_List *list, void *data)
             item->prev->next = item->next;
             item->next->prev = item->prev;
             ilist->memst->Free(item);
+            ilist->size--;
             return data;
         }
         item = item->next;
@@ -194,6 +205,10 @@ CMUTIL_STATIC CMUTIL_Iterator *CMUTIL_ListIterator(const CMUTIL_List *list)
 {
     const CMUTIL_List_Internal *ilist = (const CMUTIL_List_Internal*)list;
     CMUTIL_ListIter_st *res = ilist->memst->Alloc(sizeof(CMUTIL_ListIter_st));
+    if (!res) {
+        CMLogError("Failed to allocate memory for list iterator.");
+        return NULL;
+    }
     memset(res, 0x0, sizeof(CMUTIL_ListIter_st));
     memcpy(res, &g_cmutil_list_iterator, sizeof(CMUTIL_Iterator));
     res->curr = ilist->head;
@@ -220,6 +235,9 @@ CMUTIL_STATIC void CMUTIL_ListMoveAll(CMUTIL_List *dest, CMUTIL_List *src)
 {
     CMUTIL_List_Internal *isrc = (CMUTIL_List_Internal*)src;
     CMUTIL_List_Internal *idest = (CMUTIL_List_Internal*)dest;
+
+    if (!isrc->head)
+        return;
 
     if (idest->tail) {
         idest->tail->next = isrc->head;
@@ -253,6 +271,10 @@ CMUTIL_List *CMUTIL_ListCreateInternal(
         CMUTIL_Mem *memst, CMFreeCB freecb)
 {
     CMUTIL_List_Internal *ilist = memst->Alloc(sizeof(CMUTIL_List_Internal));
+    if (!ilist) {
+        CMLogError("Failed to allocate memory for list.");
+        return NULL;
+    }
     memset(ilist, 0x0, sizeof(CMUTIL_List_Internal));
     memcpy(ilist, &g_cmutil_list, sizeof(CMUTIL_List));
     ilist->memst = memst;

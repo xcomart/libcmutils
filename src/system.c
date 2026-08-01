@@ -42,6 +42,11 @@ SOFTWARE.
 # define CMUTIL_MODTIME(a)  a.st_mtime
 #endif
 
+// MSVC does not provide the POSIX file type test macros.
+#if !defined(S_ISDIR)
+# define S_ISDIR(m)         (((m) & S_IFMT) == S_IFDIR)
+#endif
+
 
 CMUTIL_LogDefine("cmutil.system")
 
@@ -161,16 +166,29 @@ CMUTIL_Library *CMUTIL_LibraryCreateInternal(
 
     ext = strrchr(path, '.');
     if (ext && strcasecmp(ext + 1, CMUTIL_SO_EXT) == 0)
-        sprintf(slib, "%s", path);
+        snprintf(slib, sizeof(slib), "%s", path);
     else
-        sprintf(slib, "%s.%s", path, CMUTIL_SO_EXT);
+        snprintf(slib, sizeof(slib), "%s.%s", path, CMUTIL_SO_EXT);
 
     res->memst = memst;
 
 #if defined(MSWIN)
     res->library = LoadLibrary(slib);
+    if (res->library == NULL) {
+        CMLogErrorS("Failed to load library '%s'. error: %lu",
+                    slib, (unsigned long)GetLastError());
+        memst->Free(res);
+        return NULL;
+    }
 #else
     res->library = dlopen(slib, RTLD_NOW);
+    if (res->library == NULL) {
+        const char *derr = dlerror();
+        CMLogErrorS("Failed to load library '%s'. %s",
+                    slib, derr? derr:"unknown error");
+        memst->Free(res);
+        return NULL;
+    }
 #endif
     res->mutex = CMUTIL_MutexCreateInternal(memst);
     res->procs = CMUTIL_MapCreateInternal(
@@ -358,15 +376,22 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_FileGetContents(const CMUTIL_File *file)
 
 CMUTIL_STATIC CMBool CMUTIL_FileDelete(const CMUTIL_File *file)
 {
+#if defined(_MSC_VER)
+    // Win32 DeleteFile returns nonzero on success.
+    return DeleteFile(CMCall(file, GetFullPath)) != 0 ?
+            CMTrue:CMFalse;
+#else
+    // platforms.h maps DeleteFile to unlink which returns 0 on success.
     return DeleteFile(CMCall(file, GetFullPath)) == 0 ?
             CMTrue:CMFalse;
+#endif
 }
 
 CMUTIL_STATIC CMBool CMUTIL_FileIsFile(const CMUTIL_File *file)
 {
     struct stat s;
     if ( stat(CMCall(file, GetFullPath), &s) == 0 ) {
-        return s.st_mode & S_IFDIR ?
+        return S_ISDIR(s.st_mode) ?
                 CMFalse:CMTrue;
     }
     return CMFalse;
@@ -376,7 +401,7 @@ CMUTIL_STATIC CMBool CMUTIL_FileIsDirectory(const CMUTIL_File *file)
 {
     struct stat s;
     if ( stat(CMCall(file, GetFullPath), &s) == 0 ) {
-        return s.st_mode & S_IFDIR ?
+        return S_ISDIR(s.st_mode) ?
                 CMTrue:CMFalse;
     }
     return CMFalse;
@@ -436,6 +461,7 @@ CMUTIL_STATIC CMUTIL_FileList *CMUTIL_FileChildren(const CMUTIL_File *file)
                 CMCall(flist->files, Add, f, NULL);
             }
         } while (FindNextFile(hFind, &ffd) != 0);
+        FindClose(hFind);
     }
 #else
     DIR *dirp;
@@ -473,7 +499,7 @@ CMUTIL_STATIC void CMUTIL_FileFindFileOper(
         const char *fname)
 {
     struct stat s;
-    if ( stat(filepath, &s) == 0 && (s.st_mode & S_IFDIR)) {
+    if ( stat(filepath, &s) == 0 && S_ISDIR(s.st_mode)) {
         if (recursive)
             CMUTIL_FileFindInternal(
                         flist, filepath, pattern, recursive);
@@ -513,6 +539,7 @@ CMUTIL_STATIC void CMUTIL_FileFindInternal(
                             flist, pattern, recursive, pathbuf, fname);
             }
         } while (FindNextFile(hFind, &ffd) != 0);
+        FindClose(hFind);
     }
 #else
     DIR *dirp;
