@@ -31,7 +31,21 @@ jobs:
       with:
         vcpkgGitCommitId: '594ad8871e1e8e45f8e626c015fd611163430207'
 
+    # vcpkg builds openssl, zlib and libiconv from source during the CMake
+    # configure step, which dominates the Windows job. Persisting vcpkg's
+    # binary packages turns that into a download on every later run.
+    - name: Restore vcpkg binary cache (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/vcpkg_binary_cache
+        key: vcpkg-${{ runner.os }}-${{ matrix.build_type }}-${{ hashFiles('vcpkg.json', '.github/workflows/build-and-test.yml') }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-${{ matrix.build_type }}-
+
     - name: Configure CMake
+      env:
+        VCPKG_BINARY_SOURCES: ${{ runner.os == 'Windows' && format('clear;files,{0}/vcpkg_binary_cache,readwrite', github.workspace) || '' }}
       run: >
         cmake -S . -B build
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
