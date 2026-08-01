@@ -36,7 +36,18 @@ typedef HANDLE CMStream;
 #include <sys/wait.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/poll.h>
+
+#if defined(APPLE)
+// referencing 'environ' directly is not allowed in a shared library on
+// darwin, the runtime provides an accessor instead.
+# include <crt_externs.h>
+# define CMUTIL_ENVIRON (*_NSGetEnviron())
+#else
+extern char **environ;
+# define CMUTIL_ENVIRON environ
+#endif
 
 typedef int CMStream;
 #define EMPTY_STREAM (-1)
@@ -93,22 +104,33 @@ CMUTIL_STATIC CMBool CMUTIL_CreatePipe(
     saAttr.bInheritHandle = inherit_read || inherit_write;
     saAttr.lpSecurityDescriptor = NULL;
 
+    pipe[0] = EMPTY_STREAM;
+    pipe[1] = EMPTY_STREAM;
+
     // Create a pipe for the child process's STDIN / STDOUT / STDERR.
     if (!CreatePipe(pipe, pipe+1, &saAttr, 4096)) {
         CMLogErrorS("CreatePipe failed");
+        pipe[0] = EMPTY_STREAM;
+        pipe[1] = EMPTY_STREAM;
         return CMFalse;
     }
     // Ensure the read handle to the pipe is not inherited.
     if (!inherit_read && !SetHandleInformation(pipe[0], HANDLE_FLAG_INHERIT, 0)) {
         CMLogErrorS("SetHandleInformation failed");
-        return CMFalse;
+        goto FAILED;
     }
     // Ensure the write handle to the pipe is not inherited.
     if (!inherit_write && !SetHandleInformation(pipe[1], HANDLE_FLAG_INHERIT, 0)) {
         CMLogErrorS("SetHandleInformation failed");
-        return CMFalse;
+        goto FAILED;
     }
     return CMTrue;
+FAILED:
+    CMUTIL_ClosePipe(pipe[0]);
+    CMUTIL_ClosePipe(pipe[1]);
+    pipe[0] = EMPTY_STREAM;
+    pipe[1] = EMPTY_STREAM;
+    return CMFalse;
 }
 
 CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
@@ -117,7 +139,9 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
 
     PROCESS_INFORMATION piProcInfo;
     STARTUPINFO siStartInfo;
-    CMStream p1[2], p2[2], p3[2];
+    CMStream p1[2] = { EMPTY_STREAM, EMPTY_STREAM };
+    CMStream p2[2] = { EMPTY_STREAM, EMPTY_STREAM };
+    CMStream p3[2] = { EMPTY_STREAM, EMPTY_STREAM };
 
     CMUTIL_ByteBuffer *envbuf = NULL;
 
@@ -125,13 +149,17 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
     int i;
     const char *cwd = NULL;
     char *env = NULL;
+    BOOL bSuccess = FALSE;
 
     // Create a pipe for the child process's STDIN.
-    CMUTIL_CreatePipe(p1, CMTrue, CMFalse);
+    if (!CMUTIL_CreatePipe(p1, CMTrue, CMFalse))
+        goto ERROR_POINT;
     // Create a pipe for the child process's STDOUT.
-    CMUTIL_CreatePipe(p2, CMFalse, CMTrue);
+    if (!CMUTIL_CreatePipe(p2, CMFalse, CMTrue))
+        goto ERROR_POINT;
     // Create a pipe for the child process's STDERR.
-    CMUTIL_CreatePipe(p3, CMFalse, CMTrue);
+    if (!CMUTIL_CreatePipe(p3, CMFalse, CMTrue))
+        goto ERROR_POINT;
 
     ZeroMemory( &piProcInfo, sizeof(PROCESS_INFORMATION) );
     ZeroMemory( &siStartInfo, sizeof(STARTUPINFO) );
@@ -177,7 +205,7 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
         }
     }
 
-    BOOL bSuccess = CreateProcess(NULL,
+    bSuccess = CreateProcess(NULL,
                                   (LPTSTR)CMCall(cmd, GetCString), // command line
                                   NULL, // process security attributes
                                   NULL, // primary thread security attributes
@@ -221,13 +249,98 @@ ERROR_POINT:
 
 #else
 
+CMUTIL_STATIC void CMUTIL_FreeEnviron(CMUTIL_Mem *memst, char **envp)
+{
+    if (envp) {
+        int i;
+        for (i = 0; envp[i]; i++)
+            memst->Free(envp[i]);
+        memst->Free(envp);
+    }
+}
+
+/**
+ * Builds a NULL terminated "KEY=VALUE" array out of the current environment
+ * overlaid with ip->env. This must be done by the parent, the forked child
+ * is not allowed to allocate memory.
+ */
+CMUTIL_STATIC char **CMUTIL_BuildEnviron(CMUTIL_Process_Internal *ip)
+{
+    char **cur = CMUTIL_ENVIRON;
+    const CMUTIL_Array *pairs = ip->env? CMCall(ip->env, GetPairs):NULL;
+    const int npairs = pairs? CMCall(pairs, GetSize):0;
+    int ncur = 0, cnt = 0, i, j;
+    char **res = NULL;
+    size_t asize;
+
+    while (cur && cur[ncur]) ncur++;
+
+    asize = (size_t)(ncur + npairs + 1) * sizeof(char*);
+    res = (char**)ip->memst->Alloc(asize);
+    if (res == NULL) return NULL;
+    memset(res, 0x0, asize);
+
+    for (i = 0; i < ncur; i++) {
+        const char *eq = strchr(cur[i], '=');
+        const size_t klen = eq?
+                    (size_t)(eq - cur[i]):strlen(cur[i]);
+        const size_t ilen = strlen(cur[i]);
+        CMBool overridden = CMFalse;
+        for (j = 0; j < npairs; j++) {
+            CMUTIL_MapPair *pair = (CMUTIL_MapPair*)CMCall(pairs, GetAt, j);
+            const char *skey = CMCall(pair, GetKey);
+            if (strlen(skey) == klen && strncmp(skey, cur[i], klen) == 0) {
+                overridden = CMTrue;
+                break;
+            }
+        }
+        if (overridden) continue;
+        res[cnt] = (char*)ip->memst->Alloc(ilen + 1);
+        if (res[cnt] == NULL) goto FAILED;
+        memcpy(res[cnt], cur[i], ilen + 1);
+        cnt++;
+    }
+
+    for (j = 0; j < npairs; j++) {
+        CMUTIL_MapPair *pair = (CMUTIL_MapPair*)CMCall(pairs, GetAt, j);
+        const char *skey = CMCall(pair, GetKey);
+        const char *value = CMCall(pair, GetValue);
+        size_t klen, vlen;
+        if (skey == NULL || value == NULL) continue;
+        klen = strlen(skey);
+        vlen = strlen(value);
+        res[cnt] = (char*)ip->memst->Alloc(klen + vlen + 2);
+        if (res[cnt] == NULL) goto FAILED;
+        memcpy(res[cnt], skey, klen);
+        res[cnt][klen] = '=';
+        memcpy(res[cnt] + klen + 1, value, vlen + 1);
+        cnt++;
+    }
+    res[cnt] = NULL;
+    return res;
+FAILED:
+    CMUTIL_FreeEnviron(ip->memst, res);
+    return NULL;
+}
+
 CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
 {
     CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
-    CMStream p1[2], p2[2], p3[2];
-    int i;
+    // p1 is created only when the caller writes to the child's stdin,
+    // so it must be initialized for the error cleanup path.
+    CMStream p1[2] = { EMPTY_STREAM, EMPTY_STREAM };
+    CMStream p2[2] = { EMPTY_STREAM, EMPTY_STREAM };
+    CMStream p3[2] = { EMPTY_STREAM, EMPTY_STREAM };
+    // p4 reports a failing execvp back to the parent, it is closed by the
+    // kernel on a successful exec so the parent reads EOF then.
+    CMStream p4[2] = { EMPTY_STREAM, EMPTY_STREAM };
+    int i, nargs, exec_errno = 0;
     pid_t pid;
-    const CMUTIL_Array *pairs = NULL;
+    ssize_t nread;
+    char **args = NULL;
+    char **envp = NULL;
+    const char *command = NULL;
+    const char *cwd = NULL;
 
     if (ip->type & CMProcStreamWrite && pipe(p1) == -1)
         goto err_pipe1;
@@ -235,95 +348,134 @@ CMUTIL_STATIC CMBool CMUTIL_StartSubprocess(CMUTIL_Process *proc)
         goto err_pipe2;
     if (pipe(p3) == -1)
         goto err_pipe3;
-
-    if ((pid = fork()) == -1) {
-        CMLogErrorS("fork failed %d:%s", errno, strerror(errno));
+    if (pipe(p4) == -1)
+        goto err_pipe4;
+    if (fcntl(p4[1], F_SETFD, FD_CLOEXEC) == -1) {
+        CMLogErrorS("fcntl failed %d:%s", errno, strerror(errno));
         goto err_fork;
     }
 
-    if (pid) {
-        /* Parent process. */
-        ip->pid = pid;
-        if (ip->type & CMProcStreamWrite) {
-            ip->inpipe = p1[1];  // write to process stdin
-            CMUTIL_ClosePipe(p1[0]);
-        }
-        ip->outpipe = p2[0]; // read from process stdout
-        ip->errpipe = p3[0]; // read from process stderr
-        CMUTIL_ClosePipe(p2[1]);
-        CMUTIL_ClosePipe(p3[1]);
-        return CMTrue;
+    // everything the child needs is prepared here, see the comment in the
+    // child branch below.
+    command = CMCall(ip->command, GetCString);
+    nargs = ip->args? CMCall(ip->args, GetSize):0;
+    args = (char**)ip->memst->Alloc((size_t)(nargs + 2) * sizeof(char*));
+    if (args == NULL) {
+        CMLogErrorS("cannot allocate argument vector.");
+        goto err_fork;
     }
-    CMUTIL_LogSystem *lsys = CMUTIL_LogSystemGet();
-    CMCall(lsys, UpdateEnv);
-    /* Child process. */
-    if (ip->type & CMProcStreamWrite) {
-        dup2(p1[0], STDIN_FILENO);
-        CMUTIL_ClosePipe(p1[0]);
-        CMUTIL_ClosePipe(p1[1]);
-    } else {
-        dup2(ip->inpipe, STDIN_FILENO);
-        CMUTIL_ClosePipe(ip->inpipe);
+    memset(args, 0x0, (size_t)(nargs + 2) * sizeof(char*));
+    args[0] = (char*)command;
+    for (i = 0; i < nargs; i++) {
+        const CMUTIL_String *arg = CMCall(ip->args, GetAt, i);
+        args[i+1] = (char*)CMCall(arg, GetCString);
     }
-    dup2(p2[1], STDOUT_FILENO);
-    dup2(p3[1], STDERR_FILENO);
-    CMUTIL_ClosePipe(p2[0]);
-    CMUTIL_ClosePipe(p2[1]);
-    CMUTIL_ClosePipe(p3[0]);
-    CMUTIL_ClosePipe(p3[1]);
 
-    // set environment variables
-    if (ip->env) {
-        pairs = CMCall(ip->env, GetPairs);
-        for (i = 0; i < CMCall(pairs, GetSize); i++) {
-            CMUTIL_MapPair *pair = (CMUTIL_MapPair*)CMCall(pairs, GetAt, i);
-            const char *skey = CMCall(pair, GetKey);
-            const char *value = CMCall(pair, GetValue);
-            setenv(skey, value, 1);
-        }
-        if (CMLogIsEnabled(CMLogLevel_Debug)) {
+    envp = CMUTIL_BuildEnviron(ip);
+    if (envp == NULL) {
+        CMLogErrorS("cannot build child environment.");
+        goto err_fork;
+    }
+
+    if (ip->cwd)
+        cwd = CMCall(ip->cwd, GetCString);
+
+    if (CMLogIsEnabled(CMLogLevel_Debug)) {
+        if (cwd)
+            CMLogDebug("Working directory: %s", cwd);
+        if (ip->env) {
             CMUTIL_String *buf = CMUTIL_StringCreate();
             CMCall(ip->env, PrintTo, buf, NULL);
             CMLogDebug("Environment variables: %s", CMCall(buf, GetCString));
             CMCall(buf, Destroy);
         }
     }
-    if (ip->cwd) {
-        CMLogDebug("Working directory: %s", CMCall(ip->cwd, GetCString));
-        if (chdir(CMCall(ip->cwd, GetCString)) != 0) {
-            CMLogErrorS("chdir failed %d:%s", errno, strerror(errno));
-        }
+
+    if ((pid = fork()) == -1) {
+        CMLogErrorS("fork failed %d:%s", errno, strerror(errno));
+        goto err_fork;
     }
-    {
-        // this is child process
-        char **args = CMAlloc((CMCall(ip->args, GetSize) + 2) * sizeof(char *));
-        memset(args, 0, (CMCall(ip->args, GetSize) + 2) * sizeof(char *));
-        args[0] = (char*)CMCall(ip->command, GetCString);
-        if (CMCall(ip->args, GetSize) > 0) {
-            for (i = 0; i < CMCall(ip->args, GetSize); i++) {
-                const CMUTIL_String *arg = CMCall(ip->args, GetAt, i);
-                args[i+1] = (char*)CMCall(arg, GetCString);
-            }
+
+    if (pid == 0) {
+        /* Child process.
+         * Only async-signal-safe calls are allowed from here on. The parent
+         * may be multi threaded and fork clones the calling thread only, so
+         * any lock a foreign thread held at fork time stays locked forever
+         * in this image. Do not add logging, allocation or any other
+         * library call before execvp. */
+        if (ip->type & CMProcStreamWrite) {
+            dup2(p1[0], STDIN_FILENO);
+            close(p1[0]);
+            close(p1[1]);
+        } else if (ip->inpipe != EMPTY_STREAM) {
+            dup2(ip->inpipe, STDIN_FILENO);
+            close(ip->inpipe);
         }
-        if (execvp(CMCall(ip->command, GetCString), args) != 0) {
-            CMLogErrorS("execvp failed %d:%s", errno, strerror(errno));
+        dup2(p2[1], STDOUT_FILENO);
+        dup2(p3[1], STDERR_FILENO);
+        close(p2[0]);
+        close(p2[1]);
+        close(p3[0]);
+        close(p3[1]);
+        close(p4[0]);
+
+        if (cwd && chdir(cwd) != 0)
+            goto err_child;
+
+        CMUTIL_ENVIRON = envp;
+        execvp(command, args);
+err_child:
+        {
+            const int cerr = errno;
+            const ssize_t wr = write(p4[1], &cerr, sizeof(cerr));
+            (void)wr;
         }
-        CMFree(args);
+        _exit(127);
     }
-    // cannot be here in general cases, the below codes are error handler
-    /* Error occurred. */
-    CMLogErrorS("error running %s: %s",
-        CMCall(ip->command, GetCString), strerror(errno));
-    abort();
+
+    /* Parent process. */
+    ip->pid = pid;
+    close(p4[1]);
+    p4[1] = EMPTY_STREAM;
+    do {
+        nread = read(p4[0], &exec_errno, sizeof(exec_errno));
+    } while (nread == -1 && errno == EINTR);
+    close(p4[0]);
+    p4[0] = EMPTY_STREAM;
+
+    if (nread == (ssize_t)sizeof(exec_errno)) {
+        int status = 0;
+        CMLogErrorS("error running %s: %d:%s",
+            command, exec_errno, strerror(exec_errno));
+        while (waitpid(pid, &status, 0) == -1 && errno == EINTR) ;
+        goto err_fork;
+    }
+
+    if (ip->type & CMProcStreamWrite) {
+        ip->inpipe = p1[1];  // write to process stdin
+        CMUTIL_ClosePipe(p1[0]);
+    }
+    ip->outpipe = p2[0]; // read from process stdout
+    ip->errpipe = p3[0]; // read from process stderr
+    CMUTIL_ClosePipe(p2[1]);
+    CMUTIL_ClosePipe(p3[1]);
+    CMUTIL_FreeEnviron(ip->memst, envp);
+    ip->memst->Free(args);
+    return CMTrue;
 
 err_fork:
+    CMUTIL_FreeEnviron(ip->memst, envp);
+    if (args) ip->memst->Free(args);
+    CMUTIL_ClosePipe(p4[1]);
+    CMUTIL_ClosePipe(p4[0]);
+err_pipe4:
     CMUTIL_ClosePipe(p3[1]);
     CMUTIL_ClosePipe(p3[0]);
 err_pipe3:
     CMUTIL_ClosePipe(p2[1]);
     CMUTIL_ClosePipe(p2[0]);
 err_pipe2:
-    if (ip->inpipe == EMPTY_STREAM) {
+    if (ip->type & CMProcStreamWrite) {
         CMUTIL_ClosePipe(p1[1]);
         CMUTIL_ClosePipe(p1[0]);
     }
@@ -410,55 +562,64 @@ CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
     CMUTIL_ByteBuffer *errbuf = CMUTIL_ByteBufferCreateInternal(
         ip->memst, 1025);
     int closecnt = 0;
-    int fd_cnt = 2;
 #if defined(MSWIN)
-    HANDLE pfd[2] = { ip->outpipe, ip->errpipe };
-    HANDLE *tpfd = pfd;
+    // anonymous pipe handles are not waitable synchronization objects,
+    // so availability must be probed with PeekNamedPipe.
     if (ip->type & CMProcStreamRead && ip->pipe_to == NULL) {
-        fd_cnt--;
-        tpfd = pfd + 1;
+        // stdout is consumed by the caller, not by this reader.
+        closecnt |= 1;
     }
     if (ip->type & CMProcStreamReadErr) {
-        fd_cnt--;
-        // no need reader
-        if (fd_cnt == 0) closecnt = 3;
+        // stderr is consumed by the caller, not by this reader.
+        closecnt |= 2;
     }
 
     while (closecnt < 3) {
         uint8_t c;
-        DWORD rc = WaitForMultipleObjects(fd_cnt, tpfd, FALSE, 0);
-        if (rc <= WAIT_OBJECT_0 + fd_cnt - 1) {
-            if (rc == WAIT_OBJECT_0 && fd_cnt == 2) {
+        CMBool readany = CMFalse;
+        DWORD avail = 0;
+        if (!(closecnt & 1)) {
+            if (!PeekNamedPipe(ip->outpipe, NULL, 0, NULL, &avail, NULL)) {
+                closecnt |= 1;
+            } else if (avail > 0) {
                 ssize_t sz = CMUTIL_ProcessReadPipe(ip->outpipe, &c, 1);
                 if (sz == 1) {
+                    readany = CMTrue;
                     if (strchr("\r\n", c) == NULL) {
                         CMCall(stdbuf, AddByte, c);
                     }
                     if (CMCall(stdbuf, GetSize) == 1024 || c == '\n') {
                         CMUTIL_ProcessFlushStdout(ip, stdbuf);
                     }
-                } else if (sz < 0) {
-                    CMLogError("read stdout error: %s", strerror(errno));
+                } else {
+                    if (sz < 0)
+                        CMLogError("read stdout error: %s", strerror(errno));
                     closecnt |= 1;
                 }
-            } else if (rc == WAIT_OBJECT_0 + (fd_cnt - 1)) {
+            }
+        }
+        if (!(closecnt & 2)) {
+            avail = 0;
+            if (!PeekNamedPipe(ip->errpipe, NULL, 0, NULL, &avail, NULL)) {
+                closecnt |= 2;
+            } else if (avail > 0) {
                 ssize_t sz = CMUTIL_ProcessReadPipe(ip->errpipe, &c, 1);
                 if (sz == 1) {
+                    readany = CMTrue;
                     if (strchr("\r\n", c) == NULL) {
                         CMCall(errbuf, AddByte, c);
                     }
                     if (CMCall(errbuf, GetSize) == 1024 || c == '\n') {
                         CMUTIL_ProcessFlushStderr(ip, errbuf);
                     }
-                } else if (sz < 0) {
-                    CMLogError("read stderr error: %s", strerror(errno));
+                } else {
+                    if (sz < 0)
+                        CMLogError("read stderr error: %s", strerror(errno));
                     closecnt |= 2;
                 }
             }
-        } else if (rc == WAIT_FAILED) {
-            CMLogError("read stdout error: %s", strerror(errno));
-            closecnt = 3;
-        } else if (rc == WAIT_TIMEOUT) {
+        }
+        if (!readany) {
             if (CMCall(stdbuf, GetSize) > 0) {
                 CMUTIL_ProcessFlushStdout(ip, stdbuf);
                 CMCall(stdbuf, Clear);
@@ -471,18 +632,21 @@ CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
         }
     }
 #else
+    int fd_cnt = 2;
     struct pollfd pfd[2];
     struct pollfd *tpfd = pfd;
     memset(pfd, 0x0, sizeof(struct pollfd)*2);
 
     if (ip->type & CMProcStreamRead && ip->pipe_to == NULL) {
+        // stdout is consumed by the caller, not by this reader.
         fd_cnt--;
         tpfd = pfd + 1;
+        closecnt |= 1;
     }
     if (ip->type & CMProcStreamReadErr) {
+        // stderr is consumed by the caller, not by this reader.
         fd_cnt--;
-        // no need reader
-        if (fd_cnt == 0) closecnt = 3;
+        closecnt |= 2;
     }
     pfd[0].fd = ip->outpipe;
     pfd[1].fd = ip->errpipe;
@@ -503,14 +667,16 @@ CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
                     if (CMCall(stdbuf, GetSize) == 1024 || c == '\n') {
                         CMUTIL_ProcessFlushStdout(ip, stdbuf);
                     }
-                } else if (n < 0) {
-                    CMLogError("read stdout error: %s", strerror(errno));
-                    closecnt |= 1;
-                } else if (pfd[0].revents & POLLHUP) {
+                } else {
+                    if (n < 0)
+                        CMLogError("read stdout error: %s", strerror(errno));
                     closecnt |= 1;
                 }
                 pfd[0].revents = 0;
-                if (closecnt & 1 && closecnt < 3) {
+                // switch to stderr only when this reader owns stderr,
+                // otherwise the caller's stream would be stolen.
+                if (closecnt & 1 && closecnt < 3 &&
+                        !(ip->type & CMProcStreamReadErr)) {
                     fd_cnt = 1;
                     tpfd = pfd + 1;
                 }
@@ -524,13 +690,18 @@ CMUTIL_STATIC void *CMUTIL_ProcessReadProc(void *data)
                     if (CMCall(errbuf, GetSize) == 1024 || c == '\n') {
                         CMUTIL_ProcessFlushStderr(ip, errbuf);
                     }
-                } else if (n < 0) {
-                    CMLogError("read stderr error: %s", strerror(errno));
-                    closecnt |= 2;
-                } else if (pfd[1].revents & POLLHUP) {
+                } else {
+                    if (n < 0)
+                        CMLogError("read stderr error: %s", strerror(errno));
                     closecnt |= 2;
                 }
                 pfd[1].revents = 0;
+                // a closed descriptor keeps reporting POLLHUP,
+                // so drop it from the poll set.
+                if (closecnt & 2 && closecnt < 3) {
+                    fd_cnt = 1;
+                    tpfd = pfd;
+                }
             }
         } else if (rc == 0) {
             if (CMCall(stdbuf, GetSize) > 0) {
@@ -570,6 +741,25 @@ CMUTIL_STATIC CMBool CMUTIL_ProcessStart(
         CMLogErrorS("Process is already running.");
         return CMFalse;
     }
+
+    // clean up the remnants of a previous run, otherwise
+    // the pipes and the process handle would be leaked.
+    if (ip->reader) {
+        CMCall(ip->reader, Join);
+        ip->reader = NULL;
+    }
+    CMUTIL_ClosePipe(ip->inpipe);
+    CMUTIL_ClosePipe(ip->outpipe);
+    CMUTIL_ClosePipe(ip->errpipe);
+    ip->inpipe = EMPTY_STREAM;
+    ip->outpipe = EMPTY_STREAM;
+    ip->errpipe = EMPTY_STREAM;
+#if defined(MSWIN)
+    if (ip->hproc) {
+        CloseHandle(ip->hproc);
+        ip->hproc = NULL;
+    }
+#endif
 
     ip->type = type;
     if (!CMUTIL_StartSubprocess(proc)) {
@@ -703,22 +893,31 @@ CMUTIL_STATIC ssize_t CMUTIL_ProcessRead(
 
 CMUTIL_STATIC int CMUTIL_ProcessWait(CMUTIL_Process *proc, long millis)
 {
-    int status;
+    int status = -1;
     CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
 
     if (ip->status == CM_RUNNING_) {
 #if defined(MSWIN)
         if (ip->hproc) {
-            DWORD exit_code;
-            WaitForSingleObject(ip->hproc, millis < 0 ? INFINITE : millis);
-            GetExitCodeProcess(ip->hproc, &exit_code);
+            DWORD exit_code = 0;
+            DWORD wres = WaitForSingleObject(
+                ip->hproc, millis < 0 ? INFINITE : (DWORD)millis);
+            if (wres != WAIT_OBJECT_0) {
+                // the child is still alive, joining the reader thread
+                // would block until the child terminates.
+                CMLogWarn("process(%d) wait timed out.", ip->pid);
+                return -1;
+            }
+            if (!GetExitCodeProcess(ip->hproc, &exit_code))
+                exit_code = (DWORD)-1;
             status = (int)exit_code;
         } else {
-            status = -1;
+            return -1;
         }
 #else
         long counts = millis / 100;
-        long step = 10000;
+        long step = 100000;   // 100 milliseconds
+        CMBool exited = CMFalse;
         if (millis < 0) {
             counts = INT32_MAX;
         } else {
@@ -731,10 +930,29 @@ CMUTIL_STATIC int CMUTIL_ProcessWait(CMUTIL_Process *proc, long millis)
         }
         while (counts--) {
             const pid_t pid = waitpid(ip->pid, &status, WNOHANG);
-            if (pid > 0) break;
-            usleep(step);
+            if (pid > 0) {
+                exited = CMTrue;
+                break;
+            }
+            if (pid < 0) {
+                // already reaped or not our child
+                CMLogWarn("waitpid(%d) failed %d:%s",
+                    ip->pid, errno, strerror(errno));
+                exited = CMTrue;
+                status = -1;
+                break;
+            }
+            USLEEP((uint32_t)step);
+        }
+        if (!exited) {
+            // the child is still alive, joining the reader thread
+            // would block until the child terminates.
+            CMLogWarn("process(%d) wait timed out.", ip->pid);
+            return -1;
         }
 #endif
+        // the child has been reaped already, further signaling is invalid.
+        ip->status = CM_EXITED_;
         if (ip->reader) {
             CMCall(ip->reader, Join);
             ip->reader = NULL;
@@ -762,12 +980,30 @@ CMUTIL_STATIC void CMUTIL_ProcessKill(CMUTIL_Process *proc)
     CMUTIL_Process_Internal *ip = (CMUTIL_Process_Internal *)proc;
     if (ip->status == CM_RUNNING_ || ip->status == CM_SUSPENDED_) {
 #if defined(MSWIN)
-        if (ip->hproc != INVALID_HANDLE_VALUE) {
+        // hproc is zero initialized, NULL is the only empty sentinel.
+        if (ip->hproc) {
             TerminateProcess(ip->hproc, PROCESS_TERMINATE);
-            ip->hproc = INVALID_HANDLE_VALUE;
+            WaitForSingleObject(ip->hproc, 1000);
+            CloseHandle(ip->hproc);
+            ip->hproc = NULL;
         }
 #else
-        kill(ip->pid, SIGTERM);
+        {
+            // the terminated child must be reaped, otherwise it stays zombie.
+            int st = 0;
+            int i;
+            pid_t r = 0;
+            kill(ip->pid, SIGTERM);
+            for (i = 0; i < 20; i++) {
+                r = waitpid(ip->pid, &st, WNOHANG);
+                if (r != 0) break;
+                USLEEP(50000);
+            }
+            if (r == 0) {
+                kill(ip->pid, SIGKILL);
+                waitpid(ip->pid, &st, 0);
+            }
+        }
 #endif
     } else {
         CMLogErrorS("Process is not running.");
@@ -793,15 +1029,26 @@ CMUTIL_STATIC void CMUTIL_ProcessDestroy(CMUTIL_Process *proc)
     if (ip->status == CM_RUNNING_ || ip->status == CM_SUSPENDED_) {
         CMUTIL_ProcessKill(proc);
     }
+    // the reader thread polls the pipes, so it must be joined
+    // before the pipes are closed.
+    if (ip->reader) {
+        CMCall(ip->reader, Join);
+        ip->reader = NULL;
+    }
     CMUTIL_ClosePipe(ip->inpipe);
     CMUTIL_ClosePipe(ip->outpipe);
     CMUTIL_ClosePipe(ip->errpipe);
-    if (ip->reader) CMCall(ip->reader, Join);
+    ip->inpipe = EMPTY_STREAM;
+    ip->outpipe = EMPTY_STREAM;
+    ip->errpipe = EMPTY_STREAM;
     if (ip->command) CMCall(ip->command, Destroy);
     if (ip->cwd) CMCall(ip->cwd, Destroy);
     if (ip->args) CMCall(ip->args, Destroy);
 #if defined(MSWIN)
-    if (ip->hproc != INVALID_HANDLE_VALUE) CloseHandle(ip->hproc);
+    if (ip->hproc) {
+        CloseHandle(ip->hproc);
+        ip->hproc = NULL;
+    }
 #endif
     ip->memst->Free(ip);
 }

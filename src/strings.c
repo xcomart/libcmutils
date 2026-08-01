@@ -362,6 +362,11 @@ CMUTIL_STATIC ssize_t CMUTIL_StringInsertNString(CMUTIL_String *string,
 {
     if (tobeadded && size > 0) {
         CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
+        if ((size_t)at > istr->size) {
+            CMLogErrorS("index out of bound. at: %u, size: %zu",
+                at, istr->size);
+            return -1;
+        }
         if (!CMUTIL_StringCheckSize(istr, size)) {
             CMLogError("CMUTIL_StringCheckSize failed");
             return -1;
@@ -394,13 +399,24 @@ CMUTIL_STATIC ssize_t CMUTIL_StringInsertVPrint(
         const char *fmt, va_list args)
 {
     if (fmt) {
-        char buf[4096];
-        ssize_t len = vsnprintf(buf, sizeof(buf), fmt, args);
+        char *buf = NULL;
+        va_list args_copy;
+        va_copy(args_copy, args);
+        ssize_t len = vsnprintf(NULL, 0, fmt, args_copy);
+        va_end(args_copy);
         if (len < 0) {
             CMLogErrorS("vsnprintf failed. %d:%s", errno, strerror(errno));
             return -1;
         }
-        len = CMCall(string, InsertNString, buf, idx, len);
+        buf = malloc((size_t)len+1);
+        if (buf == NULL) {
+            CMLogErrorS("memory allocation failed. %d:%s",
+                errno, strerror(errno));
+            return -1;
+        }
+        len = vsnprintf(buf, (size_t)len+1, fmt, args);
+        len = CMCall(string, InsertNString, buf, idx, (size_t)len);
+        free(buf);
         if (len < 0)
             CMLogError("CMUTIL_String InsertNString failed");
         return len;
@@ -440,10 +456,17 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringSubstring(
         size_t len = length;
         if ((offset + length) > istr->size)
             len = istr->size - offset;
-        res = CMUTIL_StringCreateInternal(istr->memst, len, NULL);
-        CMCall(res, AddNString, istr->data + offset, len);
+        // capacity must be positive, zero length yields an empty string.
+        res = CMUTIL_StringCreateInternal(
+                    istr->memst, len > 0 ? len : 1, NULL);
+        if (!res) {
+            CMLogError("CMUTIL_StringCreateInternal failed");
+            return NULL;
+        }
+        if (len > 0)
+            CMCall(res, AddNString, istr->data + offset, len);
     } else {
-        CMLogErrorS("invalid argument. offset: %zu, length: %zu",
+        CMLogErrorS("invalid argument. offset: %u, length: %zu",
             offset, length);
     }
     return res;
@@ -457,11 +480,13 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringToLower(
             (CMUTIL_String_Internal*)CMUTIL_StringCreateInternal(
                 istr->memst, istr->size, NULL);
     if (res) {
-        register char *p = res->data, *q = istr->data;
-        while (*q)
-            *p++ = (char)tolower(*q++);
-        *p = 0x0;
+        size_t i;
+        for (i=0; i<istr->size; i++)
+            res->data[i] = (char)tolower((unsigned char)istr->data[i]);
+        res->data[istr->size] = 0x0;
         res->size = istr->size;
+    } else {
+        CMLogError("CMUTIL_StringCreateInternal failed");
     }
     return (CMUTIL_String*)res;
 }
@@ -471,7 +496,7 @@ CMUTIL_STATIC void CMUTIL_StringSelfToUpper(CMUTIL_String *str)
     CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)str;
     register char *p = istr->data;
     while (*p) {
-        *p = (char)toupper(*p);
+        *p = (char)toupper((unsigned char)*p);
         p++;
     }
 }
@@ -484,10 +509,10 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringToUpper(
         (CMUTIL_String_Internal*)CMUTIL_StringCreateInternal(
                 istr->memst, istr->size, NULL);
     if (res) {
-        register char *p = res->data, *q = istr->data;
-        while (*q)
-            *p++ = (char)toupper(*q++);
-        *p = 0x0;
+        size_t i;
+        for (i=0; i<istr->size; i++)
+            res->data[i] = (char)toupper((unsigned char)istr->data[i]);
+        res->data[istr->size] = 0x0;
         res->size = istr->size;
     } else {
         CMLogError("CMUTIL_StringCreateInternal failed");
@@ -500,7 +525,7 @@ CMUTIL_STATIC void CMUTIL_StringSelfToLower(CMUTIL_String *str)
     CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)str;
     register char *p = istr->data;
     while (*p) {
-        *p = (char)tolower(*p);
+        *p = (char)tolower((unsigned char)*p);
         p++;
     }
 }
@@ -566,7 +591,7 @@ CMUTIL_STATIC int CMUTIL_StringGetChar(
     const CMUTIL_String_Internal *istr = (const CMUTIL_String_Internal*)string;
     if (idx < istr->size)
         return (int)istr->data[idx];
-    CMLogErrorS("invalid argument. idx: %zu", idx);
+    CMLogErrorS("invalid argument. idx: %u", idx);
     return -1;
 }
 
@@ -607,9 +632,13 @@ CMUTIL_STATIC void CMUTIL_StringSelfTrim(CMUTIL_String *string)
     CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
     if (istr) {
 
-        // right trim
         size_t len = istr->size;
-        register char *p = istr->data + len - 1;
+        register char *p;
+        if (len == 0)
+            return;
+
+        // right trim
+        p = istr->data + len - 1;
         while (strchr(SPACES, *p) && (p > istr->data)) {
             p--; len--;
         }
@@ -717,7 +746,7 @@ CMUTIL_String *CMUTIL_StringCreateEx(
 
 void CMUTIL_StringSetSizeInternal(CMUTIL_String *str, size_t newsize) {
     CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)str;
-    if (newsize > istr->capacity) {
+    if (newsize >= istr->capacity) {
         size_t newcapacity = newsize;
         char *newdata = istr->memst->Realloc(istr->data, newcapacity+1);
         if (!newdata) {
@@ -947,10 +976,16 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_CSConvConv(
                 CMUTIL_String_Internal *pres = NULL;
                 res = CMUTIL_StringCreateInternal(memst, cvsize, NULL);
                 pres = (CMUTIL_String_Internal*)res;
-                memcpy(pres->data, rbuf, cvsize);
-                *(pres->data + cvsize) = 0x0;
-                pres->size = cvsize;
+                if (pres) {
+                    memcpy(pres->data, rbuf, cvsize);
+                    *(pres->data + cvsize) = 0x0;
+                    pres->size = cvsize;
+                }
             }
+            if (rbuf)
+                memst->Free(rbuf);
+            if (wstr)
+                memst->Free(wstr);
         }
 #else
         iconv_t icv;
@@ -964,30 +999,37 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_CSConvConv(
         insz = (size_t)CMCall(instr, GetSize);
 
         icv = iconv_open(tocs, frcs);
+        if (icv == (iconv_t)-1) {
+            CMLogErrorS("iconv_open failed. %d:%s", errno, strerror(errno));
+            return NULL;
+        }
 
         osz = outsz = insz * 2;
         if (outsz > 0) {
             res = CMUTIL_StringCreateInternal(memst, outsz, NULL);
-            obuf = (char*)CMCall(res, GetCString);
+            if (res) {
+                obuf = (char*)CMCall(res, GetCString);
 
 #if defined(SUNOS)
-            ressz = iconv(icv, (const char**)&src, &insz, &obuf, &outsz);
+                ressz = iconv(icv, (const char**)&src, &insz, &obuf, &outsz);
 #else
-            ressz = iconv(icv, &src, &insz, &obuf, &outsz);
+                ressz = iconv(icv, &src, &insz, &obuf, &outsz);
 #endif
-            if (ressz == (size_t) -1) {
-                CMCall(res, Destroy);
-                res = NULL;
-            } else {
-                CMUTIL_String_Internal *pres = (CMUTIL_String_Internal*)res;
-                if (ressz == 0) {
-                    pres->size = osz - outsz;
+                if (ressz == (size_t) -1) {
+                    CMLogErrorS("iconv failed. %d:%s", errno, strerror(errno));
+                    CMCall(res, Destroy);
+                    res = NULL;
                 } else {
-                    pres->size = ressz;
+                    CMUTIL_String_Internal *pres =
+                            (CMUTIL_String_Internal*)res;
+                    // iconv only reports the number of irreversible
+                    // conversions, actual output size is always osz - outsz.
+                    pres->size = osz - outsz;
+                    *(pres->data + pres->size) = 0x0;
                 }
-                *(pres->data + pres->size) = 0x0;
             }
         }
+        iconv_close(icv);
 #endif
     }
     return res;
@@ -1056,6 +1098,8 @@ char* CMUTIL_StrRTrim(char *inp)
     if (!inp)
         return NULL;
     len = (int)strlen(inp);
+    if (len == 0)
+        return inp;
     p = inp + len - 1;
     while (strchr(SPACES, *p) && (p > inp))
         p--;
@@ -1087,23 +1131,30 @@ char* CMUTIL_StrTrim(char *inp)
 CMUTIL_StringArray *CMUTIL_StringSplitInternal(
         CMUTIL_Mem *memst, const char *haystack, const char *needle)
 {
-    char buf[4096];
     CMUTIL_StringArray *res = NULL;
     if (haystack && needle) {
-        register const char *p, *q, *r;
-        int needlelen;
+        register const char *p, *q;
+        size_t needlelen;
         res = CMUTIL_StringArrayCreateInternal(memst, 5);
         if (res) {
             CMUTIL_String *str = NULL;
-            needlelen = (int)strlen(needle);
+            size_t len;
+            needlelen = strlen(needle);
             p = haystack;
             /* find needle */
-            q = strstr(p, needle);
+            q = needlelen > 0 ? strstr(p, needle) : NULL;
             while (q) {
-                strncpy(buf, p, (uint32_t)(q-p));
-                *(buf+(q-p)) = 0x0;
-                r = CMUTIL_StrTrim(buf);
-                str = CMUTIL_StringCreateInternal(memst, strlen(r), r);
+                len = (size_t)(q - p);
+                // capacity must be positive even for an empty token.
+                str = CMUTIL_StringCreateInternal(memst, len+1, NULL);
+                if (!str) {
+                    CMLogError("CMUTIL_StringCreateInternal failed");
+                    CMCall(res, Destroy);
+                    return NULL;
+                }
+                if (len > 0)
+                    CMCall(str, AddNString, p, len);
+                CMCall(str, SelfTrim);
                 CMCall(res, Add, str);
                 /* skip needle */
                 p = q + needlelen;
@@ -1111,9 +1162,16 @@ CMUTIL_StringArray *CMUTIL_StringSplitInternal(
                 q = strstr(p, needle);
             }
             /* add last one */
-            strcpy(buf, p);
-            r = CMUTIL_StrTrim(buf);
-            str = CMUTIL_StringCreateInternal(memst, strlen(r), r);
+            len = strlen(p);
+            str = CMUTIL_StringCreateInternal(memst, len+1, NULL);
+            if (!str) {
+                CMLogError("CMUTIL_StringCreateInternal failed");
+                CMCall(res, Destroy);
+                return NULL;
+            }
+            if (len > 0)
+                CMCall(str, AddNString, p, len);
+            CMCall(str, SelfTrim);
             CMCall(res, Add, str);
         }
     }
@@ -1202,18 +1260,25 @@ typedef struct CMUTIL_ByteBuffer_Internal {
     size_t              capacity;
 } CMUTIL_ByteBuffer_Internal;
 
-CMUTIL_STATIC void CMUTIL_ByteBufferCheckSize(
+CMUTIL_STATIC CMBool CMUTIL_ByteBufferCheckSize(
         CMUTIL_ByteBuffer_Internal *bbi,
         uint32_t insize)
 {
     size_t reqsz = bbi->size + insize;
     if (bbi->capacity < reqsz) {
-        size_t ncapa = bbi->capacity * 2;
+        uint8_t *nbuf = NULL;
+        size_t ncapa = bbi->capacity > 0 ? bbi->capacity * 2 : 16;
         while (ncapa < reqsz)
             ncapa *= 2;
-        bbi->buffer = bbi->memst->Realloc(bbi->buffer, ncapa);
+        nbuf = bbi->memst->Realloc(bbi->buffer, ncapa);
+        if (!nbuf) {
+            CMLogErrorS("Failed to reallocate memory for byte buffer.");
+            return CMFalse;
+        }
+        bbi->buffer = nbuf;
         bbi->capacity = ncapa;
     }
+    return CMTrue;
 }
 
 CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddByte(
@@ -1221,7 +1286,10 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddByte(
         uint8_t b)
 {
     CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
-    CMUTIL_ByteBufferCheckSize(bbi, 1);
+    if (!CMUTIL_ByteBufferCheckSize(bbi, 1)) {
+        CMLogError("CMUTIL_ByteBufferCheckSize failed");
+        return NULL;
+    }
     *(bbi->buffer + bbi->size) = b;
     bbi->size ++;
     return buffer;
@@ -1243,7 +1311,10 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferAddBytesPart(
 {
     if (bytes && length > 0) {
         CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
-        CMUTIL_ByteBufferCheckSize(bbi, length);
+        if (!CMUTIL_ByteBufferCheckSize(bbi, length)) {
+            CMLogError("CMUTIL_ByteBufferCheckSize failed");
+            return NULL;
+        }
         memcpy(bbi->buffer + bbi->size, bytes + offset, length);
         bbi->size += length;
         return buffer;
@@ -1276,7 +1347,10 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_ByteBufferInsertBytesAt(
         }
         if (index == bbi->size)
             return CMCall(buffer, AddBytes, bytes, length);
-        CMUTIL_ByteBufferCheckSize(bbi, length);
+        if (!CMUTIL_ByteBufferCheckSize(bbi, length)) {
+            CMLogError("CMUTIL_ByteBufferCheckSize failed");
+            return NULL;
+        }
         memmove(bbi->buffer + index + length,
                 bbi->buffer + index,
                 bbi->size - index);
@@ -1294,7 +1368,7 @@ CMUTIL_STATIC int CMUTIL_ByteBufferGetAt(
         uint32_t index)
 {
     CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
-    if (index > bbi->size) {
+    if (index >= bbi->size) {
         CMLogErrorS("index out of bounds: size - %u, request - %u",
                     (uint32_t)bbi->size, index);
         return -1;
@@ -1322,7 +1396,7 @@ CMUTIL_STATIC CMBool CMUTIL_ByteBufferShrinkTo(
 {
     CMUTIL_ByteBuffer_Internal *bbi = (CMUTIL_ByteBuffer_Internal*)buffer;
     if (bbi->capacity < size) {
-        CMLogErrorS("out of bound(buffer capacity: %lu, size: %lu)",
+        CMLogErrorS("out of bound(buffer capacity: %zu, size: %zu)",
                 bbi->capacity, size);
         return CMFalse;
     }

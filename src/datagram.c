@@ -121,8 +121,18 @@ CMUTIL_STATIC void CMUTIL_DGramSocketDisconnect(
 {
     CMUTIL_DGramSocket_Internal *idsock = (CMUTIL_DGramSocket_Internal*)dsock;
     if (idsock->connected) {
-        closesocket(idsock->sock);
-        idsock->sock = INVALID_SOCKET;
+        CMUTIL_SocketAddr addr;
+        memset(&addr, 0x0, sizeof(addr));
+        addr.ss_family = AF_UNSPEC;
+        // connecting to AF_UNSPEC dissolves the UDP association,
+        // the socket itself stays usable for further operations.
+        // some platforms report an error even though the association
+        // has been dissolved, so the result is only traced.
+        if (connect(idsock->sock, (struct sockaddr*)&addr,
+                    (socklen_t)sizeof(struct sockaddr)) < 0) {
+            CMLogTrace("udp disconnect returned an error: %s", strerror(errno));
+        }
+        memset(&(idsock->raddr), 0x0, sizeof(CMUTIL_SocketAddr));
         idsock->connected = CMFalse;
     }
 }

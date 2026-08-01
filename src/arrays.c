@@ -52,10 +52,10 @@ CMUTIL_STATIC CMBool CMUTIL_ArrayCheckSize(
     void *origdata = array->data;
     size_t reqsz = (array->size + insize);
     if (array->capacity < reqsz) {
-        size_t newcap = array->size * 2;
+        size_t newcap = array->capacity ? array->capacity * 2 : 4;
         while (newcap < reqsz) newcap *= 2;
         array->data = array->memst->Realloc(
-                    array->data, (uint32_t)newcap * sizeof(void*));
+                    array->data, newcap * sizeof(void*));
         if (array->data == NULL) {
             CMLogErrorS("Failed to allocate memory for array.");
             array->data = origdata;
@@ -118,7 +118,7 @@ CMUTIL_STATIC void* CMUTIL_ArrayInsertAtPrivate(
     }
     if (index < iarray->size) {
         memmove(iarray->data+index+1, iarray->data+index,
-                (uint32_t)(iarray->size - index) * sizeof(void*));
+                (iarray->size - index) * sizeof(void*));
     } else if (index > iarray->size) {
         CMLogErrorS("Index out of bound: %d (array size is %d).",
                    index, iarray->size);
@@ -187,6 +187,8 @@ CMUTIL_STATIC CMBool CMUTIL_ArrayAdd(CMUTIL_Array *array, void *item, void **ret
             // found same data and duplication
             if (ret)
                 *ret = iarray->data[index];
+            else if (iarray->freecb && iarray->data[index] != item)
+                iarray->freecb(iarray->data[index]);
             iarray->data[index] = item;
         } else if (found != 0) {
             void *res = CMUTIL_ArrayInsertAtPrivate(array, item, index);
@@ -213,7 +215,7 @@ CMUTIL_STATIC void *CMUTIL_ArrayRemoveAt(
     if (index < iarray->size) {
         res = iarray->data[index];
         memmove(iarray->data+index, iarray->data+index+1,
-                (uint32_t)(iarray->size - index - 1) * sizeof(void*));
+                (iarray->size - index - 1) * sizeof(void*));
         iarray->size--;
     } else {
         CMLogErrorS("Index out of bound: %d (array size is %d).",
@@ -390,7 +392,7 @@ CMUTIL_STATIC void CMUTIL_ArrayClear(CMUTIL_Array *array)
                 iarray->freecb(iarray->data[i]);
         }
         memset(iarray->data, 0x0,
-               (uint32_t)iarray->capacity * sizeof(void*));
+               iarray->capacity * sizeof(void*));
         iarray->size = 0;
     } else {
         CMLogErrorS("Array is NULL for CMUTIL_ArrayClear.");
@@ -445,7 +447,7 @@ CMUTIL_Array *CMUTIL_ArrayCreateInternal(
     memset(iarray, 0x0, sizeof(CMUTIL_Array_Internal));
 
     memcpy(iarray, &g_cmutil_array, sizeof(CMUTIL_Array));
-    iarray->data = mem->Alloc(sizeof(void*) * (uint32_t)initcapacity);
+    iarray->data = mem->Alloc(sizeof(void*) * initcapacity);
     if (!iarray->data) {
         CMLogErrorS("Failed to allocate memory for array data.");
         mem->Free(iarray);
