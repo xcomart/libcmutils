@@ -927,7 +927,7 @@ Pattern conversions (each accepts a printf-style width, e.g. `%-15F`, `%04L`):
 
 | Token | Meaning |
 | --- | --- |
-| `%d` / `%date` | Timestamp, optionally formatted: `%d{%F %T.%Q}` |
+| `%d` / `%date` | Timestamp. Braces take either a named format — `DEFAULT`, `ISO8601`, `ISO8601_BASIC`, `ABSOLUTE`, `COMPACT`, `GENERAL` — as in `%d{ISO8601}`, or a `strftime` string containing a percent sign, where `%Q` and `%q` expand to milliseconds |
 | `%c` / `%logger` | Logger name |
 | `%t` / `%tid` / `%thread` | Thread id or name |
 | `%P` / `%pid` / `%process` | Process id |
@@ -950,7 +950,7 @@ CMUTIL_LogSystem *lsys = CMUTIL_LogSystemCreate();
 CMUTIL_ConfLogger *logger =
         CMCall(lsys, CreateLogger, NULL, CMLogLevel_Debug, CMTrue);
 
-const char *pattern = "%d{%F %T.%Q} %P-[%-10t] (%-15F:%04L) [%05p] %c : %m%n%ex";
+const char *pattern = "%d{DEFAULT} %P-[%-10t] (%-15F:%04L) [%05p] %c : %m%n%ex";
 
 CMUTIL_LogAppender *console =
         CMUTIL_LogConsoleAppenderCreate("Console", pattern, CMFalse);
