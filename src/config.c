@@ -54,7 +54,8 @@ CMUTIL_STATIC const char *CMUTIL_NextTermBefore(
 {
     register const char *p = line;
     register char *q = dest;
-    while (*p && (!strchr(delim, *p) || *(p - 1) == escapechar) && maxlen-- > 0)
+    while (*p && (!strchr(delim, *p) ||
+                  (p > line && *(p - 1) == escapechar)) && maxlen-- > 0)
         *q++ = *p++;
     *q = 0x0;
     return p;
@@ -133,9 +134,6 @@ CMUTIL_STATIC void CMUTIL_ConfigDestroy(CMUTIL_Config *conf)
     }
 }
 
-#define DOFAILED    if (!*p) do { \
-        failed = 1; CMUTIL_ConfItemDestroy(item); goto FAILED; } while(0)
-
 void CMUTIL_ConfigSave(const CMUTIL_Config *conf, const char *confpath)
 {
     if (conf) {
@@ -145,11 +143,17 @@ void CMUTIL_ConfigSave(const CMUTIL_Config *conf, const char *confpath)
         char fmt[50];
         uint32_t i;
         f = fopen(confpath, "wb");
+        if (f == NULL) {
+            CMLogError("cannot open configuration file '%s' for writing.",
+                       confpath);
+            return;
+        }
         for (i = 0; i < CMCall(iconf->sequence, GetSize); i++) {
             CMUTIL_ConfItem *item = (CMUTIL_ConfItem*)CMCall(
                     iconf->sequence, GetAt, i);
             if (item->type == ConfItem_Pair) {
-                char *v = (char*)CMCall(iconf->confs, Get, item->key);
+                const char *v = (const char*)CMCall(iconf->confs, Get, item->key);
+                if (v == NULL) v = "";
                 if (item->comment) {
                     sprintf(fmt, "%%%ds = %%s %%s\n", iconf->maxkeylen);
                     fprintf(f, fmt, item->key, v, item->comment);
@@ -208,7 +212,8 @@ void CMUTIL_ConfigSet(CMUTIL_Config *conf, const char *key, const char *value)
 
 long CMUTIL_ConfigGetLong(const CMUTIL_Config *conf, const char *key)
 {
-    return strtol(CMCall(conf, Get, key), NULL, 10);
+    const char *v = CMCall(conf, Get, key);
+    return v? strtol(v, NULL, 10):0L;
 }
 
 void CMUTIL_ConfigSetLong(CMUTIL_Config *conf, const char *key, long value)
@@ -220,7 +225,8 @@ void CMUTIL_ConfigSetLong(CMUTIL_Config *conf, const char *key, long value)
 
 double CMUTIL_ConfigGetDouble(const CMUTIL_Config *conf, const char *key)
 {
-    return strtod(CMCall(conf, Get, key), NULL);
+    const char *v = CMCall(conf, Get, key);
+    return v? strtod(v, NULL):0.0;
 }
 
 void CMUTIL_ConfigSetDouble(CMUTIL_Config *conf, const char *key, double value)
@@ -232,7 +238,9 @@ void CMUTIL_ConfigSetDouble(CMUTIL_Config *conf, const char *key, double value)
 
 CMBool CMUTIL_ConfigGetBoolean(const CMUTIL_Config *conf, const char *key)
 {
-    return strchr("YyTt1", *CMCall(conf, Get, key))? CMTrue:CMFalse;
+    const char *v = CMCall(conf, Get, key);
+    // strchr matches the terminating null, so empty value must be excluded.
+    return (v && *v && strchr("YyTt1", *v))? CMTrue:CMFalse;
 }
 
 void CMUTIL_ConfigSetBoolean(
@@ -283,7 +291,6 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
 {
     FILE *f = fopen(fconf, "rb");
     CMUTIL_Config_Internal *res = NULL;
-    int failed = 0;
 
     if (f) {
 //        int cont = 0;
@@ -318,10 +325,10 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
                 char *prev = NULL;
                 CMUTIL_ConfItem *previtem = NULL;
                 char name[1025], value[2049];
+                // a key without value is accepted as an empty valued item.
+                value[0] = 0x0;
                 p = CMUTIL_NextTermBefore(name, p, " =\t", '\\', 1024);
-                DOFAILED;
                 p = CMUTIL_StrSkipSpaces(p, " =\t");
-                DOFAILED;
                 p = CMUTIL_NextTermBefore(value, p, "#\n", '\\', 2048);
                 v = CMUTIL_StrTrim(value);
                 if (*p == '#')
@@ -330,6 +337,8 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
                 if (!CMCall(res->confs, Put, name, nval, (void**)&prev)) {
                     CMLogError("CMUTIL_Array Put failed");
                     memst->Free(nval);
+                    CMUTIL_ConfItemDestroy(item);
+                    CMCall(str, Clear);
                     continue;
                 }
                 if (prev) {
@@ -346,6 +355,8 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
                     CMLogError("CMUTIL_Map Put failed");
                     CMCall(res->confs, Remove, name);
                     memst->Free(nval);
+                    CMUTIL_ConfItemDestroy(item);
+                    CMCall(str, Clear);
                     continue;
                 }
                 if (previtem) {
@@ -361,15 +372,9 @@ CMUTIL_Config *CMUTIL_ConfigLoadInternal(
             CMCall(res->sequence, Add, item, NULL);
             CMCall(str, Clear);
         }
-    FAILED:
         if (str)
             CMCall(str, Destroy);
         fclose(f);
-    }
-
-    if (failed && res) {
-        CMCall((CMUTIL_Config*)res, Destroy);
-        res = NULL;
     }
 
     return (CMUTIL_Config*)res;

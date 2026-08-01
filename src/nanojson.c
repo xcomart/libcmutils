@@ -53,7 +53,14 @@ CMUTIL_STATIC void CMUTIL_JsonValueStringToStr(
     if (p) {
         CMCall(buf, AddChar, '\"');
         while (*p) {
-            switch (*p) {
+            const uint8_t c = (uint8_t)*p;
+            switch (c) {
+            case '\b':
+                CMCall(buf, AddNString, "\\b", 2);
+                break;
+            case '\f':
+                CMCall(buf, AddNString, "\\f", 2);
+                break;
             case '\r':
                 CMCall(buf, AddNString, "\\r", 2);
                 break;
@@ -63,10 +70,20 @@ CMUTIL_STATIC void CMUTIL_JsonValueStringToStr(
             case '\t':
                 CMCall(buf, AddNString, "\\t", 2);
                 break;
+            case '\"':
+                CMCall(buf, AddNString, "\\\"", 2);
+                break;
+            case '\\':
+                CMCall(buf, AddNString, "\\\\", 2);
+                break;
             default:
-                if (strchr(JSN_DELIMS, *p))
-                    CMCall(buf, AddChar, '\\');
-                CMCall(buf, AddChar, *p);
+                if (c < 0x20) {
+                    char ubuf[8];
+                    snprintf(ubuf, sizeof(ubuf), "\\u%04X", (unsigned int)c);
+                    CMCall(buf, AddNString, ubuf, 6);
+                } else {
+                    CMCall(buf, AddChar, (char)c);
+                }
             }
             p++;
         }
@@ -345,8 +362,11 @@ CMUTIL_STATIC void CMUTIL_JsonValueSetLong(
 CMUTIL_STATIC void CMUTIL_JsonValueSetDouble(
         CMUTIL_JsonValue *jval, double value)
 {
-    char buf[50];
-    size_t size = (uint32_t)sprintf(buf, "%lf", value);
+    char buf[50] = {0,};
+    int len = snprintf(buf, sizeof(buf), "%.17g", value);
+    size_t size;
+    if (len < 0) len = 0;
+    size = (size_t)len < sizeof(buf)? (size_t)len : sizeof(buf) - 1;
     CMUTIL_JsonValueSetBase(jval, buf, size, CMJsonValueDouble);
 }
 
@@ -782,10 +802,14 @@ CMUTIL_JsonArray *CMUTIL_JsonArrayCreate()
 }
 
 
+// maximum nesting depth of arrays/objects, guards against stack exhaustion.
+#define CMUTIL_JSON_MAX_DEPTH   512
+
 typedef struct CMUTIL_JsonParser {
     const char *orig, *curr;
     int64_t remain, linecnt;
     CMBool silent;
+    int depth;
     CMUTIL_Mem *memst;
 } CMUTIL_JsonParser;
 
@@ -849,25 +873,84 @@ RETRYPOINT:
     if (!a->silent) CMLogError("parse error in line %d before '%s': %s",    \
                 a->linecnt, _buf, msg); } while(0)
 
+CMUTIL_STATIC void CMUTIL_JsonAppendUTF8(
+        CMUTIL_String *sbuf, uint32_t codepoint)
+{
+    char out[4];
+    if (codepoint < 0x80) {
+        CMCall(sbuf, AddChar, (char)codepoint);
+    } else if (codepoint < 0x800) {
+        out[0] = (char)(0xC0 | (codepoint >> 6));
+        out[1] = (char)(0x80 | (codepoint & 0x3F));
+        CMCall(sbuf, AddNString, out, 2);
+    } else if (codepoint < 0x10000) {
+        out[0] = (char)(0xE0 | (codepoint >> 12));
+        out[1] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+        out[2] = (char)(0x80 | (codepoint & 0x3F));
+        CMCall(sbuf, AddNString, out, 3);
+    } else {
+        out[0] = (char)(0xF0 | (codepoint >> 18));
+        out[1] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
+        out[2] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+        out[3] = (char)(0x80 | (codepoint & 0x3F));
+        CMCall(sbuf, AddNString, out, 4);
+    }
+}
+
 CMUTIL_STATIC CMBool CMUTIL_JsonParseEscape(
         CMUTIL_JsonParser *pctx, CMUTIL_String *sbuf)
 {
-    uint8_t buf[3];
+    uint8_t buf[2] = {0,};
     CMUTIL_JsonParseConsume(pctx, 1);
     if (pctx->remain <= 0) {
         CMUTIL_JSON_PARSE_ERROR(pctx, "unexpected end.");
         return CMFalse;
     }
     switch (*(pctx->curr)) {
+    case 'b': CMCall(sbuf, AddChar, '\b'); break;
+    case 'f': CMCall(sbuf, AddChar, '\f'); break;
     case 't': CMCall(sbuf, AddChar, '\t'); break;
     case 'r': CMCall(sbuf, AddChar, '\r'); break;
     case 'n': CMCall(sbuf, AddChar, '\n'); break;
-    case 'u':
-        // unicodes are converted to 2 bytes
-        CMUTIL_StringHexToBytes(buf, pctx->curr+1, 4);
-        CMCall(sbuf, AddNString, (char*)buf, 2);
+    case 'u': {
+        uint32_t cp;
+        // 'u' plus 4 hexadecimal digits must be available.
+        if (pctx->remain < 5) {
+            CMUTIL_JSON_PARSE_ERROR(pctx, "unexpected end.");
+            return CMFalse;
+        }
+        if (CMUTIL_StringHexToBytes(buf, pctx->curr+1, 4) < 0) {
+            CMUTIL_JSON_PARSE_ERROR(pctx, "invalid unicode escape.");
+            return CMFalse;
+        }
+        cp = ((uint32_t)buf[0] << 8) | (uint32_t)buf[1];
         CMUTIL_JsonParseConsume(pctx, 4);
+        if (cp >= 0xD800 && cp <= 0xDBFF) {
+            // high surrogate, a low surrogate escape must follow.
+            uint32_t lo;
+            if (pctx->remain < 7 ||
+                    *(pctx->curr+1) != '\\' || *(pctx->curr+2) != 'u') {
+                CMUTIL_JSON_PARSE_ERROR(pctx, "invalid surrogate pair.");
+                return CMFalse;
+            }
+            if (CMUTIL_StringHexToBytes(buf, pctx->curr+3, 4) < 0) {
+                CMUTIL_JSON_PARSE_ERROR(pctx, "invalid unicode escape.");
+                return CMFalse;
+            }
+            lo = ((uint32_t)buf[0] << 8) | (uint32_t)buf[1];
+            if (lo < 0xDC00 || lo > 0xDFFF) {
+                CMUTIL_JSON_PARSE_ERROR(pctx, "invalid surrogate pair.");
+                return CMFalse;
+            }
+            cp = 0x10000u + ((cp - 0xD800u) << 10) + (lo - 0xDC00u);
+            CMUTIL_JsonParseConsume(pctx, 6);
+        } else if (cp >= 0xDC00 && cp <= 0xDFFF) {
+            CMUTIL_JSON_PARSE_ERROR(pctx, "invalid surrogate pair.");
+            return CMFalse;
+        }
+        CMUTIL_JsonAppendUTF8(sbuf, cp);
         break;
+    }
     default: CMCall(sbuf, AddChar, *(pctx->curr)); break;
     }
     return CMTrue;
@@ -875,14 +958,21 @@ CMUTIL_STATIC CMBool CMUTIL_JsonParseEscape(
 
 CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonParseBase(CMUTIL_JsonParser *pctx)
 {
+    CMUTIL_Json *res = NULL;
+    if (pctx->depth >= CMUTIL_JSON_MAX_DEPTH) {
+        CMUTIL_JSON_PARSE_ERROR(pctx, "maximum nesting depth exceeded.");
+        return NULL;
+    }
+    pctx->depth++;
     if (CMUTIL_JsonSkipSpaces(pctx)) {
         switch (*(pctx->curr)) {
-        case '{': return CMUTIL_JsonParseObject(pctx);
-        case '[': return CMUTIL_JsonParseArray(pctx);
-        default:  return CMUTIL_JsonParseValue(pctx);
+        case '{': res = CMUTIL_JsonParseObject(pctx); break;
+        case '[': res = CMUTIL_JsonParseArray(pctx); break;
+        default:  res = CMUTIL_JsonParseValue(pctx); break;
         }
     }
-    return NULL;
+    pctx->depth--;
+    return res;
 }
 
 CMUTIL_STATIC CMBool CMUTIL_JsonParseString(
@@ -1043,6 +1133,10 @@ CMUTIL_STATIC CMUTIL_Json *CMUTIL_JsonParseObject(CMUTIL_JsonParser *pctx)
             CMUTIL_JSON_PARSE_ERROR(pctx, "string parsing error.");
             goto ENDPOINT;
         }
+        if (!CMUTIL_JsonSkipSpaces(pctx)) {
+            CMUTIL_JSON_PARSE_ERROR(pctx, "unexpected end reached.");
+            goto ENDPOINT;
+        }
         if (*(pctx->curr) != ':') {
             CMUTIL_JSON_PARSE_ERROR(pctx, "value part does not appear.");
             goto ENDPOINT;
@@ -1156,6 +1250,7 @@ CMUTIL_Json *CMUTIL_JsonParseInternal(
         (int64_t)CMCall(jsonstr, GetSize),
         0,
         silent,
+        0,
         memst
     };
     return CMUTIL_JsonParseBase(&parser);

@@ -74,6 +74,17 @@ CMUTIL_LogDefine("cmutils.network")
     } while(0)
 #endif
 
+// winsock does not set errno, socket errors are reported by WSAGetLastError().
+#if defined(MSWIN)
+# define CMSockErrNo        WSAGetLastError()
+# define CMSockErrStr       "winsock error"
+# define CMSockWouldBlock() (WSAGetLastError() == WSAEWOULDBLOCK)
+#else
+# define CMSockErrNo        errno
+# define CMSockErrStr       strerror(errno)
+# define CMSockWouldBlock() (errno == EAGAIN || errno == EWOULDBLOCK)
+#endif
+
 #if defined(MSWIN)
 #elif defined(APPLE)
 static CMUTIL_Mutex *g_cmutil_hostbyname_mutex = NULL;
@@ -92,13 +103,15 @@ int CMUTIL_NetworkGetHostByNameR(const char *name,
                     struct hostent *ret, char *buf, size_t buflen,
                     struct hostent **result, int *h_errnop)
 {
-    int i;
+    int i, naddr = 0, nalias = 0;
+    size_t alen;
     struct hostent *staticval = NULL;
     register char *p = buf, *q;
     size_t clen;
 
+    // reserves 'sz' bytes from remaining buffer, must be called before write.
 #define declen(sz) do {                                 \
-    if (buflen - sz - 1 > 0) buflen -= sz;              \
+    if (buflen >= (size_t)(sz)) buflen -= (size_t)(sz); \
     else {                                              \
         CMCall(g_cmutil_hostbyname_mutex, Unlock);      \
         return -1;                                      \
@@ -110,48 +123,67 @@ int CMUTIL_NetworkGetHostByNameR(const char *name,
     // lock gethostbyname function to guarantee consistancy.
     CMCall(g_cmutil_hostbyname_mutex, Lock);
     staticval = CMUTIL_NetworkGetHostByName(name);
-    memcpy(ret, staticval, sizeof(struct hostent));
-    clen = sizeof(char*) * staticval->h_length;
-
-    // reserve space for address pointers
-    ret->h_addr_list = (char**)p;
-    p += clen; declen(clen);
-
-    // reserve space for alias pointers
-    ret->h_aliases = (char**)p;
-    p += clen; declen(clen);
-
-    // copy each data to result structure
-    for (i=0; i<staticval->h_length; i++) {
-
-        q = staticval->h_addr_list[i];
-        ret->h_addr_list[i] = p;
-        while (*q) {
-            *p++ = *q++;
-            declen(1);
-        }
-        *p++ = 0x0; declen(1);
-
-        q = staticval->h_aliases[i];
-        ret->h_aliases[i] = p;
-        while (*q) {
-            *p++ = *q++;
-            declen(1);
-        }
-        *p++ = 0x0; declen(1);
+    if (staticval == NULL) {
+        CMCall(g_cmutil_hostbyname_mutex, Unlock);
+        if (result) *result = NULL;
+        if (h_errnop) *h_errnop = HOST_NOT_FOUND;
+        return -1;
     }
+    memcpy(ret, staticval, sizeof(struct hostent));
+
+    // h_length is the size of each address, not the number of addresses.
+    alen = (size_t)staticval->h_length;
+    if (staticval->h_addr_list)
+        while (staticval->h_addr_list[naddr]) naddr++;
+    if (staticval->h_aliases)
+        while (staticval->h_aliases[nalias]) nalias++;
+
+    // reserve space for address pointers including NULL terminator
+    clen = sizeof(char*) * (size_t)(naddr + 1);
+    declen(clen);
+    ret->h_addr_list = (char**)p;
+    p += clen;
+
+    // reserve space for alias pointers including NULL terminator
+    clen = sizeof(char*) * (size_t)(nalias + 1);
+    declen(clen);
+    ret->h_aliases = (char**)p;
+    p += clen;
+
+    // addresses are binary data, copy exactly h_length bytes each.
+    for (i=0; i<naddr; i++) {
+        declen(alen);
+        memcpy(p, staticval->h_addr_list[i], alen);
+        ret->h_addr_list[i] = p;
+        p += alen;
+    }
+    ret->h_addr_list[naddr] = NULL;
+
+    for (i=0; i<nalias; i++) {
+        ret->h_aliases[i] = p;
+        q = staticval->h_aliases[i];
+        while (*q) {
+            declen(1);
+            *p++ = *q++;
+        }
+        declen(1);
+        *p++ = 0x0;
+    }
+    ret->h_aliases[nalias] = NULL;
 
     // copy name
     ret->h_name = p;
     q = staticval->h_name;
     while (*q) {
-        *p++ = *q++;
         declen(1);
+        *p++ = *q++;
     }
-    *p++ = 0x0; declen(1);
+    declen(1);
+    *p++ = 0x0;
 
     CMCall(g_cmutil_hostbyname_mutex, Unlock);
-    CMUTIL_UNUSED(result, h_errnop);
+    if (result) *result = ret;
+    if (h_errnop) *h_errnop = 0;
     return 0;
 }
 
@@ -253,10 +285,13 @@ CMSocketResult CMUTIL_SocketAddrGet(
     if (hostbuf) {
         if (saddr->ss_family == AF_INET) {
             struct sockaddr_in *sin = (struct sockaddr_in*)saddr;
-            uint8_t ip[4];
             const uint32_t addr = ntohl(sin->sin_addr.s_addr);
-            memcpy(ip, &addr, sizeof(addr));
-            if (sprintf(hostbuf, "%u.%u.%u.%u", ip[3], ip[2], ip[1], ip[0]) <= 0) {
+            // shift based extraction to be independent of host endianness.
+            if (sprintf(hostbuf, "%u.%u.%u.%u",
+                        (unsigned)((addr >> 24) & 0xffu),
+                        (unsigned)((addr >> 16) & 0xffu),
+                        (unsigned)((addr >>  8) & 0xffu),
+                        (unsigned)(addr & 0xffu)) <= 0) {
                 CMLogError("cannot get ip address from %s", hostbuf);
                 res = CMSocketUnknownError;
             }
@@ -343,7 +378,7 @@ CMUTIL_STATIC CMBool CMUTIL_SocketNonBlocking(SOCKET *sock, CMBool silent)
 #if defined(SUNOS)
     const int rc = fcntl(*sock, F_SETFL, fcntl(*sock, F_GETFL, 0) | O_NONBLOCK);
     if (rc < 0) {
-        if (!res->silent)
+        if (!silent)
             CMLogErrorS("fnctl failed.(%d:%s)", errno, strerror(errno));
         return CMFalse;
     }
@@ -479,15 +514,18 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketRead(
 #endif
         if (rc == SOCKET_ERROR) {
             if (!isock->silent)
-                CMLogError("recv failed.(%d:%s)", errno, strerror(errno));
+                CMLogError("recv failed.(%d:%s)", CMSockErrNo, CMSockErrStr);
             return CMSocketReceiveFailed;
         }
-        if (rc > 0) {
-            CMLogTrace("%d bytes received", rc);
-            CMCall(buffer, AddBytes, buf, (uint32_t)rc);
-            rsize += (uint32_t)rc;
+        if (rc == 0) {
+            // orderly shutdown by peer, no more data will arrive.
+            if (!isock->silent)
+                CMLogError("connection closed by peer.");
+            return CMSocketReceiveFailed;
         }
-
+        CMLogTrace("%d bytes received", rc);
+        CMCall(buffer, AddBytes, buf, (uint32_t)rc);
+        rsize += (uint32_t)rc;
     }
     return CMSocketOk;
 }
@@ -618,15 +656,11 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWritePart(
                        (int)size, 0);
 #endif
         if (rc == SOCKET_ERROR) {
-            if (errno == EAGAIN
-#if !defined(MSWIN)
-                || errno == EWOULDBLOCK
-#endif
-                )
+            if (CMSockWouldBlock())
                 continue;
             if (!isock->silent)
                 CMLogError("socket write error.(%d:%s)",
-                           errno, strerror(errno));
+                           CMSockErrNo, CMSockErrStr);
             return CMSocketSendFailed;
         }
         CMLogTrace("%d bytes written", rc);
@@ -799,6 +833,7 @@ CONNECT_RETRY:
     if (!CMUTIL_SocketNonBlocking(&s, silent)) {
         if (!silent)
             CMLogError("CMUTIL_SocketNonBlocking failed");
+        closesocket(s);
         return CMFalse;
     }
 
@@ -814,10 +849,19 @@ CONNECT_RETRY:
         {
             CMSocketResult sr = CMUTIL_SocketCheckWriteBuffer(&is->base, timeout);
 
-            if (sr == CMSocketOk) {   // OK, connected to server
-                return CMTrue;
-            }
-            if (sr == CMSocketTimeout) {
+            if (sr == CMSocketOk) {
+                // a failed non-blocking connect also becomes writable,
+                // SO_ERROR tells whether the connection really succeeded.
+                int soerr = 0;
+                socklen_t soerrlen = (socklen_t)sizeof(soerr);
+                if (getsockopt(s, SOL_SOCKET, SO_ERROR,
+                               (char*)&soerr, &soerrlen) == 0 && soerr == 0) {
+                    return CMTrue;
+                }
+                if (!silent)
+                    CMLogError("connect failed.(%d)", soerr);
+                // fall through to retry to connect
+            } else if (sr == CMSocketTimeout) {
                 if (!silent)
                     CMLogError("connect timeout.");
                 closesocket(s);
@@ -888,14 +932,10 @@ CMUTIL_STATIC int CMUTIL_SocketReadByte(
         rc = (int)recv(isock->sock, &buf, 1, 0);
 #endif
         if (rc == SOCKET_ERROR) {
-            if (errno == EAGAIN
-#if !defined(MSWIN)
-                || errno == EWOULDBLOCK
-#endif
-                )
+            if (CMSockWouldBlock())
                 continue;
             if (!isock->silent)
-                CMLogError("recv failed.(%d:%s)", errno, strerror(errno));
+                CMLogError("recv failed.(%d:%s)", CMSockErrNo, CMSockErrStr);
             return -1;
         } else if (rc == 0) {
             if (!isock->silent)
@@ -921,7 +961,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteByte(
                 CMLogError("socket write timeout");
             return sr;
         }
-        if (sr == CMSocketOk) {
+        if (sr != CMSocketOk) {
             return sr;
         }
 
@@ -931,15 +971,11 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SocketWriteByte(
         rc = (int)send(isock->sock, (char*)&c, 1, 0);
 #endif
         if (rc == SOCKET_ERROR) {
-            if (errno == EAGAIN
-#if !defined(MSWIN)
-                || errno == EWOULDBLOCK
-#endif
-                )
+            if (CMSockWouldBlock())
                 continue;
             if (!isock->silent)
                 CMLogError("socket write error.(%d:%s)",
-                           errno, strerror(errno));
+                           CMSockErrNo, CMSockErrStr);
             return CMSocketSendFailed;
         }
         if (rc > 0)
@@ -1056,7 +1092,7 @@ CMBool CMUTIL_SocketConnectBase(
         while (curr) {
             char hostip[256];
             // error log enable if this is the last entry.
-            CMBool issilent = silent || !curr->ai_next? CMFalse:CMTrue;
+            CMBool issilent = (curr->ai_next == NULL)? silent:CMTrue;
             CMUTIL_SocketAddr ss = {0,};
             struct sockaddr_in *sin = (struct sockaddr_in*)&ss;
             memcpy(sin, (struct sockaddr_in*)(curr->ai_addr),
@@ -1550,7 +1586,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
 #if defined(CMUTIL_SSL_USE_OPENSSL)
     int in_init=0;
 
-    while (size > 0 && cnt < timeout * 10) {
+    while (size > 0 && cnt < timeout / 100) {
         if (SSL_in_init(isck->session) &&
                 !SSL_total_renegotiations(isck->session)) {
             in_init = 1;
@@ -1580,14 +1616,14 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
                 res = CMUTIL_SocketCheckWriteBuffer(sock, timeout);
                 if (res != CMSocketOk) {
                     CMLogError("SSL read failed");
-                    return -1;
+                    return CMSocketReceiveFailed;
                 }
                 break;
             case SSL_ERROR_WANT_READ:
                 res = CMUTIL_SocketCheckReadBuffer(sock, timeout);
                 if (res != CMSocketOk) {
                     CMLogError("SSL read failed");
-                    return -1;
+                    return CMSocketReceiveFailed;
                 }
                 break;
             case SSL_ERROR_WANT_X509_LOOKUP:
@@ -1609,7 +1645,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
     }
 #else
 
-    while (size > 0 && cnt < timeout * 10) {
+    while (size > 0 && cnt < timeout / 100) {
         int handshake_res = 0;
 
         res = CMCall(sock, CheckReadBuffer, timeout);
@@ -1648,13 +1684,13 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketRead(
                 CMLogError("peer closed connection");
                 return CMSocketReceiveFailed;
             } else {
-                CMCall(buffer, AddNString, buf, (uint32_t)rc);
+                CMCall(buffer, AddBytes, buf, (uint32_t)rc);
                 size -= (uint32_t)rc;
             }
         }
     }
 #endif  // !CMUTIL_SSL_USE_OPENSSL
-    if (cnt < timeout * 10)
+    if (cnt < timeout / 100)
         return CMSocketOk;
     else {
         CMLogError("receive timed out.");
@@ -1684,7 +1720,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
 #if defined(CMUTIL_SSL_USE_OPENSSL)
     int in_init=0;
 
-    while (size > 0 && cnt < timeout * 10) {
+    while (size > 0 && cnt < timeout / 100) {
         if (SSL_in_init(isck->session) &&
                 !SSL_total_renegotiations(isck->session)) {
             in_init = 1;
@@ -1713,14 +1749,14 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
                 res = CMUTIL_SocketCheckWriteBuffer(sock, timeout);
                 if (res != CMSocketOk) {
                     CMLogError("SSL write failed");
-                    return -1;
+                    return CMSocketSendFailed;
                 }
                 break;
             case SSL_ERROR_WANT_READ:
                 res = CMUTIL_SocketCheckReadBuffer(sock, timeout);
                 if (res != CMSocketOk) {
                     CMLogError("SSL write failed");
-                    return -1;
+                    return CMSocketSendFailed;
                 }
                 break;
             case SSL_ERROR_WANT_X509_LOOKUP:
@@ -1742,7 +1778,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
     }
 #else
 
-    while (size > 0 && cnt < timeout * 10) {
+    while (size > 0 && cnt < timeout / 100) {
         int handshake_res = 0;
 
         res = CMCall(sock, CheckWriteBuffer, timeout);
@@ -1784,7 +1820,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWritePart(
         }
     }
 #endif  // !CMUTIL_SSL_USE_OPENSSL
-    if (cnt < timeout * 10)
+    if (cnt < timeout / 100)
         return CMSocketOk;
     CMLogError("send timed out.");
     return CMSocketTimeout;
@@ -1898,10 +1934,10 @@ CMUTIL_STATIC int CMUTIL_SSLSocketReadByte(
     while (CMTrue) {
         int handshake_res = 0;
 
-        res = CMCall(sock, CheckReadBuffer, INT32_MAX);
+        res = CMCall(sock, CheckReadBuffer, timeout);
         if (res != CMSocketOk) {
             CMLogError("CheckReadBuffer() failed");
-            return res;
+            return -1;
         }
 
         rc = (int)gnutls_record_recv(isck->session, &buf, 1);
@@ -2008,7 +2044,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLSocketWriteByte(
     while (CMTrue) {
         int handshake_res = 0;
 
-        res = CMCall(sock, CheckWriteBuffer, INT32_MAX);
+        res = CMCall(sock, CheckWriteBuffer, timeout);
         if (res != CMSocketOk)
             return res;
 
@@ -2060,7 +2096,8 @@ static CMUTIL_Socket g_cmutil_sslsocket = {
     CMUTIL_SSLSocketClose,
     CMUTIL_SSLSocketGetRawSocket,
     CMUTIL_SSLSocketReadByte,
-    CMUTIL_SSLSocketWriteByte
+    CMUTIL_SSLSocketWriteByte,
+    CMUTIL_SocketSetSilent
 };
 
 CMUTIL_STATIC CMUTIL_SSLSocket_Internal *CMUTIL_SSLSocketCreate(
@@ -2094,6 +2131,25 @@ CMUTIL_STATIC CMUTIL_SSLSocket_Internal *CMUTIL_SSLSocketCreate(
     }} while(0)
 #endif  // !CMUTIL_SSL_USE_OPENSSL
 
+#if defined(CMUTIL_SSL_USE_OPENSSL)
+CMUTIL_STATIC CMBool CMUTIL_SSLLoadSystemTrust(SSL_CTX *ctx, CMBool silent)
+{
+#if defined(MSWIN) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+    // OpenSSL ships no trust store on Windows, the OS certificate store
+    // must be loaded through the winstore provider instead.
+    if (SSL_CTX_load_verify_store(ctx, "org.openssl.winstore://") == 1)
+        return CMTrue;
+#endif
+    if (SSL_CTX_set_default_verify_paths(ctx) == 1)
+        return CMTrue;
+    if (!silent) {
+        char buf[1024];
+        ERR_error_string(ERR_peek_last_error(), buf);
+        CMLogError("cannot load system trust store - %s", buf);
+    }
+    return CMFalse;
+}
+#endif  // CMUTIL_SSL_USE_OPENSSL
 
 
 CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
@@ -2114,8 +2170,19 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
         goto FAILED;
     }
 
-    if (ca && *ca)
-        SSL_CHECK(SSL_CTX_use_certificate_chain_file(res->sslctx, ca), FAILED);
+    // A given CA file replaces the trust store, otherwise the system trust
+    // store is used. Verification is skipped only when the caller opted out
+    // by supplying neither a CA file nor a server name to verify against.
+    if (ca && *ca) {
+        SSL_CHECK(SSL_CTX_load_verify_locations(res->sslctx, ca, NULL), FAILED);
+        SSL_CTX_set_verify(res->sslctx, SSL_VERIFY_PEER, NULL);
+    } else if (servername && *servername) {
+        if (!CMUTIL_SSLLoadSystemTrust(res->sslctx, silent))
+            goto FAILED;
+        SSL_CTX_set_verify(res->sslctx, SSL_VERIFY_PEER, NULL);
+    } else {
+        SSL_CTX_set_verify(res->sslctx, SSL_VERIFY_NONE, NULL);
+    }
     if (cert && key && *cert && *key) {
         SSL_CHECK(SSL_CTX_use_certificate_file(
                       res->sslctx, cert, SSL_FILETYPE_PEM), FAILED);
@@ -2124,21 +2191,36 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
         SSL_CHECK(SSL_CTX_check_private_key(res->sslctx), FAILED);
     }
 
-    if (servername && *servername) {
-        char buf[1024];
-        strcpy(buf, servername);
-        SSL_CTX_set_tlsext_servername_arg(res->sslctx, buf);
+    res->session = SSL_new(res->sslctx);
+    if (res->session == NULL) {
+        if (!silent) {
+            char errbuf[1024];
+            ERR_error_string(ERR_peek_last_error(), errbuf);
+            CMLogError("SSL_new failed : %s", errbuf);
+        }
+        goto FAILED;
     }
 
-    res->session = SSL_new(res->sslctx);
-    // TODO: server name setting
+    if (servername && *servername) {
+        // SNI and host name verification belong to the session, not the
+        // context, and must be set before the handshake starts.
+        SSL_CHECK((int)SSL_set_tlsext_host_name(
+                      res->session, servername), FAILED);
+        if (ca && *ca)
+            SSL_CHECK(SSL_set1_host(res->session, servername), FAILED);
+    }
 #else
-    if (ca || (cert && key))
+    if ((ca && *ca) || (servername && *servername) ||
+            (cert && key && *cert && *key))
         SSL_CHECK(gnutls_certificate_allocate_credentials(
                       &res->cred), FAILED);
+    // A given CA file replaces the trust store, otherwise the system trust
+    // store is used whenever there is a server name to verify against.
     if (ca && *ca)
         SSL_CHECK(gnutls_certificate_set_x509_trust_file(
                       res->cred, ca, GNUTLS_X509_FMT_PEM), FAILED);
+    else if (servername && *servername)
+        SSL_CHECK(gnutls_certificate_set_x509_system_trust(res->cred), FAILED);
     if (cert && key && *cert && *key)
         SSL_CHECK(gnutls_certificate_set_x509_key_file(
                       res->cred, cert, key, GNUTLS_X509_FMT_PEM), FAILED);
@@ -2187,7 +2269,6 @@ CMUTIL_Socket *CMUTIL_SSLSocketConnectInternal(
                 CMLogError("SSL_connect failed");
                 goto FAILED;
             }
-            break;
         }
 #else
         int ir;
@@ -2239,15 +2320,30 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLServerSocketAccept(
     CMBool silent = issock->base.silent;
     CMUTIL_SSLSocket_Internal *cli = CMUTIL_SSLSocketCreate(
                 issock->base.memst, silent);
-    CMSocketResult ret = CMSocketUnknownError;
+    CMSocketResult ret;
 
-    if (CMUTIL_ServerSocketAcceptInternal(
-                server, (CMUTIL_Socket*)cli, timeout)) {
+    *res = NULL;
+    ret = CMUTIL_ServerSocketAcceptInternal(
+                server, (CMUTIL_Socket*)cli, timeout);
+    if (ret != CMSocketOk) {
+        CMCall((CMUTIL_Socket*)cli, Close);
+        return ret;
+    }
+
 #if defined(CMUTIL_SSL_USE_OPENSSL)
-        cli->session = SSL_new(issock->sslctx);
-        SSL_set_fd(cli->session, (int)cli->base.sock);
-        SSL_CHECK(SSL_accept(cli->session), FAILED);
+    cli->session = SSL_new(issock->sslctx);
+    if (cli->session == NULL) {
+        if (!silent) {
+            char errbuf[1024];
+            ERR_error_string(ERR_peek_last_error(), errbuf);
+            CMLogError("SSL_new failed : %s", errbuf);
+        }
+        goto FAILED;
+    }
+    SSL_CHECK(SSL_set_fd(cli->session, (int)cli->base.sock), FAILED);
+    SSL_CHECK(SSL_accept(cli->session), FAILED);
 #else
+    {
         int handshake_res;
         SSL_CHECK(gnutls_init(&(cli->session), GNUTLS_SERVER), FAILED);
         SSL_CHECK(gnutls_priority_set(
@@ -2267,13 +2363,15 @@ CMUTIL_STATIC CMSocketResult CMUTIL_SSLServerSocketAccept(
         } while (handshake_res < 0 &&
                  gnutls_error_is_fatal(handshake_res) == 0);
         SSL_CHECK(handshake_res, FAILED);
-#endif  // !CMUTIL_SSL_USE_OPENSSL
     }
+#endif  // !CMUTIL_SSL_USE_OPENSSL
+
     *res = (CMUTIL_Socket*)cli;
-    ret = CMSocketOk;
+    return CMSocketOk;
+
 FAILED:
     CMCall((CMUTIL_Socket*)cli, Close);
-    return ret;
+    return CMSocketUnknownError;
 }
 
 CMUTIL_STATIC void CMUTIL_SSLServerSocketClose(CMUTIL_ServerSocket *ssock)
@@ -2294,13 +2392,15 @@ CMUTIL_STATIC void CMUTIL_SSLServerSocketClose(CMUTIL_ServerSocket *ssock)
         if (issock->priority_cache)
             gnutls_priority_deinit(issock->priority_cache);
 #endif  // !CMUTIL_SSL_USE_OPENSSL
-        CMCall(ssock, Close);
+        // Close of this vtable is this function itself, call base directly.
+        CMUTIL_ServerSocketClose(ssock);
     }
 }
 
 static CMUTIL_ServerSocket g_cmutil_sslserversocket = {
     CMUTIL_SSLServerSocketAccept,
-    CMUTIL_SSLServerSocketClose
+    CMUTIL_SSLServerSocketClose,
+    CMUTIL_ServerSocketSetSilent
 };
 
 CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreateInternal(
@@ -2320,10 +2420,12 @@ CMUTIL_ServerSocket *CMUTIL_SSLServerSocketCreateInternal(
 #if defined(CMUTIL_SSL_USE_OPENSSL)
         const SSL_METHOD *method = TLS_server_method();
         res->sslctx = SSL_CTX_new(method);
-        if (res->sslctx == NULL && !silent) {
-            char buf[1024];
-            ERR_error_string(ERR_peek_last_error(), buf);
-            CMLogError("Unable to create SSL context : %s", buf);
+        if (res->sslctx == NULL) {
+            if (!silent) {
+                char buf[1024];
+                ERR_error_string(ERR_peek_last_error(), buf);
+                CMLogError("Unable to create SSL context : %s", buf);
+            }
             goto FAILED;
         }
         if (ca)
@@ -2445,7 +2547,7 @@ CMBool CMUTIL_SocketPairInternal(
     CMUTIL_Socket_Internal *is2 = CMUTIL_SocketCreate(mem, CMTrue);
     SOCKET s[2];
 
-#if defined(WIN32)
+#if defined(MSWIN)
     union {
        struct sockaddr_in inaddr;
        struct sockaddr addr;
