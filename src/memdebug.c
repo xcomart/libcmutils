@@ -83,6 +83,12 @@ CMUTIL_STATIC FILE *CMUTIL_MemGetFP()
         // unknown platform just save it current dir
         sz = 0;
 #endif
+        // readlink/GetModuleFileName may fail(-1) or fill the whole buffer,
+        // clamp to a valid index leaving room for the appended suffix.
+        if (sz < 0)
+            sz = 0;
+        if (sz > (ssize_t)(sizeof(buf) - 32))
+            sz = (ssize_t)(sizeof(buf) - 32);
         buf[sz] = 0x0;
         strftime(dtbuf, sizeof(dtbuf), "%Y%m%d_%H%M%S", &currtm);
         strcat(buf, "_mem_log_");
@@ -208,10 +214,13 @@ CMUTIL_STATIC void *CMUTIL_MemRcyAlloc(size_t size)
     void *res;
     CMUTIL_MemNode *node;
     CMUTIL_MemRcyList *list;
-    if (idx >= MEM_BLOCK_SZ) {
+    // 1 << idx must not overflow size_t, so idx is bounded by its bit width.
+    if (idx < 0 || idx >= MEM_BLOCK_SZ || idx >= (int)(sizeof(size_t) * 8)) {
         CMUTIL_MemLogWithStack(
-                    "*** FATAL - allocating size too big(%ld).", (long)size);
+                    "*** FATAL - allocating size too big(%zu).", size);
         assert(0);
+        // must not index g_cmutil_memrcyblocks out of bound on NDEBUG build.
+        return NULL;
     }
     list = &g_cmutil_memrcyblocks[idx];
     CMCall(list->mutex, Lock);
@@ -221,8 +230,14 @@ CMUTIL_STATIC void *CMUTIL_MemRcyAlloc(size_t size)
         list->head = node->next;
         list->avlcnt--;
     } else {
+        res = malloc(sizeof(CMUTIL_MemNode) + ((size_t)1 << idx) + 1);
+        if (res == NULL) {
+            CMCall(list->mutex, Unlock);
+            CMUTIL_MemLogWithStack(
+                        "*** FATAL - cannot allocate %zu bytes.", size);
+            return NULL;
+        }
         list->cnt++;
-        res = malloc(sizeof(CMUTIL_MemNode) + (size_t)(1L << idx) + 1);
         node = (CMUTIL_MemNode*)res;
         node->index = idx;
     }
@@ -245,8 +260,17 @@ CMUTIL_STATIC void *CMUTIL_MemRcyAlloc(size_t size)
 
 CMUTIL_STATIC void *CMUTIL_MemRcyCalloc(size_t nmem, size_t size)
 {
-    size_t totsz = nmem * size;
-    void *res = CMUTIL_MemRcyAlloc(totsz);
+    size_t totsz;
+    void *res;
+    if (nmem != 0 && size > (SIZE_MAX / nmem)) {
+        CMUTIL_MemLogWithStack(
+                    "*** FATAL - calloc size overflow(%zu * %zu).", nmem, size);
+        return NULL;
+    }
+    totsz = nmem * size;
+    res = CMUTIL_MemRcyAlloc(totsz);
+    if (res == NULL)
+        return NULL;
     memset(res, 0x0, totsz);
     return res;
 }
@@ -286,9 +310,21 @@ CMUTIL_STATIC CMBool CMUTIL_MemCheckFlow(CMUTIL_MemNode *node)
 
 CMUTIL_STATIC void CMUTIL_MemRcyFree(void *ptr)
 {
-    CMUTIL_MemNode *node =
-            (CMUTIL_MemNode*)(((CMUTIL_MemNode*)ptr) - 1);
-    CMUTIL_MemRcyList *list = &g_cmutil_memrcyblocks[node->index];
+    CMUTIL_MemNode *node;
+    CMUTIL_MemRcyList *list;
+
+    if (ptr == NULL) {
+        CMUTIL_MemLogWithStack("*** FATAL - freeing null pointer.");
+        return;
+    }
+
+    node = (CMUTIL_MemNode*)(((CMUTIL_MemNode*)ptr) - 1);
+    if (node->index < 0 || node->index >= MEM_BLOCK_SZ) {
+        CMUTIL_MemLogWithStack("*** FATAL - memory index out of bound. "
+                               "is this memory allocated using CMAlloc?");
+        return;
+    }
+    list = &g_cmutil_memrcyblocks[node->index];
 
     CMCall(list->mutex, Lock);
     if (CMCall(list->used, Remove, node) == NULL) {
@@ -319,10 +355,15 @@ CMUTIL_STATIC void CMUTIL_MemRcyFree(void *ptr)
 
 CMUTIL_STATIC void *CMUTIL_MemRcyRealloc(void *ptr, size_t size)
 {
-    CMUTIL_MemNode *node =
-            (CMUTIL_MemNode*)(((CMUTIL_MemNode*)ptr) - 1);
+    CMUTIL_MemNode *node;
     int nidx = CMUTIL_MemRcyIndex(size);
-    if (node->index >= MEM_BLOCK_SZ) {
+
+    // realloc with null pointer behaves like alloc.
+    if (ptr == NULL)
+        return CMUTIL_MemRcyAlloc(size);
+
+    node = (CMUTIL_MemNode*)(((CMUTIL_MemNode*)ptr) - 1);
+    if (node->index < 0 || node->index >= MEM_BLOCK_SZ) {
         CMUTIL_MemLogWithStack("*** FATAL - memory index out of bound. "
                                "is this memory allocated using CMAlloc?");
         return NULL;
@@ -338,7 +379,7 @@ CMUTIL_STATIC void *CMUTIL_MemRcyRealloc(void *ptr, size_t size)
     if (node->index == nidx) {
         CMUTIL_MemRcyList *list;
         list = &g_cmutil_memrcyblocks[nidx];
-        CMCall(list->mutex, Unlock);
+        CMCall(list->mutex, Lock);
         list->usedsize += (size - node->size);
         node->size = size;
         CMCall(list->mutex, Unlock);
@@ -355,7 +396,10 @@ CMUTIL_STATIC void *CMUTIL_MemRcyRealloc(void *ptr, size_t size)
         return ptr;
     } else {
         void *res = CMUTIL_MemRcyAlloc(size);
-        memcpy(res, ptr, node->size);
+        if (res == NULL)
+            return NULL;
+        // copy only what fits in both blocks.
+        memcpy(res, ptr, size < node->size? size:node->size);
         CMUTIL_MemRcyFree(ptr);
         return res;
     }
@@ -366,6 +410,8 @@ CMUTIL_STATIC char *CMUTIL_MemRcyStrdup(const char *str)
     if (str) {
         size_t size = strlen(str)+1;
         char *res = CMUTIL_MemRcyAlloc(size);
+        if (res == NULL)
+            return NULL;
         memcpy(res, str, size);
         return res;
     } else {
@@ -421,17 +467,18 @@ CMBool CMUTIL_MemDebugClear()
             CMUTIL_MemRcyList *list = &g_cmutil_memrcyblocks[i];
             // TODO: print used items;
             if (CMCall(list->used, GetSize) > 0) {
-                CMUTIL_MemLog("*** FATAL - index:%d count:%d "
-                              "total:%ld byte memory leak detected.",
+                CMUTIL_MemLog("*** FATAL - index:%u count:%d "
+                              "total:%zu byte memory leak detected.",
                               i, list->cnt - list->avlcnt, list->usedsize);
                 if (g_cmutil_memoper == CMMemDebug) {
                     uint32_t j;
                     for (j=0; j<CMCall(list->used, GetSize); j++) {
                         CMUTIL_MemNode *node = (CMUTIL_MemNode*)CMCall(
                                     list->used, GetAt, j);
-                        CMUTIL_MemLog("* %dth memory leak. size:%d%s"S_CRLF,
+                        CMUTIL_MemLog("* %uth memory leak. size:%zu%s"S_CRLF,
                                       j, node->size,
-                                      CMCall(node->stack, GetCString));
+                                      node->stack?
+                                          CMCall(node->stack, GetCString):"");
                     }
                 }
                 res = CMFalse;

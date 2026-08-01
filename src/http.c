@@ -35,6 +35,10 @@ SOFTWARE.
 
 CMUTIL_LogDefine("cmutils.http")
 
+// upper bound for a single response body / chunk, guards against
+// absurd or hostile length headers.
+#define CMUTIL_HTTP_MAX_BODY    (1024L*1024L*1024L)
+
 struct CMUTIL_HttpContext {
     CMUTIL_Map      *socket_pools;
     CMUTIL_Mutex    *socket_pools_mutex;
@@ -117,7 +121,7 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_HttpContextGetSocket(
     CMUTIL_Pool *pool = NULL;
     CMUTIL_SocketPoolElem *elem = NULL;
     char buf[256];
-    sprintf(buf, "%s:%d", host, port);
+    snprintf(buf, sizeof(buf), "%s:%d", host, port);
     CMCall(g_httpctx.socket_pools_mutex, Lock);
     pool = CMCall(g_httpctx.socket_pools, Get, buf);
     if (pool)
@@ -162,7 +166,7 @@ CMUTIL_STATIC CMBool CMUTIL_HttpContextPutSocket(
     CMUTIL_Pool *pool = NULL;
     char buf[256];
     CMBool res = CMFalse;
-    sprintf(buf, "%s:%d", host, port);
+    snprintf(buf, sizeof(buf), "%s:%d", host, port);
     CMCall(g_httpctx.socket_pools_mutex, Lock);
     pool = CMCall(g_httpctx.socket_pools, Get, buf);
     if (pool == NULL) {
@@ -215,9 +219,18 @@ CMUTIL_STATIC CMBool CMUTIL_HttpClientSetSSLCert(
     const char *cafile)
 {
     CMUTIL_HttpClient_Internal *ih = (CMUTIL_HttpClient_Internal *)client;
-    strcpy(ih->certfile, certfile);
-    strcpy(ih->keyfile, keyfile);
-    strcpy(ih->cafile, cafile);
+    if ((certfile && strlen(certfile) >= sizeof(ih->certfile)) ||
+        (keyfile && strlen(keyfile) >= sizeof(ih->keyfile)) ||
+        (cafile && strlen(cafile) >= sizeof(ih->cafile))) {
+        CMLogError("certificate file path too long");
+        return CMFalse;
+    }
+    memset(ih->certfile, 0x0, sizeof(ih->certfile));
+    memset(ih->keyfile, 0x0, sizeof(ih->keyfile));
+    memset(ih->cafile, 0x0, sizeof(ih->cafile));
+    if (certfile) strcpy(ih->certfile, certfile);
+    if (keyfile) strcpy(ih->keyfile, keyfile);
+    if (cafile) strcpy(ih->cafile, cafile);
     return CMTrue;
 }
 
@@ -296,9 +309,13 @@ CMUTIL_STATIC char *CMUTIL_HttpClientLineValue(char *buf, const char *header)
     char hbuf[128];
     char *p = strchr(buf, ':');
     char *q = p;
+    size_t hlen;
     if (p == NULL) return NULL;
-    strncpy(hbuf, buf, p-buf);
-    hbuf[p-buf] = '\0';
+    hlen = (size_t)(p - buf);
+    // header name longer than the local buffer cannot match anything.
+    if (hlen >= sizeof(hbuf)) return NULL;
+    memcpy(hbuf, buf, hlen);
+    hbuf[hlen] = '\0';
     p = CMUTIL_StrTrim(hbuf);
     if (strcasecmp(p, header) == 0) {
         q++;
@@ -347,7 +364,7 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
         return NULL;
     }
 
-    sprintf(buf, "%s %s HTTP/1.1", method, uri);
+    snprintf(buf, sizeof(buf), "%s %s HTTP/1.1", method, uri);
     sr = CMUTIL_HttpClientWriteLine(sock, buf, timeout);
     if (sr != CMSocketOk) {
         CMLogError("failed to write request line");
@@ -360,7 +377,7 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
         int i;
         for (i=0; i<CMCall(pairs, GetSize); i++) {
             CMUTIL_MapPair *pair = CMCall(pairs, GetAt, i);
-            sprintf(buf, "%s: %s",
+            snprintf(buf, sizeof(buf), "%s: %s",
                 CMCall(pair, GetKey),
                 (char*)CMCall(pair, GetValue));
             if (strcasecmp("Host", CMCall(pair, GetKey)) == 0)
@@ -375,7 +392,7 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
         }
     }
     if (needHost) {
-        sprintf(buf, "Host: %s:%d", ih->host, ih->port);
+        snprintf(buf, sizeof(buf), "Host: %s:%d", ih->host, ih->port);
         sr = CMUTIL_HttpClientWriteLine(sock, buf, timeout);
         if (sr != CMSocketOk) {
             CMLogError("failed to write header line");
@@ -383,9 +400,9 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
         }
     }
     if (!ih->keepalive) {
-        sprintf(buf, "Connection: close");
+        snprintf(buf, sizeof(buf), "Connection: close");
     } else {
-        sprintf(buf, "Connection: keep-alive");
+        snprintf(buf, sizeof(buf), "Connection: keep-alive");
     }
     sr = CMUTIL_HttpClientWriteLine(sock, buf, timeout);
     if (sr != CMSocketOk) {
@@ -395,7 +412,8 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
     if (strcasecmp(method, "POST") == 0 || strcasecmp(method, "PUT") == 0) {
         if (body != NULL) {
             if (needLength) {
-                sprintf(buf, "Content-Length: %zu", CMCall(body, GetSize));
+                snprintf(buf, sizeof(buf), "Content-Length: %zu",
+                    CMCall(body, GetSize));
                 sr = CMUTIL_HttpClientWriteLine(sock, buf, timeout);
                 if (sr != CMSocketOk) {
                     CMLogError("failed to write header line");
@@ -443,11 +461,14 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
             CMLogError("failed to parse status line");
             goto FAILED;
         }
-        q = strchr(p, ' ');
+        // p points at the space before the status code,
+        // the reason phrase starts after the next one.
+        q = strchr(p+1, ' ');
         if (q) *q = '\0';
         *status = (int)strtol(p+1, NULL, 10);
         if (*status != 200) {
-            CMLogWarn("status code is not 200: %d - %s", *status, q+1);
+            CMLogWarn("status code is not 200: %d - %s",
+                      *status, q? q+1:"");
        }
     }
 
@@ -465,7 +486,13 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
         }
         p = CMUTIL_HttpClientLineValue(buf, "Content-Length");
         if (p) {
-            len = strtol(p, NULL, 10);
+            char *endp = NULL;
+            const long clen = strtol(p, &endp, 10);
+            if (endp == p || clen < 0 || clen > CMUTIL_HTTP_MAX_BODY) {
+                CMLogError("invalid Content-Length: %s", p);
+                goto FAILED;
+            }
+            len = (size_t)clen;
             continue;
         }
         p = CMUTIL_HttpClientLineValue(buf, "Transfer-Encoding");
@@ -486,35 +513,40 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
 
     if (len > 0) {
         res = CMUTIL_ByteBufferCreateInternal(ih->memst, len);
-        sr = CMCall(sock, Read, res, len, timeout);
-        if (sr == CMSocketOk) {
-            goto ENDPOINT;
+        sr = CMCall(sock, Read, res, (uint32_t)len, timeout);
+        if (sr != CMSocketOk) {
+            CMLogError("failed to read response body");
+            goto FAILED;
         }
-        CMLogError("failed to read response body");
-    } else {
-        if (strstr(transfer, "chunked")) {
-            res = CMUTIL_ByteBufferCreateInternal(ih->memst, 2048);
-            while (CMUTIL_HttpClientReadLine(sock, buf, sizeof(buf), timeout)) {
-                if (*buf == '\0')
-                    break;
-                len = strtol(buf, NULL, 16);
-                if (len == 0) {
-                    // consume chunk end \r\n
-                    CMUTIL_HttpClientReadLine(sock, buf, sizeof(buf), timeout);
-                    break;
-                }
-                sr = CMCall(sock, Read, res, len, timeout);
-                if (sr != CMSocketOk) {
-                    CMLogError("failed to read response body");
-                    goto FAILED;
-                }
+    } else if (strstr(transfer, "chunked")) {
+        res = CMUTIL_ByteBufferCreateInternal(ih->memst, 2048);
+        while (CMUTIL_HttpClientReadLine(sock, buf, sizeof(buf), timeout)) {
+            char *endp = NULL;
+            long clen;
+            if (*buf == '\0')
+                break;
+            clen = strtol(buf, &endp, 16);
+            if (endp == buf || clen < 0 || clen > CMUTIL_HTTP_MAX_BODY) {
+                CMLogError("invalid chunk size: %s", buf);
+                goto FAILED;
+            }
+            if (clen == 0) {
                 // consume chunk end \r\n
                 CMUTIL_HttpClientReadLine(sock, buf, sizeof(buf), timeout);
+                break;
             }
-        } else {
-            CMLogError("unknown transfer encoding: %s", transfer);
-            goto FAILED;
-       }
+            sr = CMCall(sock, Read, res, (uint32_t)clen, timeout);
+            if (sr != CMSocketOk) {
+                CMLogError("failed to read response body");
+                goto FAILED;
+            }
+            // consume chunk end \r\n
+            CMUTIL_HttpClientReadLine(sock, buf, sizeof(buf), timeout);
+        }
+    } else {
+        // no body at all(Content-Length: 0, 204, 304 or HEAD response),
+        // which is a perfectly valid response.
+        res = CMUTIL_ByteBufferCreateInternal(ih->memst, 1);
     }
     if (keepalive) {
         // save connection for later use.
@@ -577,33 +609,51 @@ CMUTIL_STATIC CMBool CMUTIL_HttpClientParseUrl(
     CMUTIL_HttpClient_Internal *ih, const char *url)
 {
     char buf[256];
+    size_t hlen, plen;
     const char *p = strchr(url, ':');
     const char *q = NULL;
     if (p == NULL) return CMFalse;
-    ih->ishttps = (strncmp(url, "https", p-url) == 0) ? CMTrue : CMFalse;
+    if (strncmp(p, "://", 3) != 0) {
+        CMLogError("invalid url: %s", url);
+        return CMFalse;
+    }
+    // the whole scheme must match, not only as many characters as it has.
+    ih->ishttps = ((size_t)(p - url) == 5 && strncmp(url, "https", 5) == 0)?
+                CMTrue:CMFalse;
     p += 3;
     q = strchr(p, ':');
     if (q) {
-        strncpy(ih->host, p, q-p);
-        ih->host[q-p] = '\0';
+        hlen = (size_t)(q - p);
+        if (hlen == 0 || hlen >= sizeof(ih->host)) {
+            CMLogError("invalid or too long host name in url: %s", url);
+            return CMFalse;
+        }
+        memcpy(ih->host, p, hlen);
+        ih->host[hlen] = '\0';
         q++;
         p = strchr(q, '/');
-        if (p) {
-            strncpy(buf, q, p-q);
-            buf[p-q] = '\0';
-        } else {
-            strcpy(buf, q);
+        plen = p? (size_t)(p - q):strlen(q);
+        if (plen == 0 || plen >= sizeof(buf)) {
+            CMLogError("invalid port in url: %s", url);
+            return CMFalse;
         }
+        memcpy(buf, q, plen);
+        buf[plen] = '\0';
         ih->port = (int)strtol(buf, NULL, 10);
+        if (ih->port <= 0 || ih->port > 65535) {
+            CMLogError("invalid port in url: %s", url);
+            return CMFalse;
+        }
     } else {
         q = strchr(p, '/');
-        if (q) {
-            strncpy(ih->host, p, p-q);
-            ih->host[p-q] = '\0';
-        } else {
-            strcpy(ih->host, p);
+        hlen = q? (size_t)(q - p):strlen(p);
+        if (hlen == 0 || hlen >= sizeof(ih->host)) {
+            CMLogError("invalid or too long host name in url: %s", url);
+            return CMFalse;
         }
-        ih->port = ih->ishttps ? 443 : 80;
+        memcpy(ih->host, p, hlen);
+        ih->host[hlen] = '\0';
+        ih->port = ih->ishttps? 443:80;
     }
     return CMTrue;
 }
@@ -618,6 +668,7 @@ CMUTIL_HttpClient *CMUTIL_HttpClientCreateInternal(
     ih->memst = memst;
     ih->keepalive = CMTrue;
     if (!CMUTIL_HttpClientParseUrl(ih, urlprefix)) {
+        memst->Free(ih);
         return NULL;
     }
     ih->verifyhost = CMTrue;

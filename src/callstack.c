@@ -165,9 +165,33 @@ static tSGSP pSGSP;
 static HANDLE hProcess;
 static DWORD dwProcessId;
 
+#if defined(_MSC_VER)
+# define CMUTIL_CS_STRDUP _strdup
+#else
+# define CMUTIL_CS_STRDUP strdup
+#endif
+
+// dbghelp APIs are not thread safe, every stack walk must be serialized.
+// this module is initialized before(and cleared after) the debugging
+// allocator, so system allocator must be used here.
+static CMUTIL_Mem g_cmutil_callstack_memsys = {
+    malloc,
+    calloc,
+    realloc,
+    CMUTIL_CS_STRDUP,
+    free
+};
+
+static CMUTIL_Mutex *g_cmutil_callstack_mutex = NULL;
+
 void CMUTIL_CallStackInit()
 {
     char szTemp[4096] = { 0, };
+
+    if (g_cmutil_callstack_mutex == NULL)
+        g_cmutil_callstack_mutex = CMUTIL_MutexCreateInternal(
+            &g_cmutil_callstack_memsys);
+
     // But before wqe do this, we first check if the ".local" file exists
     if (GetModuleFileName(NULL, szTemp, 4096) > 0)
     {
@@ -236,27 +260,41 @@ void CMUTIL_CallStackInit()
         pSGSP = (tSGSP)GetProcAddress(
             g_cmutil_hDbhHelp, "SymGetSearchPath");
 
-        if (pSI(hProcess, NULL, FALSE) == FALSE) {
+        if (pSI != NULL && pSI(hProcess, NULL, FALSE) == FALSE) {
             // TODO: report error
         }
 
-        DWORD symOptions = pSGO();  // SymGetOptions
-        symOptions |= SYMOPT_LOAD_LINES;
-        symOptions |= SYMOPT_FAIL_CRITICAL_ERRORS;
-        //symOptions |= SYMOPT_NO_PROMPTS;
-        // SymSetOptions
-        symOptions = pSSO(symOptions);
+        if (pSGO != NULL && pSSO != NULL) {
+            DWORD symOptions = pSGO();  // SymGetOptions
+            symOptions |= SYMOPT_LOAD_LINES;
+            symOptions |= SYMOPT_FAIL_CRITICAL_ERRORS;
+            //symOptions |= SYMOPT_NO_PROMPTS;
+            // SymSetOptions
+            symOptions = pSSO(symOptions);
+            CMUTIL_UNUSED(symOptions);
+        }
     }
 }
 
 void CMUTIL_CallStackClear()
 {
+    if (g_cmutil_callstack_mutex)
+        CMCall(g_cmutil_callstack_mutex, Lock);
     if (pSC != NULL && hProcess != NULL)
         pSC(hProcess);
     hProcess = NULL;
     if (g_cmutil_hDbhHelp)
         FreeLibrary(g_cmutil_hDbhHelp);
     g_cmutil_hDbhHelp = NULL;
+    pSC = NULL; pSFTA = NULL; pSGLFA = NULL; pSGMB = NULL; pSGMI = NULL;
+    pSGO = NULL; pSGSFA = NULL; pSI = NULL; pSLM = NULL; pSSO = NULL;
+    pSW = NULL; pUDSN = NULL; pSGSP = NULL;
+    if (g_cmutil_callstack_mutex) {
+        CMUTIL_Mutex *mutex = g_cmutil_callstack_mutex;
+        g_cmutil_callstack_mutex = NULL;
+        CMCall(mutex, Unlock);
+        CMCall(mutex, Destroy);
+    }
 }
 
 // **************************************** ToolHelp32 ************************
@@ -349,8 +387,10 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerGetModuleListTH32(
         return FALSE;
 
     hSnap = pCT32S(TH32CS_SNAPMODULE, dwProcessId);
-    if (hSnap == (HANDLE)-1)
+    if (hSnap == (HANDLE)-1 || hSnap == NULL) {
+        FreeLibrary(hToolhelp);
         return FALSE;
+    }
 
     keepGoing = !!pM32F(hSnap, &me);
     int cnt = 0;
@@ -464,9 +504,13 @@ CMUTIL_STATIC DWORD CMUTIL_StackWalkerLoadModule(
     const CMUTIL_StackWalker_Internal *walker,
     LPCSTR img, LPCSTR mod, DWORD64 baseAddr, DWORD size)
 {
-    CHAR *szImg = walker->memst->Strdup(img);
-    CHAR *szMod = walker->memst->Strdup(mod);
+    CHAR *szImg;
+    CHAR *szMod;
     DWORD result = ERROR_SUCCESS;
+    if (pSLM == NULL)
+        return ERROR_DLL_INIT_FAILED;
+    szImg = walker->memst->Strdup(img);
+    szMod = walker->memst->Strdup(mod);
     if ((szImg == NULL) || (szMod == NULL))
         result = ERROR_NOT_ENOUGH_MEMORY;
     else
@@ -588,6 +632,15 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerShowCallstack(
     int frameNum;
     HANDLE hThread = GetCurrentThread();
 
+    // dbghelp may not be available at all, nothing can be done then.
+    if (g_cmutil_callstack_mutex == NULL || hProcess == NULL ||
+        pSW == NULL || pSFTA == NULL || pSGMB == NULL)
+        return FALSE;
+
+    // dbghelp APIs are single threaded, serialize whole walk including
+    // module loading.
+    CMCall(g_cmutil_callstack_mutex, Lock);
+
     // modules are loaded already
     //if (walker->m_modulesLoaded == FALSE)
     CMCall(walker, LoadModules);  // ignore the result...
@@ -687,16 +740,19 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerShowCallstack(
         {
             // we seem to have a valid PC
             // show procedure info (SymGetSymFromAddr64())
-            if (pSGSFA(hProcess, s.AddrPC.Offset, &(csEntry.offsetFromSmybol),
+            if (pSGSFA != NULL &&
+                pSGSFA(hProcess, s.AddrPC.Offset, &(csEntry.offsetFromSmybol),
                 pSym) != FALSE)
             {
-                // TODO: Mache dies sicher...!
-                strcpy(csEntry.name, pSym->Name);
+                strncpy(csEntry.name, pSym->Name, STACKWALK_MAX_NAMELEN - 1);
+                csEntry.name[STACKWALK_MAX_NAMELEN - 1] = 0;
                 // UnDecorateSymbolName()
-                pUDSN(pSym->Name, csEntry.undName,
-                    STACKWALK_MAX_NAMELEN, UNDNAME_NAME_ONLY);
-                pUDSN(pSym->Name, csEntry.undFullName,
-                    STACKWALK_MAX_NAMELEN, UNDNAME_COMPLETE);
+                if (pUDSN != NULL) {
+                    pUDSN(pSym->Name, csEntry.undName,
+                        STACKWALK_MAX_NAMELEN, UNDNAME_NAME_ONLY);
+                    pUDSN(pSym->Name, csEntry.undFullName,
+                        STACKWALK_MAX_NAMELEN, UNDNAME_COMPLETE);
+                }
             }
             else
             {
@@ -712,8 +768,9 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerShowCallstack(
                     &(csEntry.offsetFromLine), &Line) != FALSE)
                 {
                     csEntry.lineNumber = Line.LineNumber;
-                    // TODO: Mache dies sicher...!
-                    strcpy(csEntry.lineFileName, Line.FileName);
+                    strncpy(csEntry.lineFileName, Line.FileName,
+                        STACKWALK_MAX_NAMELEN - 1);
+                    csEntry.lineFileName[STACKWALK_MAX_NAMELEN - 1] = 0;
                 }
                 else
                 {
@@ -744,7 +801,9 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerShowCallstack(
         if (frameNum == 0)
             et = firstEntry;
         {
-            CHAR buffer[STACKWALK_MAX_NAMELEN];
+            // name and lineFileName may be up to STACKWALK_MAX_NAMELEN-1
+            // characters each, so the formatted line needs a larger buffer.
+            CHAR buffer[STACKWALK_MAX_NAMELEN * 3];
             if ((et != lastEntry) && (csEntry.offset != 0))
             {
                 int len;
@@ -760,15 +819,23 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerShowCallstack(
                     if (csEntry.moduleName[0] == 0)
                         strcpy(csEntry.moduleName,
                             "(module-name not available)");
-                    len = _snprintf(buffer, STACKWALK_MAX_NAMELEN,
+                    len = snprintf(buffer, sizeof(buffer),
                         "%p (%s): %s: %s\n", (LPVOID)csEntry.offset,
                         csEntry.moduleName, csEntry.lineFileName, csEntry.name);
                 }
                 else
-                    len = _snprintf(buffer, STACKWALK_MAX_NAMELEN,
+                    len = snprintf(buffer, sizeof(buffer),
                         "%s (%d): %s\n", csEntry.lineFileName,
                         (int)csEntry.lineNumber, csEntry.name);
-                readMemoryFunction(buffer, len, pUserData);
+                // snprintf may fail(negative) or report the untruncated
+                // length, clamp it to what really resides in the buffer.
+                if (len < 0)
+                    len = 0;
+                if (len > (int)(sizeof(buffer) - 1))
+                    len = (int)(sizeof(buffer) - 1);
+                buffer[len] = 0;
+                if (len > 0)
+                    readMemoryFunction(buffer, (size_t)len, pUserData);
             }
         }
 
@@ -782,6 +849,8 @@ CMUTIL_STATIC BOOL CMUTIL_StackWalkerShowCallstack(
 
 cleanup:
     if (pSym) walker->memst->Free(pSym);
+
+    CMCall(g_cmutil_callstack_mutex, Unlock);
 
     return TRUE;
 }
@@ -899,12 +968,16 @@ void CMUTIL_CallStackClear()
 }
 
 #if defined(SUNOS)
+
+#include <ucontext.h>
+#include <dlfcn.h>
+
 typedef struct CMUTIL_StackWalkerCtx {
     int currdepth;
     int stdepth;
     CMUTIL_StringArray *stack;
     CMUTIL_String *buffer;
-    CMUTIL_StackWalker_Internal *walker;
+    const CMUTIL_StackWalker_Internal *walker;
 } CMUTIL_StackWalkerCtx;
 
 CMUTIL_STATIC int CMUTIL_StackWalkerIterator(
@@ -912,23 +985,24 @@ CMUTIL_STATIC int CMUTIL_StackWalkerIterator(
 {
     Dl_info dlip;
 
+    CMUTIL_UNUSED(sig);
     if (dladdr((void*)pc, &dlip)) {
         CMUTIL_StackWalkerCtx *stk = (CMUTIL_StackWalkerCtx*)uarg;
-        if (wtemp->depth++ > wtemp->stdepth) {
-            if (wtemp->buffer) {
-                CMCall(wtemp->buffer, AddPrint, "\n%08lx %s %s",
-                    pc, dlip.dli_fname, dlip.dli_sname);
-            } else {
+        const char *fname = dlip.dli_fname? dlip.dli_fname:"(unknown)";
+        const char *sname = dlip.dli_sname? dlip.dli_sname:"(unknown)";
+        if (stk->currdepth++ > stk->stdepth) {
+            if (stk->buffer) {
+                CMCall(stk->buffer, AddPrint, "\n%08lx %s %s",
+                    pc, fname, sname);
+            } else if (stk->stack) {
                 CMUTIL_String *item = CMUTIL_StringCreateInternal(
-                            50, NULL, stk->walker->memst);
+                            stk->walker->memst, 50, NULL);
                 CMCall(item, AddPrint, "%08lx %s %s",
-                    pc, dlip.dli_fname, dlip.dli_sname);
-                CMCall(item->stack, Add, item);
+                    pc, fname, sname);
+                CMCall(stk->stack, Add, item);
             }
-            return 0;
-        } else {
-            return -1;
         }
+        return 0;
     }
     else {
         return -1;
@@ -945,7 +1019,7 @@ CMUTIL_STATIC CMUTIL_StringArray *CMUTIL_StackWalkerGetStack(
         CMUTIL_StackWalkerCtx wtemp = {
             0, skipdepth+1,
             CMUTIL_StringArrayCreateInternal(iwalker->memst, 10),
-            NULL, walker
+            NULL, iwalker
         };
         walkcontext(&ucp, CMUTIL_StackWalkerIterator, &wtemp);
         return wtemp.stack;

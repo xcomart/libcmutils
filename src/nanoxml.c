@@ -38,10 +38,10 @@ static char g_cmutil_xml_escape[] = {
         0,0,0,0,0,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,
-        0,0,0,1,0,0,0,1,1,0,
+        0,0,0,0,1,0,0,0,1,1,
         0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,1,
-        0,1,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,
+        1,0,1,0,0,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,
@@ -67,10 +67,10 @@ static char *g_cmutil_xml_escape_str[] = {
         0,0,0,0,0,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,
-        0,0,0,"&quot;",0,0,0,"&amp;","&apos;",0,
+        0,0,0,0,"&quot;",0,0,0,"&amp;","&apos;",
         0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,"&lt;",
-        0,"&gt;",0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,
+        "&lt;",0,"&gt;",0,0,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,
@@ -223,18 +223,18 @@ CMUTIL_STATIC void CMUTIL_XmlEscape(
 {
     const uint8_t *p = (const uint8_t*)CMCall(src, GetCString);
     const uint8_t *stpos = p;
-    char c;
-    while ((c = (char)*p)) {
-        if (g_cmutil_xml_escape[(int)c]) {
+    uint8_t c;
+    while ((c = *p)) {
+        if (g_cmutil_xml_escape[c]) {
             char *q;
             if (stpos < p)
                 CMCall(dest, AddNString,
                        (const char*)stpos, (uint32_t)(p - stpos));
-            q = g_cmutil_xml_escape_str[(int)c];
+            q = g_cmutil_xml_escape_str[c];
             if (q)
                 CMCall(dest, AddString, q);
             else
-                CMCall(dest, AddChar, c);
+                CMCall(dest, AddChar, (char)c);
             stpos = ++p;
         } else {
             p++;
@@ -434,16 +434,88 @@ typedef struct CMUTIL_XmlParseCtx {
     int             dummy_padder;
 } CMUTIL_XmlParseCtx;
 
+// context excerpt must never read past ctx->remain, the input is not
+// guaranteed to be null terminated.
+#define CMUTIL_XML_EXCERPT(buf) do { \
+    size_t __n = (ctx->remain > 0)? \
+        ((ctx->remain > 40)? (size_t)40:(size_t)ctx->remain):(size_t)0; \
+    memcpy(buf, ctx->pos, __n); (buf)[__n] = 0x0; strcat(buf, "..."); \
+    } while(0)
 #define DO_BOOL(...) do { if (!(__VA_ARGS__)) { \
     char __buf[50] = {0,};    \
-    strncat(__buf, ctx->pos, 40); strcat(__buf, "..."); \
+    CMUTIL_XML_EXCERPT(__buf); \
     CMLogError("xml parse failed near '%s'", __buf);  \
     return CMFalse; } } while(0)
 #define DO_OBJ(...) do { if (!(__VA_ARGS__)) { \
     char __buf[50] = {0,};\
-    strncat(__buf, ctx->pos, 40); strcat(__buf, "..."); \
+    CMUTIL_XML_EXCERPT(__buf); \
     CMLogError("xml parse failed near '%s'", __buf);  \
     return NULL; } } while(0)
+
+// maximum nesting depth of xml elements, guards against stack exhaustion.
+#define CMUTIL_XML_MAX_DEPTH    256
+
+CMUTIL_STATIC void CMUTIL_XmlAppendUTF8(
+        CMUTIL_String *dest, uint32_t codepoint)
+{
+    char out[4];
+    if (codepoint < 0x80) {
+        CMCall(dest, AddChar, (char)codepoint);
+    } else if (codepoint < 0x800) {
+        out[0] = (char)(0xC0 | (codepoint >> 6));
+        out[1] = (char)(0x80 | (codepoint & 0x3F));
+        CMCall(dest, AddNString, out, 2);
+    } else if (codepoint < 0x10000) {
+        out[0] = (char)(0xE0 | (codepoint >> 12));
+        out[1] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+        out[2] = (char)(0x80 | (codepoint & 0x3F));
+        CMCall(dest, AddNString, out, 3);
+    } else {
+        out[0] = (char)(0xF0 | (codepoint >> 18));
+        out[1] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
+        out[2] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+        out[3] = (char)(0x80 | (codepoint & 0x3F));
+        CMCall(dest, AddNString, out, 4);
+    }
+}
+
+// bounded counterparts of strchr/strstr, the parser input is length
+// delimited and may not be null terminated.
+CMUTIL_STATIC const char *CMUTIL_XmlFindChar(
+        const char *s, int64_t remain, char c)
+{
+    if (remain <= 0) return NULL;
+    return (const char*)memchr(s, c, (size_t)remain);
+}
+
+CMUTIL_STATIC const char *CMUTIL_XmlFindStr(
+        const char *s, int64_t remain, const char *needle)
+{
+    size_t nlen = strlen(needle);
+    size_t i, limit;
+    if (remain < (int64_t)nlen) return NULL;
+    limit = (size_t)remain - nlen;
+    for (i = 0; i <= limit; i++)
+        if (memcmp(s + i, needle, nlen) == 0)
+            return s + i;
+    return NULL;
+}
+
+CMUTIL_STATIC void CMUTIL_XmlApplyCharset(
+        CMUTIL_String *dest, CMUTIL_XmlParseCtx *ctx)
+{
+    if (ctx->cconv) {
+        // convert encoding to utf-8
+        CMUTIL_String *ndst = CMCall(ctx->cconv, Forward, dest);
+        if (ndst) {
+            size_t len = CMCall(ndst, GetSize);
+            const char *p = CMCall(ndst, GetCString);
+            CMCall(dest, Clear);
+            CMCall(dest, AddNString, p, len);
+            CMCall(ndst, Destroy);
+        }
+    }
+}
 
 CMUTIL_STATIC CMBool CMUTIL_XmlUnescape(
         CMUTIL_String *dest, CMUTIL_String *src,
@@ -458,11 +530,29 @@ CMUTIL_STATIC CMBool CMUTIL_XmlUnescape(
             if (q > p)
                 CMCall(dest, AddNString, p, (uint64_t)(q-p));
             strncat(keybuf, q+1, (uint64_t)(r-q-1));
-            v = (char*)CMCall(g_cmutil_xml_escape_map, Get, keybuf);
-            if (v)
-                CMCall(dest, AddString, v);
-            else
-                return CMFalse;
+            if (*keybuf == '#') {
+                // numeric character reference: '&#nnn;' or '&#xhh;'
+                const char *dstart = (keybuf[1] == 'x' || keybuf[1] == 'X')?
+                            keybuf+2 : keybuf+1;
+                int base = (keybuf[1] == 'x' || keybuf[1] == 'X')? 16 : 10;
+                char *eptr = NULL;
+                unsigned long cp = strtoul(dstart, &eptr, base);
+                if (eptr == dstart || eptr == NULL || *eptr != '\0' ||
+                        cp == 0 || cp > 0x10FFFFuL) {
+                    CMLogErrorS(
+                        "invalid xml: bad character reference '&%s;'", keybuf);
+                    return CMFalse;
+                }
+                CMUTIL_XmlAppendUTF8(dest, (uint32_t)cp);
+            } else {
+                v = (char*)CMCall(g_cmutil_xml_escape_map, Get, keybuf);
+                if (v) {
+                    CMCall(dest, AddString, v);
+                } else {
+                    CMLogErrorS("invalid xml: unknown entity '&%s;'", keybuf);
+                    return CMFalse;
+                }
+            }
             p = r + 1;
         } else {
             return CMFalse;
@@ -473,15 +563,7 @@ CMUTIL_STATIC CMBool CMUTIL_XmlUnescape(
         CMCall(dest, AddNString, p, len);
     }
 
-    if (ctx->cconv) {
-        // convert encoding to utf-8
-        CMUTIL_String *ndst = CMCall(ctx->cconv, Forward, dest);
-        size_t len = CMCall(ndst, GetSize);
-        const char *p = CMCall(ndst, GetCString);
-        CMCall(dest, Clear);
-        CMCall(dest, AddNString, p, len);
-        CMCall(ndst, Destroy);
-    }
+    CMUTIL_XmlApplyCharset(dest, ctx);
 
     return CMTrue;
 }
@@ -517,48 +599,57 @@ CMUTIL_STATIC CMBool CMUTIL_XmlNextSub(
 }
 
 CMUTIL_STATIC CMBool CMUTIL_XmlNextToken(
-        char *buf, CMUTIL_XmlParseCtx *ctx)
+        char *buf, size_t bufsz, CMUTIL_XmlParseCtx *ctx)
 {
     register const char *p = ctx->pos;
-    register char *q = buf;
-    while (ctx->remain > 0 && *p && !strchr(g_cmutil_delims, *p)) {
-        *q++ = *p++; ctx->remain--;
+    int64_t remain = ctx->remain;
+    size_t cnt = 0;
+    if (buf == NULL || bufsz == 0) return CMFalse;
+    while (remain > 0 && *p && !strchr(g_cmutil_delims, *p)) {
+        if (cnt + 1 >= bufsz) {
+            CMLogErrorS("invalid xml: token exceeds buffer size(%u)",
+                        (uint32_t)bufsz);
+            return CMFalse;
+        }
+        buf[cnt++] = *p++; remain--;
     }
-    if (ctx->remain >= 0) {
-        *q = 0x0;
-        ctx->pos = p;
-        return CMTrue;
-    } else {
-        return CMFalse;
-    }
+    buf[cnt] = 0x0;
+    ctx->pos = p;
+    ctx->remain = remain;
+    return CMTrue;
 }
 
 CMUTIL_STATIC CMBool CMUTIL_XmlParseHeader(CMUTIL_XmlParseCtx *ctx)
 {
-    char buf[20];
+    char buf[64];
     DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
     DO_BOOL(CMUTIL_XmlNextSub(buf, ctx, 2));
     if (strcmp(buf, "<?") == 0) {
         DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
-        DO_BOOL(CMUTIL_XmlNextToken(buf, ctx));
+        DO_BOOL(CMUTIL_XmlNextToken(buf, sizeof(buf), ctx));
         // 'buf' may contain 'xml'
         DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
-        while (*(ctx->pos) != '?') {
+        while (ctx->remain > 0 && *(ctx->pos) != '?') {
             CMBool isenc;
-            DO_BOOL(CMUTIL_XmlNextToken(buf, ctx));
+            DO_BOOL(CMUTIL_XmlNextToken(buf, sizeof(buf), ctx));
             isenc = strcmp(buf, "encoding") == 0?
                     CMTrue:CMFalse;
             DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, 2));
-            DO_BOOL(CMUTIL_XmlNextToken(buf, ctx));
+            DO_BOOL(CMUTIL_XmlNextToken(buf, sizeof(buf), ctx));
             if (isenc) {
-                const char *p = strchr(ctx->pos, '?');
+                const char *p = CMUTIL_XmlFindChar(ctx->pos, ctx->remain, '?');
                 if (!p) return CMFalse;
+                if (strlen(buf) >= sizeof(ctx->encoding)) {
+                    CMLogErrorS("invalid xml: encoding name too long");
+                    return CMFalse;
+                }
                 strcpy(ctx->encoding, buf);
                 CMUTIL_XmlNextSub(NULL, ctx, (uint64_t)(p - ctx->pos));
             } else {
                 CMUTIL_XmlNextSub(NULL, ctx, 1);
             }
         }
+        DO_BOOL(ctx->remain > 0);
         DO_BOOL(CMUTIL_XmlNextSub(buf, ctx, 2));
         return CMTrue;
     } else {
@@ -580,12 +671,11 @@ CMUTIL_STATIC CMBool CMUTIL_XmlNextChar(
 }
 
 CMUTIL_STATIC CMBool CMUTIL_XmlStartsWith(
-        const char *a, const char *b)
+        const char *a, int64_t remain, const char *b)
 {
-    while (*b && *a == *b) {
-        a++; b++;
-    }
-    return *b? CMFalse:CMTrue;
+    size_t blen = strlen(b);
+    if (remain < (int64_t)blen) return CMFalse;
+    return memcmp(a, b, blen) == 0? CMTrue:CMFalse;
 }
 
 CMUTIL_STATIC CMBool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
@@ -594,40 +684,58 @@ CMUTIL_STATIC CMBool CMUTIL_XmlParseAttributes(CMUTIL_XmlParseCtx *ctx)
             (CMUTIL_XmlNode*)CMCall(ctx->stack, Top);
     CMUTIL_XmlNode_Internal *inode = (CMUTIL_XmlNode_Internal*)node;
     DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
-    while (!strchr("/>", *(ctx->pos))) {
+    while (ctx->remain > 0 && !strchr("/>", *(ctx->pos))) {
         char attname[1024], attvalue[1024], openc;
-        const char *p;
+        const char *p, *itstart = ctx->pos;
         CMUTIL_String *bfval, *afval;
-        DO_BOOL(CMUTIL_XmlNextToken(attname, ctx));
+        DO_BOOL(CMUTIL_XmlNextToken(attname, sizeof(attname), ctx));
         DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
+        DO_BOOL(ctx->remain > 0);
 
         // may current ctx->pos indicates '='
         if ('=' == *(ctx->pos)) {
+            size_t vlen;
             DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, 1));
             DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
             DO_BOOL(CMUTIL_XmlNextChar(ctx, &openc));
-            p = strchr(ctx->pos, openc);
+            p = CMUTIL_XmlFindChar(ctx->pos, ctx->remain, openc);
             if (!p) {
-                CMLogErrorS("invalid xml");
+                CMLogErrorS("invalid xml: attribute value is not closed");
                 return CMFalse;
             }
-            *attvalue = 0x0;
-            strncat(attvalue, ctx->pos, (uint64_t)(p - ctx->pos));
-            *(attvalue + (uint64_t)(p - ctx->pos)) = 0x0;
-            DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, (uint64_t)(p - ctx->pos + 1)));
+            vlen = (size_t)(p - ctx->pos);
+            if (vlen >= sizeof(attvalue)) {
+                CMLogErrorS("invalid xml: attribute value exceeds buffer "
+                            "size(%u)", (uint32_t)sizeof(attvalue));
+                return CMFalse;
+            }
+            memcpy(attvalue, ctx->pos, vlen);
+            attvalue[vlen] = 0x0;
+            DO_BOOL(CMUTIL_XmlNextSub(NULL, ctx, vlen + 1));
         } else {
             // assume attribute value is 'true' if there is no value part.
             strcpy(attvalue, "true");
         }
         bfval = CMUTIL_StringCreateInternal(ctx->memst, 0, attvalue);
         afval = CMUTIL_StringCreateInternal(
-                    ctx->memst, CMCall(bfval, GetSize), NULL);
-        CMUTIL_XmlUnescape(afval, bfval, ctx);
+                    ctx->memst, CMCall(bfval, GetSize) + 1, NULL);
+        if (!CMUTIL_XmlUnescape(afval, bfval, ctx)) {
+            CMCall(bfval, Destroy);
+            CMCall(afval, Destroy);
+            CMLogErrorS("invalid xml: cannot unescape attribute value");
+            return CMFalse;
+        }
         CMCall(bfval, Destroy); bfval = NULL;
         CMCall(inode->attributes, Put, attname, afval, (void**)&bfval);
         if (bfval) CMCall(bfval, Destroy);
         DO_BOOL(CMUTIL_XmlSkipSpaces(ctx));
+        // guard against non progressing iterations on malformed input.
+        if (ctx->pos == itstart) {
+            CMLogErrorS("invalid xml: unparsable attribute");
+            return CMFalse;
+        }
     }
+    DO_BOOL(ctx->remain > 0);
     return CMTrue;
 }
 
@@ -638,16 +746,23 @@ CMUTIL_STATIC CMUTIL_XmlNode *CMUTIL_XmlParseNode(
     CMUTIL_XmlNode *child = NULL;
     CMUTIL_XmlNode *parent =
             (CMUTIL_XmlNode*)CMCall(ctx->stack, Top);
+    if (CMCall(ctx->stack, GetSize) >= (size_t)CMUTIL_XML_MAX_DEPTH) {
+        CMLogErrorS("invalid xml: maximum nesting depth(%d) exceeded",
+                    CMUTIL_XML_MAX_DEPTH);
+        return NULL;
+    }
 PARSE_NEXT:
     DO_OBJ(CMUTIL_XmlSkipSpaces(ctx));
+    DO_OBJ(ctx->remain > 0);
     if (*(ctx->pos) == '<') {
         const char *p;
         char c;
         DO_OBJ(CMUTIL_XmlNextChar(ctx, &c));
+        DO_OBJ(ctx->remain > 0);
         switch (*(ctx->pos)) {
         case '/':
             // parse close tag
-            p = strchr(ctx->pos, '>');
+            p = CMUTIL_XmlFindChar(ctx->pos, ctx->remain, '>');
             if (p) {
                 CMUTIL_XmlNextSub(NULL, ctx, (uint64_t)(p - ctx->pos + 1));
                 if (isClose)
@@ -660,20 +775,21 @@ PARSE_NEXT:
         case '!':
             // cdata or ignored.
             DO_OBJ(CMUTIL_XmlNextChar(ctx, &c));
-            if (CMUTIL_XmlStartsWith(ctx->pos, "[CDATA[")) {
+            if (CMUTIL_XmlStartsWith(ctx->pos, ctx->remain, "[CDATA[")) {
                 // create text node
                 CMUTIL_XmlNextSub(NULL, ctx, 7);
-                p = strstr(ctx->pos, "]]>");
-                if (!p) return NULL;
+                p = CMUTIL_XmlFindStr(ctx->pos, ctx->remain, "]]>");
+                if (!p) {
+                    CMLogErrorS("invalid xml: CDATA is not closed");
+                    return NULL;
+                }
                 if (parent) {
-                    CMUTIL_String *bfval, *afval;
-                    bfval = CMUTIL_StringCreateInternal(ctx->memst, 10, NULL);
-                    CMCall(bfval, AddNString,
+                    // CDATA content is literal, entities must stay as is.
+                    CMUTIL_String *afval;
+                    afval = CMUTIL_StringCreateInternal(ctx->memst, 10, NULL);
+                    CMCall(afval, AddNString,
                             ctx->pos, (uint64_t)(p - ctx->pos));
-                    afval = CMUTIL_StringCreateInternal(
-                            ctx->memst, CMCall(bfval, GetSize), NULL);
-                    CMUTIL_XmlUnescape(afval, bfval, ctx);
-                    CMCall(bfval, Destroy);
+                    CMUTIL_XmlApplyCharset(afval, ctx);
                     child = CMUTIL_XmlNodeCreateWithLenInternal(
                                 ctx->memst, CMXmlNodeText,
                                 CMCall(afval, GetCString),
@@ -688,7 +804,8 @@ PARSE_NEXT:
                 }
             } else {
                 // ignore contents.
-                const char *p = strchr(ctx->pos+1, '>');
+                const char *p = ctx->remain > 1?
+                        CMUTIL_XmlFindChar(ctx->pos+1, ctx->remain-1, '>'):NULL;
                 if (!p) {
                     CMLogErrorS("invalid xml: no close tag");
                     return NULL;
@@ -698,14 +815,14 @@ PARSE_NEXT:
             }
         default:
             // may be normal node
-            DO_OBJ(CMUTIL_XmlNextToken(tagname, ctx));
+            DO_OBJ(CMUTIL_XmlNextToken(tagname, sizeof(tagname), ctx));
             child = CMUTIL_XmlNodeCreateInternal(
                         ctx->memst, CMXmlNodeTag, tagname);
             if (parent)
                 CMCall(parent, AddChild, child);
             CMCall(ctx->stack, Push, child);
             DO_OBJ(CMUTIL_XmlParseAttributes(ctx));
-            if (CMUTIL_XmlStartsWith(ctx->pos, "/>")) {
+            if (CMUTIL_XmlStartsWith(ctx->pos, ctx->remain, "/>")) {
                 // no children
                 CMUTIL_XmlNextSub(NULL, ctx, 2);
                 CMCall(ctx->stack, Pop);
@@ -719,7 +836,8 @@ PARSE_NEXT:
                 CMCall(ctx->stack, Pop);
                 return child;
             } else {
-                CMCall(child, Destroy);
+                // 'child' is already owned by 'parent' and pushed onto
+                // ctx->stack, leave its disposal to the caller's cleanup.
                 CMLogErrorS("invalid xml");
                 return NULL;
             }
@@ -727,13 +845,23 @@ PARSE_NEXT:
     } else if (parent) {
         // text node
         CMUTIL_String *bfval, *afval;
-        const char *p = strchr (ctx->pos, '<');
-        size_t textlen = (uint64_t)(p - ctx->pos);
+        size_t textlen;
+        const char *p = CMUTIL_XmlFindChar(ctx->pos, ctx->remain, '<');
+        if (!p) {
+            CMLogErrorS("invalid xml: unterminated text node");
+            return NULL;
+        }
+        textlen = (size_t)(p - ctx->pos);
         bfval = CMUTIL_StringCreateInternal(ctx->memst, 10, NULL);
         CMCall(bfval, AddNString, ctx->pos, textlen);
         afval = CMUTIL_StringCreateInternal(
-                    ctx->memst, CMCall(bfval, GetSize), NULL);
-        CMUTIL_XmlUnescape(afval, bfval, ctx);
+                    ctx->memst, CMCall(bfval, GetSize) + 1, NULL);
+        if (!CMUTIL_XmlUnescape(afval, bfval, ctx)) {
+            CMCall(bfval, Destroy);
+            CMCall(afval, Destroy);
+            CMLogErrorS("invalid xml: cannot unescape text node");
+            return NULL;
+        }
         CMCall(bfval, Destroy);
         child = CMUTIL_XmlNodeCreateWithLenInternal(
                         ctx->memst, CMXmlNodeText,

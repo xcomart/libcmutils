@@ -72,7 +72,7 @@ CMUTIL_STATIC uint32_t CMUTIL_MapHashUpper(const char *in)
     register const char *p = in;
     unsigned h=0, g=0;
     while (*p) {
-        h=(h<<4)+(uint32_t)toupper(*p);
+        h=(h<<4)+(uint32_t)toupper((unsigned char)*p);
         if((g=h&0xf0000000) != 0) {
             h ^= (g>>24);
             h ^= g;
@@ -85,7 +85,7 @@ CMUTIL_STATIC uint32_t CMUTIL_MapHashUpper(const char *in)
 CMUTIL_STATIC void CMUTIL_MapToUpper(char *in)
 {
     while (*in) {
-        *in = (char)toupper(*in);
+        *in = (char)toupper((unsigned char)*in);
         in++;
     }
 }
@@ -101,6 +101,7 @@ CMUTIL_STATIC int CMUTIL_MapComparator(const void *a, const void *b)
 CMUTIL_STATIC void CMUTIL_MapRebuild(CMUTIL_Map_Internal *imap)
 {
     uint32_t i;
+    uint32_t usecount = 0;
     uint32_t newbucketsize = imap->bucket_size * 2;
     CMUTIL_Array **newbuckets =
         imap->memst->Alloc(sizeof(CMUTIL_Array*) * newbucketsize);
@@ -115,6 +116,7 @@ CMUTIL_STATIC void CMUTIL_MapRebuild(CMUTIL_Map_Internal *imap)
                         imap->memst, 5, CMUTIL_MapComparator,
                         NULL, CMTrue);
             newbuckets[index] = bucket;
+            usecount++;
         }
         // cannot be duplicated when map rebuild.
         CMCall(bucket, Add, item, NULL);
@@ -129,6 +131,7 @@ CMUTIL_STATIC void CMUTIL_MapRebuild(CMUTIL_Map_Internal *imap)
     imap->memst->Free(imap->buckets);
     imap->buckets = newbuckets;
     imap->bucket_size = newbucketsize;
+    imap->use_count = usecount;
 }
 
 CMUTIL_STATIC const char *CMUTIL_MapPairGetKey(const CMUTIL_MapPair *pair)
@@ -159,18 +162,23 @@ CMUTIL_STATIC CMUTIL_MapItem *CMUTIL_MapPutBase(
     item->base.GetValue = CMUTIL_MapPairGetValue;
 
     if (!bucket) {
-        imap->use_count++;
-        if ((double)imap->use_count / (double)imap->bucket_size > imap->load_factor) {
+        if ((double)(imap->use_count + 1) / (double)imap->bucket_size
+                > imap->load_factor) {
             // Rebuild the map to reduce the collision rate
             CMLogTrace("Map bucket size is %u, used count is %u, rebuild",
                 imap->bucket_size, imap->use_count);
             CMUTIL_MapRebuild(imap);
             index = hash % imap->bucket_size;
+            // rebuild may have populated this slot already.
+            bucket = imap->buckets[index];
         }
-        bucket = CMUTIL_ArrayCreateInternal(
-                    imap->memst, 5, CMUTIL_MapComparator,
-                    NULL, CMTrue);
-        imap->buckets[index] = bucket;
+        if (!bucket) {
+            bucket = CMUTIL_ArrayCreateInternal(
+                        imap->memst, 5, CMUTIL_MapComparator,
+                        NULL, CMTrue);
+            imap->buckets[index] = bucket;
+            imap->use_count++;
+        }
     }
 
     item->hash = hash;
@@ -202,6 +210,10 @@ CMUTIL_STATIC CMBool CMUTIL_MapPut(
 {
     CMUTIL_Map_Internal *imap = (CMUTIL_Map_Internal*)map;
     CMUTIL_MapItem *item = CMUTIL_MapPutBase(imap, key, value, prev);
+    if (!item) {
+        CMLogError("CMUTIL_MapPutBase failed");
+        return CMFalse;
+    }
     if (!CMCall(imap->keyset, Add, item, NULL)) {
         CMLogError("CMUTIL_Array Add failed");
         CMCall(map, Remove, key);
@@ -284,7 +296,7 @@ CMUTIL_STATIC void *CMUTIL_MapRemove(CMUTIL_Map *map, const char* key)
             ires = (CMUTIL_MapItem*)CMCall(bucket, Remove, &item);
         }
         if (ires) {
-            CMCall(imap->keyset, Remove, key);
+            CMCall(imap->keyset, Remove, ires);
             res = ires->value;
             imap->memst->Free(ires->key);
             imap->memst->Free(ires);
@@ -512,8 +524,8 @@ CMUTIL_Map *CMUTIL_MapCreateInternal(
     memset(imap, 0x0, sizeof(CMUTIL_Map_Internal));
 
     memcpy(imap, &g_cmutil_map, sizeof(CMUTIL_Map));
-    imap->buckets = memst->Alloc(sizeof(CMUTIL_Array)*bucketsize);
-    memset(imap->buckets, 0x0, sizeof(CMUTIL_Array)*bucketsize);
+    imap->buckets = memst->Alloc(sizeof(CMUTIL_Array*)*bucketsize);
+    memset(imap->buckets, 0x0, sizeof(CMUTIL_Array*)*bucketsize);
     imap->bucket_size = bucketsize;
     imap->is_ucase = isucase;
     imap->load_factor = load_factor;

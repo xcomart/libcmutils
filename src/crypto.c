@@ -29,6 +29,10 @@ typedef struct CMUTIL_BlockCrypto_Internal {
     goto FAILED; \
 } } while(0)
 
+// GCM is an AEAD mode: the 16 byte authentication tag is appended right
+// after the ciphertext on encryption and split off again on decryption.
+#define CMUTIL_GCM_TAG_LEN  16
+
 static EVP_CIPHER *CMUTIL_BlockCryptoGetCipher(
     const char *algo, const char *mode, int bits)
 {
@@ -114,8 +118,10 @@ CMUTIL_STATIC CMBool CMUTIL_BlockCryptoInit(
         CHECK_ERR(EVP_DecryptInit_ex(ibc->ctx, ibc->cipher, NULL, key, iv));
 
     // do not use block padding in GCM
-    if (strcasecmp(ibc->padding, "NoPadding") != 0 &&
-            !strcasecmp(ibc->mode, "GCM")) {
+    if (strcasecmp(ibc->padding, "NoPadding") == 0 ||
+            strcasecmp(ibc->mode, "GCM") == 0) {
+        CHECK_ERR(EVP_CIPHER_CTX_set_padding(ibc->ctx, 0));
+    } else {
         CHECK_ERR(EVP_CIPHER_CTX_set_padding(ibc->ctx, 1));
     }
     return CMTrue;
@@ -133,17 +139,29 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_BlockCryptoEncrypt(
         CMLogError("CMUTIL_BlockCryptoEncrypt() invalid arguments");
         return NULL;
     }
-    int olen = 0, total = 0;
-    CMUTIL_String *res = CMUTIL_StringCreateInternal(
-        ibc->memst, CMCall(plain, GetSize)+(ibc->key_bits/8), NULL);
+    int olen = 0, total = 0, rc;
+    int block_size = EVP_CIPHER_get_block_size(ibc->cipher);
+    CMBool is_gcm = strcasecmp(ibc->mode, "GCM") == 0? CMTrue:CMFalse;
+    size_t capacity;
+    CMUTIL_String *res = NULL;
+
+    if (block_size <= 0) block_size = 1;
+    capacity = CMCall(plain, GetSize) + (size_t)block_size;
+    if (is_gcm) capacity += CMUTIL_GCM_TAG_LEN;
+    res = CMUTIL_StringCreateInternal(ibc->memst, capacity, NULL);
+    if (!res) {
+        CMLogError("CMUTIL_StringCreateInternal() failed");
+        return NULL;
+    }
 
     if (!CMUTIL_BlockCryptoInit(bc, key, iv, CMTrue)) {
         CMLogError("CMUTIL_BlockCryptoInit() failed");
         goto FAILED;
     }
 
-    int rc = EVP_EncryptUpdate(ibc->ctx, (uint8_t*)CMCall(res, GetCString),
-        &olen, (uint8_t*)CMCall(plain, GetCString), CMCall(plain, GetSize));
+    rc = EVP_EncryptUpdate(ibc->ctx, (uint8_t*)CMCall(res, GetCString),
+        &olen, (uint8_t*)CMCall(plain, GetCString),
+        (int)CMCall(plain, GetSize));
     CHECK_ERR(rc);
     total = olen;
 
@@ -151,7 +169,14 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_BlockCryptoEncrypt(
         (uint8_t*)CMCall(res, GetCString)+total, &olen);
     CHECK_ERR(rc);
     total += olen;
-    CMUTIL_StringSetSizeInternal(res, total);
+
+    if (is_gcm) {
+        rc = EVP_CIPHER_CTX_ctrl(ibc->ctx, EVP_CTRL_GCM_GET_TAG,
+            CMUTIL_GCM_TAG_LEN, (uint8_t*)CMCall(res, GetCString)+total);
+        CHECK_ERR(rc);
+        total += CMUTIL_GCM_TAG_LEN;
+    }
+    CMUTIL_StringSetSizeInternal(res, (size_t)total);
 
     return res;
 FAILED:
@@ -165,32 +190,57 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_BlockCryptoDecrypt(
 {
     CMUTIL_BlockCrypto_Internal *ibc = (CMUTIL_BlockCrypto_Internal*)bc;
     if (!ibc || !plain) {
-        CMLogError("CMUTIL_BlockCryptoEncrypt() invalid arguments");
+        CMLogError("CMUTIL_BlockCryptoDecrypt() invalid arguments");
         return NULL;
     }
-    int olen = 0, total = 0;
-    CMUTIL_String *res = CMUTIL_StringCreateInternal(
-        ibc->memst, CMCall(plain, GetSize)+(ibc->key_bits/8), NULL);
+    int olen = 0, total = 0, rc;
+    int block_size = EVP_CIPHER_get_block_size(ibc->cipher);
+    CMBool is_gcm = strcasecmp(ibc->mode, "GCM") == 0? CMTrue:CMFalse;
+    size_t ilen = CMCall(plain, GetSize);
+    CMUTIL_String *res = NULL;
+
+    if (block_size <= 0) block_size = 1;
+    if (is_gcm) {
+        if (ilen < (size_t)CMUTIL_GCM_TAG_LEN) {
+            CMLogError("CMUTIL_BlockCryptoDecrypt() input is shorter than "
+                       "the GCM authentication tag");
+            return NULL;
+        }
+        ilen -= CMUTIL_GCM_TAG_LEN;
+    }
+    res = CMUTIL_StringCreateInternal(
+        ibc->memst, ilen + (size_t)block_size, NULL);
+    if (!res) {
+        CMLogError("CMUTIL_StringCreateInternal() failed");
+        return NULL;
+    }
 
     if (!CMUTIL_BlockCryptoInit(bc, key, iv, CMFalse)) {
         CMLogError("CMUTIL_BlockCryptoInit() failed");
         goto FAILED;
     }
 
-    int rc = EVP_DecryptUpdate(ibc->ctx, (uint8_t*)CMCall(res, GetCString),
-        &olen, (uint8_t*)CMCall(plain, GetCString), CMCall(plain, GetSize));
+    rc = EVP_DecryptUpdate(ibc->ctx, (uint8_t*)CMCall(res, GetCString),
+        &olen, (uint8_t*)CMCall(plain, GetCString), (int)ilen);
     CHECK_ERR(rc);
     total = olen;
+
+    if (is_gcm) {
+        rc = EVP_CIPHER_CTX_ctrl(ibc->ctx, EVP_CTRL_GCM_SET_TAG,
+            CMUTIL_GCM_TAG_LEN,
+            (uint8_t*)CMCall(plain, GetCString) + ilen);
+        CHECK_ERR(rc);
+    }
 
     rc = EVP_DecryptFinal_ex(ibc->ctx,
         (uint8_t*)CMCall(res, GetCString)+total, &olen);
     CHECK_ERR(rc);
     total += olen;
-    CMUTIL_StringSetSizeInternal(res, total);
+    CMUTIL_StringSetSizeInternal(res, (size_t)total);
 
     return res;
-    FAILED:
-        if (res) CMCall(res, Destroy);
+FAILED:
+    if (res) CMCall(res, Destroy);
     return NULL;
 }
 
@@ -220,9 +270,10 @@ CMUTIL_BlockCrypto *CMUTIL_BlockCryptoCreateInternal(
     memset(bc, 0x0, sizeof(CMUTIL_BlockCrypto_Internal));
     bc->memst = memst;
     bc->key_bits = key_bits;
-    strncpy(bc->algo, algo, sizeof(bc->algo));
-    strncpy(bc->mode, mode, sizeof(bc->mode));
-    strncpy(bc->padding, padding, sizeof(bc->padding));
+    // structure is zero initialized above, leave room for the terminator.
+    strncpy(bc->algo, algo, sizeof(bc->algo)-1);
+    strncpy(bc->mode, mode, sizeof(bc->mode)-1);
+    strncpy(bc->padding, padding, sizeof(bc->padding)-1);
     memcpy(&bc->base, &g_cmutil_block_crypto, sizeof(CMUTIL_BlockCrypto));
 
     bc->ctx = EVP_CIPHER_CTX_new();
@@ -384,6 +435,7 @@ CMUTIL_PublicKey *CMUTIL_PublicKeyCreateInternal(
     return (CMUTIL_PublicKey*)ik;
 FAILED:
     if (str) CMCall(str, Destroy);
+    CMCall(&ik->base, Destroy);
     return NULL;
 }
 
@@ -415,10 +467,15 @@ CMUTIL_PublicKey *CMUTIL_PublicKeyCreateFromFile(
 
 static int CMUTIL_RSAPriPwdCB(char *buf, int size, int rwflag, void *userdata) {
     CMUTIL_String *password = (CMUTIL_String *)userdata;
-    int len = CMCall(password, GetSize);
+    int len;
 
     (void)rwflag;
 
+    // userdata is NULL when no passphrase was supplied, returning 0 keeps
+    // OpenSSL from falling back to its interactive terminal prompt.
+    if (password == NULL || size <= 0) return 0;
+
+    len = (int)CMCall(password, GetSize);
     if (len > size) {
         len = size;
     }
@@ -444,9 +501,12 @@ CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateInternal(
     ik->base = g_cmutil_rsa_key;
     ik->is_private = CMTrue;
     ik->memst = memst;
-    CMUTIL_String *pwdstr = CMUTIL_StringCreateInternal(ik->memst,
-        strlen((const char*)passphrase), (const char*)passphrase);
+    CMUTIL_String *pwdstr = NULL;
     CMUTIL_String *str = NULL;
+    if (passphrase) {
+        pwdstr = CMUTIL_StringCreateInternal(ik->memst,
+            strlen((const char*)passphrase), (const char*)passphrase);
+    }
     if (is_file) {
         CMUTIL_File *f = CMUTIL_FileCreateInternal(ik->memst, data);
         if (!f) {
@@ -480,10 +540,11 @@ CMUTIL_PrivateKey *CMUTIL_PrivateKeyCreateInternal(
     }
     if (pwdstr) CMCall(pwdstr, Destroy);
     if (str) CMCall(str, Destroy);
-    return (CMUTIL_PublicKey*)ik;
+    return (CMUTIL_PrivateKey*)ik;
 FAILED:
     if (pwdstr) CMCall(pwdstr, Destroy);
     if (str) CMCall(str, Destroy);
+    CMCall(&ik->base, Destroy);
     return NULL;
 }
 
@@ -528,25 +589,33 @@ static CMUTIL_String *CMUTIL_RSACryptoEncrypt(
     CMUTIL_StringSetSizeInternal(res, olen);
     EVP_PKEY_CTX_free(ctx);
 #else
-    size_t blen = RSA_size(ik->key);
+    size_t blen = (size_t)RSA_size(ik->key);
     size_t ilen = CMCall(plain, GetSize);
     size_t modlen = ilen % blen;
     size_t olen = (ilen / blen) * blen;
+    int rlen;
     if (modlen) {
         olen = ilen + blen - modlen;
     }
+    // one RSA operation always emits exactly RSA_size() bytes.
+    if (olen < blen) olen = blen;
     res = CMUTIL_StringCreateInternal(ik->memst, olen, NULL);
-    if (key_is_public) {
-        olen = RSA_public_encrypt(
-            CMCall(plain, GetSize), (uint8_t*)CMCall(plain, GetCString),
-            (uint8_t*)CMCall(res, GetCString), ik->key, RSA_PKCS1_OAEP_PADDING);
-        CHECK_ERR(olen);
-    } else {
-        olen = RSA_private_encrypt(
-            CMCall(plain, GetSize), (uint8_t*)CMCall(plain, GetCString),
-            (uint8_t*)CMCall(res, GetCString), ik->key, RSA_PKCS1_OAEP_PADDING);
-        CHECK_ERR(olen);
+    if (!res) {
+        CMLogError("CMUTIL_StringCreateInternal() failed");
+        return NULL;
     }
+    if (key_is_public) {
+        rlen = RSA_public_encrypt(
+            (int)ilen, (uint8_t*)CMCall(plain, GetCString),
+            (uint8_t*)CMCall(res, GetCString), ik->key, RSA_PKCS1_OAEP_PADDING);
+    } else {
+        // RSA_private_encrypt() does not support OAEP padding.
+        rlen = RSA_private_encrypt(
+            (int)ilen, (uint8_t*)CMCall(plain, GetCString),
+            (uint8_t*)CMCall(res, GetCString), ik->key, RSA_PKCS1_PADDING);
+    }
+    CHECK_ERR(rlen);
+    olen = (size_t)rlen;
     CMUTIL_StringSetSizeInternal(res, olen);
 #endif
     return res;
@@ -593,25 +662,33 @@ static CMUTIL_String *CMUTIL_RSACryptoDecrypt(
     CMUTIL_StringSetSizeInternal(res, olen);
     EVP_PKEY_CTX_free(ctx);
 #else
-    size_t blen = RSA_size(ik->key);
+    size_t blen = (size_t)RSA_size(ik->key);
     size_t ilen = CMCall(encrypted, GetSize);
     size_t modlen = ilen % blen;
     size_t olen = (ilen / blen) * blen;
+    int rlen;
     if (modlen) {
         olen = ilen + blen - modlen;
     }
+    // one RSA operation never emits more than RSA_size() bytes.
+    if (olen < blen) olen = blen;
     res = CMUTIL_StringCreateInternal(ik->memst, olen, NULL);
-    if (key_is_public) {
-        olen = RSA_public_decrypt(
-            CMCall(encrypted, GetSize), (uint8_t*)CMCall(encrypted, GetCString),
-            (uint8_t*)CMCall(res, GetCString), ik->key, RSA_PKCS1_OAEP_PADDING);
-        CHECK_ERR(olen);
-    } else {
-        olen = RSA_private_decrypt(
-            CMCall(encrypted, GetSize), (uint8_t*)CMCall(encrypted, GetCString),
-            (uint8_t*)CMCall(res, GetCString), ik->key, RSA_PKCS1_OAEP_PADDING);
-        CHECK_ERR(olen);
+    if (!res) {
+        CMLogError("CMUTIL_StringCreateInternal() failed");
+        return NULL;
     }
+    if (key_is_public) {
+        // RSA_public_decrypt() does not support OAEP padding.
+        rlen = RSA_public_decrypt(
+            (int)ilen, (uint8_t*)CMCall(encrypted, GetCString),
+            (uint8_t*)CMCall(res, GetCString), ik->key, RSA_PKCS1_PADDING);
+    } else {
+        rlen = RSA_private_decrypt(
+            (int)ilen, (uint8_t*)CMCall(encrypted, GetCString),
+            (uint8_t*)CMCall(res, GetCString), ik->key, RSA_PKCS1_OAEP_PADDING);
+    }
+    CHECK_ERR(rlen);
+    olen = (size_t)rlen;
     CMUTIL_StringSetSizeInternal(res, olen);
 #endif
     return res;
@@ -816,7 +893,14 @@ CMUTIL_RSACrypto *CMUTIL_RSACryptoCreate(void) {
 
 void CMUTIL_CryptoRandom(uint8_t *buf, size_t len)
 {
-    RAND_bytes(buf, (int)len);
+    if (!buf || len == 0) return;
+    if (RAND_bytes(buf, (int)len) != 1) {
+        CMLogError("OpenSSL error: %s",
+                   ERR_error_string(ERR_get_error(), NULL));
+        CMLogError("RAND_bytes() failed, buffer is zeroed out");
+        // never leave uninitialized stack/heap bytes to be used as key or iv.
+        memset(buf, 0x0, len);
+    }
 }
 
 CMUTIL_String *CMUTIL_CryptoToBase64Internal(
@@ -848,17 +932,25 @@ CMUTIL_String *CMUTIL_CryptoFromBase64Internal(
 {
     if (!data) return NULL;
     size_t len = strlen(data);
+    int pad = 0;
+    while (len > 0 && strchr(" \t\r\n", data[len-1])) len--;
     if (len == 0) return NULL;
     CMUTIL_String *res = CMUTIL_StringCreateInternal(
         memst, (len * 3 / 4 + 1), NULL);
     if (!res) return NULL;
     int decoded_len = EVP_DecodeBlock(
-        (uint8_t*)CMCall(res, GetCString), (const uint8_t*)data, len);
+        (uint8_t*)CMCall(res, GetCString), (const uint8_t*)data, (int)len);
     if (decoded_len < 0) {
         CMLogError("EVP_DecodeBlock() failed");
         CMCall(res, Destroy);
         return NULL;
     }
+    // EVP_DecodeBlock() counts the '=' padding as decoded data.
+    while (pad < 2 && len > 0 && data[len-1] == '=') {
+        pad++; len--;
+    }
+    decoded_len -= pad;
+    if (decoded_len < 0) decoded_len = 0;
     CMUTIL_StringSetSizeInternal(res, (size_t)decoded_len);
     return res;
 }

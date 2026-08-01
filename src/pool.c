@@ -67,6 +67,10 @@ CMUTIL_STATIC void *CMUTIL_PoolCheckOut(
                     ipool->destroyf(res, ipool->udata);
                     res = ipool->createf(ipool->udata);
                     if (res == NULL) {
+                        CMCall(ipool->avlmtx, Lock);
+                        if (ipool->totcnt > 0)
+                            ipool->totcnt--;
+                        CMCall(ipool->avlmtx, Unlock);
                         CMCall(ipool->semp, Release);
                         CMLogError("resource creation failed.");
                     }
@@ -116,10 +120,14 @@ CMUTIL_STATIC void CMUTIL_PoolDestroy(
     if (ipool) {
         if (CMCall(ipool->avail, GetSize) < ipool->totcnt)
             CMLogWarn("pool resources are not returned.");
+        // Cancel waits for an already running ping task, so no ping can
+        // touch the pool members destroyed below.
         if (ipool->intimer && ipool->timer)
             CMCall(ipool->timer, Destroy);
         if (!ipool->intimer && ipool->pingtester)
             CMCall(ipool->pingtester, Cancel);
+        ipool->pingtester = NULL;
+        ipool->timer = NULL;
         if (ipool->semp)
             CMCall(ipool->semp, Destroy);
         if (ipool->avlmtx)
@@ -131,7 +139,7 @@ CMUTIL_STATIC void CMUTIL_PoolDestroy(
             }
             CMCall(ipool->avail, Destroy);
         }
-        CMFree(ipool);
+        ipool->memst->Free(ipool);
     }
 }
 
@@ -147,11 +155,22 @@ CMUTIL_STATIC void CMUTIL_PoolPingTester(void *p)
          * test will automatically be performed when checkout.
          */
         void *rsrc = CMCall(pool, CheckOut, 1);
+        // CheckOut may fail with timeout or creation failure
+        if (rsrc == NULL)
+            continue;
         if (!ipool->testonb) {
             if (!ipool->testf(rsrc, ipool->udata)) {
+                ipool->destroyf(rsrc, ipool->udata);
                 rsrc = ipool->createf(ipool->udata);
-                if (rsrc == NULL)
+                if (rsrc == NULL) {
+                    CMCall(ipool->avlmtx, Lock);
+                    if (ipool->totcnt > 0)
+                        ipool->totcnt--;
+                    CMCall(ipool->avlmtx, Unlock);
+                    // the semaphore acquired by CheckOut must be returned
+                    CMCall(ipool->semp, Release);
                     CMLogError("cannot create resource.");
+                }
             }
         }
         if (rsrc)
@@ -183,8 +202,15 @@ CMUTIL_Pool *CMUTIL_PoolCreateInternal(
     memcpy(res, &g_cmutil_pool, sizeof(CMUTIL_Pool));
     res->memst = memst;
     res->avail = CMUTIL_ListCreateInternal(memst, NULL);
-    for (i=0; i<initcnt; i++)
-        CMCall(res->avail, AddTail, createproc(udata));
+    for (i=0; i<initcnt; i++) {
+        void *rsrc = createproc(udata);
+        if (rsrc != NULL) {
+            CMCall(res->avail, AddTail, rsrc);
+            res->totcnt++;
+        } else {
+            CMLogError("resource creation failed.");
+        }
+    }
     res->semp = CMUTIL_SemaphoreCreateInternal(memst, maxcnt);
     res->avlmtx = CMUTIL_MutexCreateInternal(memst);
     res->createf = createproc;
