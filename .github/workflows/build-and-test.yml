@@ -32,23 +32,34 @@ jobs:
       with:
         vcpkgGitCommitId: '594ad8871e1e8e45f8e626c015fd611163430207'
 
-    # The key has to cover everything vcpkg folds into the ABI hash of a
-    # binary package. An entry whose hashes no longer match restores fine and
-    # is then rejected package by package ("Restored 0 package(s)"), which
-    # costs a full source build; worse, if the key still hits exactly,
-    # actions/cache skips the save and the useless entry is never replaced.
+    # vcpkg keys every binary package by an ABI hash of its own, and an
+    # archive whose packages no longer match that hash restores fine and is
+    # then rejected one by one ("Restored 0 package(s)"), costing a full
+    # source build. Enumerating what feeds that hash to mirror it in the
+    # cache key does not work: keying on the runner image was too coarse
+    # (a weekly image bump threw away a valid cache), keying on the MSVC
+    # toolset was too narrow (two images shipping toolset 14.51.36231
+    # still produced different ABI hashes). Whatever the remaining input
+    # is - SDK, OS build, something else - the next one will surprise us
+    # too.
     #
-    # Two inputs matter here, and neither is the runner image as a whole:
+    # So the key does not try to predict validity. It ends in the run id,
+    # which makes it unique, so the primary key never hits and the cache is
+    # therefore *always* saved. That is the important part: an exact hit
+    # makes actions/cache skip the save, which is how a useless entry used
+    # to survive forever.
     #
-    #   * the MSVC toolset, which decides vcpkg's compiler hash. The image
-    #     version moves every week or two, the toolset inside it far less
-    #     often, so keying on the toolset keeps the cache across most image
-    #     updates.
-    #   * the vcpkg tree, which supplies the port files. It is pinned above,
-    #     so its commit is read back rather than assumed.
+    # restore-keys then brings back the most recent archive of the same
+    # lineage. If its packages match, the build is a download; if they do
+    # not, vcpkg rebuilds and the archive saved at the end holds both the
+    # restored packages and the new ones. Two runner images in rotation
+    # therefore cost one rebuild each, after which every run hits.
     #
-    # The project version in vcpkg.json is deliberately left out: a release
-    # bump does not change a single dependency.
+    # The lineage prefix keeps unrelated caches apart - a dependency
+    # change, a vcpkg bump or a new toolset starts a fresh one instead of
+    # dragging an ever-growing archive along. The project version in
+    # vcpkg.json is deliberately left out: a release bump does not change a
+    # single dependency.
     - name: Compute vcpkg cache key (Windows)
       if: runner.os == 'Windows'
       id: vcpkgkey
@@ -100,12 +111,10 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ${{ github.workspace }}/vcpkg_binary_cache
-        key: vcpkg-${{ matrix.build_type }}-msvc${{ steps.vcpkgkey.outputs.toolset }}-vcpkg${{ steps.vcpkgkey.outputs.vcpkgrev }}-${{ steps.vcpkgkey.outputs.deps }}
-        # Only fall back within the same toolset and vcpkg tree - packages
-        # built against another one are rejected by their ABI hash anyway,
-        # so restoring them would only cost the download.
+        # unique per run, so this never hits and the archive is always saved
+        key: vcpkg-${{ matrix.build_type }}-msvc${{ steps.vcpkgkey.outputs.toolset }}-vcpkg${{ steps.vcpkgkey.outputs.vcpkgrev }}-${{ steps.vcpkgkey.outputs.deps }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: |
-          vcpkg-${{ matrix.build_type }}-msvc${{ steps.vcpkgkey.outputs.toolset }}-vcpkg${{ steps.vcpkgkey.outputs.vcpkgrev }}-
+          vcpkg-${{ matrix.build_type }}-msvc${{ steps.vcpkgkey.outputs.toolset }}-vcpkg${{ steps.vcpkgkey.outputs.vcpkgrev }}-${{ steps.vcpkgkey.outputs.deps }}-
 
     - name: Configure CMake
       env:
