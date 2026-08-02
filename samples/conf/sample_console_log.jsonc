@@ -1,0 +1,45 @@
+// Console-only log configuration used by every sample.
+//
+// sample_common.h points the CMUTIL_LOG_CONFIG environment variable at this
+// file before calling CMUTIL_Init(), so the log system configures itself
+// from here the first time anything is logged.
+//
+// Every appender needs a "type" - it selects the implementation. A logger
+// only needs one to be marked as the "root" logger; without it, it is a
+// named logger.
+{
+    "configuration": {
+        "appenders": [
+            {
+                "name": "Console",
+                "pattern": "%d{%T.%Q} [%-5p] %-22c - %m%n%ex",
+                "type": "Console"
+            }
+        ],
+        "loggers": [
+            {
+                "type": "root",
+                "level": "DEBUG",
+                "appenderRef": "Console"
+            },
+            {
+                // Keeps the library's own debug chatter out of the samples'
+                // output: a named logger sets the effective level for the
+                // names below it, so "cmutil.network" and friends stop at
+                // INFO while everything else stays at DEBUG.
+                // Names match by dotted prefix, and "cmutils" is a
+                // different name than "cmutil" - hence the second entry.
+                "name": "cmutil",
+                "additivity": false,
+                "level": "INFO",
+                "appenderRef": "Console"
+            },
+            {
+                "name": "cmutils",
+                "additivity": false,
+                "level": "INFO",
+                "appenderRef": "Console"
+            }
+        ]
+    }
+}
