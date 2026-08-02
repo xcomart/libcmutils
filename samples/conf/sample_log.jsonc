@@ -1,0 +1,56 @@
+// Log configuration read by sample_08_logging.
+//
+// The JSON parser accepts comments, so a configuration file can be
+// annotated. The same file is what CMUTIL_LogSystemGet() picks up on its own
+// when it is named by the CMUTIL_LOG_CONFIG environment variable, or when it
+// sits in the working directory as cmutil_log.jsonc.
+{
+    "configuration": {
+        "appenders": [
+            {
+                "name": "Console",
+                // %d timestamp, %P pid, %t thread, %F file, %L line,
+                // %p level, %c logger name, %m message, %ex stack, %n newline
+                "pattern": "%d{%T.%Q} [%-5p] %-22c - %m%n%ex",
+                "async": true,
+                "asyncBufferSize": 256,
+                "useStderr": false,
+                "type": "Console"       // Console | File | RollingFile | Socket
+            },
+            {
+                "name": "File",
+                "pattern": "%d{%F %T.%Q} %P-[%-10t] (%-15F:%04L) [%-5p] %c : %m%n%ex",
+                "async": true,
+                "asyncBufferSize": 256,
+                "type": "File",
+                "fileName": "log/sample_configured.log"
+            },
+            {
+                "name": "Rolling",
+                "pattern": "%d{%F %T.%Q} [%-5p] %c : %m%n%ex",
+                "async": true,
+                "asyncBufferSize": 256,
+                "type": "RollingFile",
+                "fileName": "log/sample_configured_rolling.log",
+                "rollTerm": "day"       // year | month | day | hour | minute
+            }
+        ],
+        "loggers": [
+            {
+                // The fallback for every logger name.
+                "type": "root",
+                "level": "DEBUG",
+                "appenderRef": ["Console", "File", "Rolling"]
+            },
+            {
+                // Matched by dotted prefix. additivity:false keeps these
+                // messages away from the root logger's appenders.
+                // A logger with no "type" is a named (non-root) one.
+                "name": "sample.logging.quiet",
+                "additivity": false,
+                "level": "ERROR",
+                "appenderRef": "Console"
+            }
+        ]
+    }
+}

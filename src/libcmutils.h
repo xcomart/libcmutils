@@ -3793,7 +3793,7 @@ CMUTIL_API CMBool CMUTIL_LogIsEnabled(
         g__logger->LogEx(g__logger, level,__FILE__,__LINE__,            \
                       CM##stack,f,##__VA_ARGS__);                       \
     else                                                                \
-        CMUTIL_LogFallback(CMLogLevel_##level, __FILE__, __LINE__,      \
+        CMUTIL_LogFallback(level, __FILE__, __LINE__,                   \
                            f, ##__VA_ARGS__);                           \
     } while(0)
 
