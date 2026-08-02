@@ -27,9 +27,70 @@ jobs:
 
     - name: Setup vcpkg (Windows)
       if: runner.os == 'Windows'
+      id: vcpkg
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgGitCommitId: '594ad8871e1e8e45f8e626c015fd611163430207'
+
+    # The key has to cover everything vcpkg folds into the ABI hash of a
+    # binary package. An entry whose hashes no longer match restores fine and
+    # is then rejected package by package ("Restored 0 package(s)"), which
+    # costs a full source build; worse, if the key still hits exactly,
+    # actions/cache skips the save and the useless entry is never replaced.
+    #
+    # Two inputs matter here, and neither is the runner image as a whole:
+    #
+    #   * the MSVC toolset, which decides vcpkg's compiler hash. The image
+    #     version moves every week or two, the toolset inside it far less
+    #     often, so keying on the toolset keeps the cache across most image
+    #     updates.
+    #   * the vcpkg tree, which supplies the port files. It is pinned above,
+    #     so its commit is read back rather than assumed.
+    #
+    # The project version in vcpkg.json is deliberately left out: a release
+    # bump does not change a single dependency.
+    - name: Compute vcpkg cache key (Windows)
+      if: runner.os == 'Windows'
+      id: vcpkgkey
+      shell: pwsh
+      run: |
+        $manifest = Get-Content vcpkg.json -Raw | ConvertFrom-Json
+        $inputs = [ordered]@{
+          baseline     = $manifest.'builtin-baseline'
+          dependencies = $manifest.dependencies
+        } | ConvertTo-Json -Depth 10 -Compress
+        $tmp = New-TemporaryFile
+        Set-Content -Path $tmp -Value $inputs -NoNewline -Encoding utf8
+        $deps = (Get-FileHash $tmp -Algorithm SHA256).Hash.Substring(0, 16).ToLower()
+        Remove-Item $tmp
+
+        $toolset = $null
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        if (Test-Path $vswhere) {
+          $vsPath = & $vswhere -latest -products * -property installationPath
+          $verFile = Join-Path $vsPath 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+          if ($vsPath -and (Test-Path $verFile)) {
+            $toolset = (Get-Content $verFile -Raw).Trim()
+          }
+        }
+        if (-not $toolset) {
+          # fall back to the image, which changes at least as often
+          $toolset = if ($env:ImageVersion) { "image$env:ImageVersion" } else { 'unknown' }
+          Write-Host "::warning::MSVC toolset version not detected, keying the cache on $toolset"
+        }
+
+        $vcpkgRev = (git -C $env:VCPKG_ROOT rev-parse --short=12 HEAD).Trim()
+
+        # CMake reads a backslash in a -D value as an escape character.
+        $toolchain = ($env:VCPKG_ROOT -replace '\\', '/') + '/scripts/buildsystems/vcpkg.cmake'
+
+        "deps=$deps"           >> $env:GITHUB_OUTPUT
+        "toolset=$toolset"     >> $env:GITHUB_OUTPUT
+        "vcpkgrev=$vcpkgRev"   >> $env:GITHUB_OUTPUT
+        "toolchain=$toolchain" >> $env:GITHUB_OUTPUT
+        Write-Host "cache key inputs: msvc=$toolset vcpkg=$vcpkgRev deps=$deps"
+        Write-Host "runner image    : $env:ImageOS-$env:ImageVersion"
+        Write-Host "toolchain file  : $toolchain"
 
     # vcpkg builds openssl, zlib and libiconv from source during the CMake
     # configure step, which dominates the Windows job. Persisting vcpkg's
@@ -39,9 +100,12 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ${{ github.workspace }}/vcpkg_binary_cache
-        key: vcpkg-${{ runner.os }}-${{ matrix.build_type }}-${{ hashFiles('vcpkg.json', '.github/workflows/build-and-test.yml') }}
+        key: vcpkg-${{ matrix.build_type }}-msvc${{ steps.vcpkgkey.outputs.toolset }}-vcpkg${{ steps.vcpkgkey.outputs.vcpkgrev }}-${{ steps.vcpkgkey.outputs.deps }}
+        # Only fall back within the same toolset and vcpkg tree - packages
+        # built against another one are rejected by their ABI hash anyway,
+        # so restoring them would only cost the download.
         restore-keys: |
-          vcpkg-${{ runner.os }}-${{ matrix.build_type }}-
+          vcpkg-${{ matrix.build_type }}-msvc${{ steps.vcpkgkey.outputs.toolset }}-vcpkg${{ steps.vcpkgkey.outputs.vcpkgrev }}-
 
     - name: Configure CMake
       env:
@@ -51,7 +115,7 @@ jobs:
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -DBUILD_TESTS=ON
         -DSUPPORT_SSL=ON
-        ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake' || '' }}
+        ${{ runner.os == 'Windows' && format('-DCMAKE_TOOLCHAIN_FILE={0}', steps.vcpkgkey.outputs.toolchain) || '' }}
         ${{ runner.os == 'macOS' && '-DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl' || '' }}
 
     - name: Build
