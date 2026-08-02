@@ -1,0 +1,18 @@
+{
+    "name": "libcmutils",
+    "version": "1.0.0",
+    "pure_c": true,
+    "coverage": 0.87,
+    "deprecated": null,
+    "platforms": ["linux", "macos", "windows"],
+    "modules": [
+        { "name": "collections", "types": 4 },
+        { "name": "networking", "types": 4 },
+        { "name": "crypto", "types": 3 }
+    ],
+    "build": {
+        "system": "cmake",
+        "standard": "C99",
+        "options": { "BUILD_TESTS": true, "CMUTIL_RSA_USE_EVP": true }
+    }
+}

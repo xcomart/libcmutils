@@ -923,6 +923,16 @@ Appender `type` is one of `Console`, `File`, `RollingFile` or `Socket`; `rollTer
 name; named loggers match by dotted prefix and `additivity: false` stops a message from also
 reaching the parent's appenders.
 
+The **closest matching logger decides the level**. `cmutil.network` above is configured at `TRACE`,
+so every logger under that name emits from `TRACE` up even though the root logger stops at `INFO` —
+and a named logger set to `WARN` under a `DEBUG` root suppresses everything below `WARN` for its
+names, including at the root's appenders. `CMLogIsEnabled()` reports that same effective level.
+
+> Every appender needs a `type`, since it selects the implementation, and a missing one invalidates
+> the whole file — the library then silently falls back to its built-in console configuration. For a
+> logger the key is optional: it only has to be spelled out to mark the `root` logger, and anything
+> else (or nothing at all) means a named logger.
+
 Pattern conversions (each accepts a printf-style width, e.g. `%-15F`, `%04L`):
 
 | Token | Meaning |
@@ -969,6 +979,11 @@ pattern)` and `CMUTIL_LogSocketAppenderCreate(name, accept_host, listen_port, pa
 listens for connections and streams the log to whoever attaches (`telnet localhost <port>`).
 `CMCall(lsys, UpdateEnv)` re-establishes the logging threads in a child after `fork()`.
 
+`CMUTIL_LogSystemConfigureFomJson(path)` builds the same thing from a file, but note that it
+installs the result as the global log system itself: pass it to `CMUTIL_LogSystemSet` afterwards and
+you destroy the system that is already installed. Drop the current one with
+`CMUTIL_LogSystemSet(NULL)` first, then call it and ignore the return value.
+
 ## Running the tests
 
 Tests are built by default (`BUILD_TESTS=ON`) and registered with CTest.
@@ -995,6 +1010,22 @@ a leak, so a green run is also a clean-memory run. Note that some tests reach ou
 
 CI (`.github/workflows/build-and-test.yml`) runs this on `ubuntu-latest`, `macos-latest` and
 `windows-latest` in `RelWithDebInfo` for every push and pull request against `main`/`master`.
+
+## Running the samples
+
+`samples/` holds one annotated program per feature area — twenty of them, from `sample_01_hello`
+through `sample_20_stackwalk`. They are built with the library by default (`BUILD_SAMPLES=ON`):
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build
+
+LD_LIBRARY_PATH=build ./build/samples/sample_05_json
+```
+
+Like the tests, every sample returns a failure status when `CMUTIL_Clear()` reports a leak. See
+[`samples/README.md`](samples/README.md) for the full list, the data files each one reads, and which
+of them bind ports or reach the network.
 
 ## Project structure
 
@@ -1023,7 +1054,12 @@ src/                Library sources and the single public header
   functions.h         Internal declarations shared between sources
   platforms.h         Platform detection and compatibility shims
 test/               One executable per module, all registered with CTest
-samples/            cmutil_log.jsonc — annotated logging configuration
+samples/            One annotated program per feature area
+  sample_NN_*.c       The samples themselves, in reading order
+  sample_common.h     Shared init/teardown helpers
+  sample_plugin.c     Tiny shared library, loaded by sample_15_library
+  conf/               Configurations, documents and keys the samples read
+  cmutil_log.jsonc    Annotated reference logging configuration
 CMakeLists.txt      Build definition
 vcpkg.json          Dependency manifest
 VERSION             Version string, read at configure time
