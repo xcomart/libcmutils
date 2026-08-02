@@ -27,9 +27,43 @@ jobs:
 
     - name: Setup vcpkg (Windows)
       if: runner.os == 'Windows'
+      id: vcpkg
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgGitCommitId: '594ad8871e1e8e45f8e626c015fd611163430207'
+
+    # The key has to cover everything vcpkg folds into the ABI hash of a
+    # binary package, which includes the compiler and vcpkg itself - both of
+    # them supplied by the runner image. An entry built on an older image
+    # restores fine and is then rejected package by package ("Restored 0
+    # package(s)"), which costs a full source build; worse, the exact key
+    # still hits, so actions/cache skips the save and the stale entry is
+    # never replaced. Naming the image in the key makes that self-healing.
+    #
+    # The project version in vcpkg.json is deliberately not part of it: a
+    # release bump does not change a single dependency.
+    - name: Compute vcpkg cache key (Windows)
+      if: runner.os == 'Windows'
+      id: vcpkgkey
+      shell: pwsh
+      run: |
+        $manifest = Get-Content vcpkg.json -Raw | ConvertFrom-Json
+        $inputs = [ordered]@{
+          baseline     = $manifest.'builtin-baseline'
+          dependencies = $manifest.dependencies
+        } | ConvertTo-Json -Depth 10 -Compress
+        $tmp = New-TemporaryFile
+        Set-Content -Path $tmp -Value $inputs -NoNewline -Encoding utf8
+        $deps = (Get-FileHash $tmp -Algorithm SHA256).Hash.Substring(0, 16).ToLower()
+        Remove-Item $tmp
+        $image = if ($env:ImageVersion) { "$env:ImageOS-$env:ImageVersion" } else { 'unknown-image' }
+        # CMake reads a backslash in a -D value as an escape character.
+        $toolchain = ($env:VCPKG_ROOT -replace '\\', '/') + '/scripts/buildsystems/vcpkg.cmake'
+        "deps=$deps"           >> $env:GITHUB_OUTPUT
+        "image=$image"         >> $env:GITHUB_OUTPUT
+        "toolchain=$toolchain" >> $env:GITHUB_OUTPUT
+        Write-Host "cache key inputs: image=$image deps=$deps"
+        Write-Host "toolchain file  : $toolchain"
 
     # vcpkg builds openssl, zlib and libiconv from source during the CMake
     # configure step, which dominates the Windows job. Persisting vcpkg's
@@ -39,9 +73,11 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ${{ github.workspace }}/vcpkg_binary_cache
-        key: vcpkg-${{ runner.os }}-${{ matrix.build_type }}-${{ hashFiles('vcpkg.json', '.github/workflows/build-and-test.yml') }}
+        key: vcpkg-${{ matrix.build_type }}-${{ steps.vcpkgkey.outputs.image }}-${{ steps.vcpkgkey.outputs.deps }}
+        # Only fall back within the same image: packages from another one
+        # are rejected by their ABI hash anyway.
         restore-keys: |
-          vcpkg-${{ runner.os }}-${{ matrix.build_type }}-
+          vcpkg-${{ matrix.build_type }}-${{ steps.vcpkgkey.outputs.image }}-
 
     - name: Configure CMake
       env:
@@ -51,7 +87,7 @@ jobs:
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -DBUILD_TESTS=ON
         -DSUPPORT_SSL=ON
-        ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake' || '' }}
+        ${{ runner.os == 'Windows' && format('-DCMAKE_TOOLCHAIN_FILE={0}', steps.vcpkgkey.outputs.toolchain) || '' }}
         ${{ runner.os == 'macOS' && '-DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl' || '' }}
 
     - name: Build
