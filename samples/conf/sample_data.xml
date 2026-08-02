@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Input for sample_06_xml. -->
+<catalog version="1" generator="libcmutils">
+    <library name="libcmutils" language="C99">
+        <description>multi-platform utility library</description>
+        <platforms>
+            <platform>linux</platform>
+            <platform>macos</platform>
+            <platform>windows</platform>
+        </platforms>
+    </library>
+    <dependencies>
+        <dependency name="openssl" optional="false"/>
+        <dependency name="zlib" optional="false"/>
+        <dependency name="iconv" optional="true"/>
+    </dependencies>
+</catalog>

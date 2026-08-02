@@ -1722,13 +1722,18 @@ CMUTIL_STATIC void CMUTIL_LoggerLogEx(
         sw = CMUTIL_StackWalkerCreateInternal(il->memst);
         stack = CMCall(sw, GetStack, 1);
     }
+    // logrefs is ordered from the most specific configured logger to the
+    // root one. 'minlevel' above already applied the most specific level,
+    // what is left is handing the message to each of them in turn.
     for (i=0; i<CMCall(il->logrefs, GetSize); i++) {
         CMUTIL_ConfLogger_Internal *cli = (CMUTIL_ConfLogger_Internal*)
                 CMCall(il->logrefs, GetAt, i);
-        if (cli->level <= level) {
-            if (CMCall(cli, Log, il, level, stack, file, line, logmsg))
-                if (!cli->additivity) break;
-        }
+        if (cli->level <= level)
+            CMCall(cli, Log, il, level, stack, file, line, logmsg);
+        // additivity is about propagation, not about whether this logger
+        // had anything to write: a non-additive logger keeps the message
+        // away from its parents either way.
+        if (!cli->additivity) break;
     }
     CMCall(logmsg, Destroy);
     if (sw) CMCall(sw, Destroy);
@@ -1779,19 +1784,30 @@ CMUTIL_STATIC CMUTIL_Logger *CMUTIL_LogSystemGetLogger(
         res->logrefs = CMUTIL_ArrayCreateInternal(
                     ilsys->memst, 3, CMUTIL_LoggerRefComparator, NULL, CMTrue);
         res->minlevel = CMLogLevel_Fatal;
-        for (i=0; i<CMCall(ilsys->cloggers, GetSize); i++) {
-            CMUTIL_ConfLogger_Internal *cl = (CMUTIL_ConfLogger_Internal*)
-                    CMCall(ilsys->cloggers, GetAt, i);
-            // adding root logger and parent loggers.
-            // parent means 'cl->name' is a name path prefix of 'name',
-            // so the following character must be a separator or the end.
-            const size_t clnlen = strlen(cl->name);
-            if (clnlen == 0 ||
-                (strncmp(name, cl->name, clnlen) == 0 &&
-                 (name[clnlen] == '\0' || name[clnlen] == '.'))) {
-                CMCall(res->logrefs, Add, cl, NULL);
-                if (res->minlevel > cl->level)
-                    res->minlevel = cl->level;
+        {
+            // the level of the *closest* configured logger is the effective
+            // level of this one, so a named logger can raise the bar over
+            // its parents instead of only lowering it. 'effnlen' tracks how
+            // specific the configured logger which set it was.
+            size_t effnlen = 0;
+            CMBool haseff = CMFalse;
+            for (i=0; i<CMCall(ilsys->cloggers, GetSize); i++) {
+                CMUTIL_ConfLogger_Internal *cl = (CMUTIL_ConfLogger_Internal*)
+                        CMCall(ilsys->cloggers, GetAt, i);
+                // adding root logger and parent loggers.
+                // parent means 'cl->name' is a name path prefix of 'name',
+                // so the following character must be a separator or the end.
+                const size_t clnlen = strlen(cl->name);
+                if (clnlen == 0 ||
+                    (strncmp(name, cl->name, clnlen) == 0 &&
+                     (name[clnlen] == '\0' || name[clnlen] == '.'))) {
+                    CMCall(res->logrefs, Add, cl, NULL);
+                    if (!haseff || clnlen > effnlen) {
+                        effnlen = clnlen;
+                        haseff = CMTrue;
+                        res->minlevel = cl->level;
+                    }
+                }
             }
         }
         // logex and destroyer
@@ -2266,6 +2282,7 @@ ENDPOINT:
 
 CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessItems(
         CMUTIL_LogSystem_Internal *lsys, CMUTIL_Json *json,
+        const char *deftype,
         CMBool(*oneprocf)(
             CMUTIL_LogSystem_Internal*, const char *, CMUTIL_Json*))
 {
@@ -2280,7 +2297,6 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessItems(
     for (i=0; i<CMCall(jarr, GetSize); i++) {
         CMUTIL_Json *item = CMCall(jarr, Get, i);
         CMUTIL_JsonObject *oitem = NULL;
-        const CMUTIL_String *type;
         CMUTIL_String *ctype = NULL;
         const char *stype = NULL;
         if (CMCall(item, GetType) != CMJsonTypeObject) {
@@ -2288,21 +2304,29 @@ CMUTIL_STATIC CMBool CMUTIL_LogSystemProcessItems(
             goto ENDPOINT;
         }
         oitem = (CMUTIL_JsonObject*)item;
-        type = CMCall(oitem, GetString, "type");
-        if (type == NULL) {
+        if (CMCall(oitem, Get, "type")) {
+            const CMUTIL_String *type = CMCall(oitem, GetString, "type");
+            if (type == NULL) {
+                printf("invalid configuration structure.\n");
+                goto ENDPOINT;
+            }
+            ctype = CMCall(type, Clone);
+            CMCall(ctype, SelfToLower);
+            stype = CMCall(ctype, GetCString);
+        } else if (deftype) {
+            // type is optional for this kind of item, apply the default.
+            stype = deftype;
+        } else {
             printf("invalid configuration structure.\n");
             goto ENDPOINT;
         }
-        ctype = CMCall(type, Clone);
-        CMCall(ctype, SelfToLower);
-        stype = CMCall(ctype, GetCString);
 
         if (!oneprocf(lsys, stype, item)) {
             printf("processing one item failed.\n");
-            CMCall(ctype, Destroy);
+            if (ctype) CMCall(ctype, Destroy);
             goto ENDPOINT;
         }
-        CMCall(ctype, Destroy);
+        if (ctype) CMCall(ctype, Destroy);
     }
     res = CMTrue;
 ENDPOINT:
@@ -2328,10 +2352,13 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureInternal(
         CMCall(g_cmutil_logsystem_mutex, Lock);
         lsys = CMUTIL_LogSystemCreateInternal(memst);
         succeeded = CMUTIL_LogSystemProcessItems(
-                    (CMUTIL_LogSystem_Internal*)lsys, appenders,
+                    // an appender type selects the implementation,
+                    // so it cannot be defaulted.
+                    (CMUTIL_LogSystem_Internal*)lsys, appenders, NULL,
                     CMUTIL_LogSystemProcessOneAppender)
                 & CMUTIL_LogSystemProcessItems(
-                    (CMUTIL_LogSystem_Internal*)lsys, loggers,
+                    // a logger without a type is a named(non-root) logger.
+                    (CMUTIL_LogSystem_Internal*)lsys, loggers, "logger",
                     CMUTIL_LogSystemProcessOneLogger);
         if (succeeded) {
             __cmutil_logsystem = (CMUTIL_LogSystem*)lsys;
