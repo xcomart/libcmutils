@@ -146,3 +146,6 @@ IF ( BUILD_SAMPLES )
     MESSAGE ( STATUS "Samples enabled building samples..." )
     ADD_SUBDIRECTORY ( samples )
 ENDIF ( BUILD_SAMPLES )
+
+# Adds the "docs" target when doxygen is present. It is not part of "all".
+ADD_SUBDIRECTORY ( doc )
