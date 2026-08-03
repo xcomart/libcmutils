@@ -210,6 +210,8 @@ CMUTIL_File *CMUTIL_FileCreateInternal(CMUTIL_Mem *memst, const char *path);
 
 CMUTIL_HttpClient *CMUTIL_HttpClientCreateInternal(
     CMUTIL_Mem *memst, const char *urlprefix);
+CMUTIL_RestClient *CMUTIL_RestClientCreateInternal(
+    CMUTIL_Mem *memst, const char *urlprefix);
 
 CMUTIL_BlockCrypto *CMUTIL_BlockCryptoCreateInternal(
         CMUTIL_Mem *memst, const char *algo, const char *mode,

@@ -3043,9 +3043,15 @@ typedef CMBool (*CMPoolItemTestCB)(void *resource, void *udata);
  *
  * @param initcnt The initial number of resources in the pool.
  * @param maxcnt The maximum number of resources allowed in the pool.
- * @param createproc A callback function to create new resources.
- * @param destroyproc A callback function to free resources.
- * @param testproc A callback function to test the validity of resources.
+ * @param createproc A callback function to create new resources, or NULL for
+ *                   a pool that never creates resources on its own. Such a
+ *                   pool hands out only what was put into it with
+ *                   <code>AddResource</code>, and <code>CheckOut</code>
+ *                   returns NULL once it runs empty.
+ * @param destroyproc A callback function to free resources, or NULL if the
+ *                    resources need no cleanup.
+ * @param testproc A callback function to test the validity of resources, or
+ *                 NULL to treat every resource as valid.
  * @param pinginterval The interval in milliseconds to ping resources for validity.
  * @param testonborrow Whether to test resources when they are checked out.
  * @param udata User-defined data to be passed to callback functions.
@@ -5502,29 +5508,133 @@ CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
 
 
+/**
+ * @typedef CMUTIL_RestClient A JSON layer over CMUTIL_HttpClient.
+ *
+ * A REST client serializes the request body from a CMUTIL_Json, parses the
+ * response body back into one, and adds the two JSON content negotiation
+ * headers when the caller did not supply them.
+ *
+ * The first member is a complete CMUTIL_HttpClient, so a REST client can be
+ * used wherever one is expected:
+ * <pre><code>
+ *   CMUTIL_RestClient *rest = CMUTIL_RestClientCreate("https://api.example.com");
+ *   CMCall(&rest->base, SetVerify, CMTrue, CMTrue);
+ *   CMUTIL_Json *user = CMCall(rest, Get, NULL, "/v1/users/42");
+ *   ...
+ *   CMUTIL_JsonDestroy(user);
+ *   CMCall(&rest->base, Destroy);       // destroys the REST client too
+ * </code></pre>
+ *
+ * All four REST methods report the HTTP status of the request they performed
+ * through <code>GetStatus</code>, which stays zero when the request never
+ * reached a response - a connection failure, a timeout or a malformed reply.
+ * The status belongs to the most recent request made through this client, so
+ * one client performs one request at a time.
+ */
 typedef struct CMUTIL_RestClient CMUTIL_RestClient;
 struct CMUTIL_RestClient {
+    /**
+     * The underlying HTTP client. Use it for TLS settings, keep-alive,
+     * requests that are not JSON, and to destroy this object.
+     */
     CMUTIL_HttpClient base;
+
+    /**
+     * @brief Perform a GET request and parse the response as JSON.
+     *
+     * @param client This REST client object.
+     * @param headers Extra request headers, or NULL. The map is only read.
+     * @param uri Request URI, relative to the prefix given at creation.
+     * @return The parsed response body, which the caller must destroy with
+     *         <code>CMUTIL_JsonDestroy</code>. NULL when the request failed,
+     *         the response carried no body, or the body was not JSON - check
+     *         <code>GetStatus</code> to tell those apart.
+     */
     CMUTIL_Json *(*Get)(
             CMUTIL_RestClient *client,
             CMUTIL_Map *headers,
             const char *uri);
+
+    /**
+     * @brief Perform a POST request with a JSON body.
+     *
+     * @param client This REST client object.
+     * @param headers Extra request headers, or NULL. The map is only read.
+     * @param uri Request URI, relative to the prefix given at creation.
+     * @param data The request body. Ownership stays with the caller.
+     * @return The parsed response body, which the caller must destroy with
+     *         <code>CMUTIL_JsonDestroy</code>, or NULL. See <code>Get</code>.
+     */
     CMUTIL_Json *(*Post)(
             CMUTIL_RestClient *client,
             CMUTIL_Map *headers,
             const char *uri,
             CMUTIL_Json *data);
+
+    /**
+     * @brief Perform a PUT request with a JSON body, discarding the response.
+     *
+     * @param client This REST client object.
+     * @param headers Extra request headers, or NULL. The map is only read.
+     * @param uri Request URI, relative to the prefix given at creation.
+     * @param data The request body. Ownership stays with the caller.
+     * @return CMTrue if the server answered with a 2xx status.
+     */
     CMBool (*Put)(
             CMUTIL_RestClient *client,
             CMUTIL_Map *headers,
             const char *uri,
             CMUTIL_Json *data);
+
+    /**
+     * @brief Perform a DELETE request, discarding the response.
+     *
+     * @param client This REST client object.
+     * @param headers Extra request headers, or NULL. The map is only read.
+     * @param uri Request URI, relative to the prefix given at creation.
+     */
     void (*Delete)(
         CMUTIL_RestClient *client,
         CMUTIL_Map *headers,
         const char *uri);
+
+    /**
+     * @brief Set the timeout applied to every REST request.
+     *
+     * The REST methods take no timeout of their own; this is it. A new client
+     * starts at <code>CMUTIL_REST_DEFAULT_TIMEOUT</code>.
+     *
+     * @param client This REST client object.
+     * @param timeout Timeout in milliseconds.
+     */
+    void (*SetTimeout)(
+        CMUTIL_RestClient *client,
+        long timeout);
+
+    /**
+     * @brief The HTTP status of the most recent request on this client.
+     *
+     * @param client This REST client object.
+     * @return The status code, or zero if the request never got a response.
+     */
+    int (*GetStatus)(
+        const CMUTIL_RestClient *client);
 };
 
+/**
+ * The timeout a REST client starts with, in milliseconds.
+ */
+#define CMUTIL_REST_DEFAULT_TIMEOUT 30000L
+
+/**
+ * @brief Create a REST client for the given URL prefix.
+ *
+ * @param urlprefix Scheme, host and optional port, like
+ *                  <code>"https://api.example.com:8443"</code>.
+ * @return A new REST client, or NULL if the prefix could not be parsed.
+ *         Destroy it with <code>CMCall(&client->base, Destroy)</code>.
+ */
 CMUTIL_API CMUTIL_RestClient *CMUTIL_RestClientCreate(const char *urlprefix);
 
 /**
