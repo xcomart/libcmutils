@@ -199,9 +199,145 @@ CMUTIL_API int CMUTIL_NetworkGetHostByNameR(
 CMUTIL_API void CMUTIL_UnusedP(void*,...);
 
 /**
+ * @brief Whether CMCall may be nested inside another CMCall's arguments.
+ *
+ * The portable spelling of CMCall pastes the trailing arguments with the
+ * GNU <code>, ## __VA_ARGS__</code> extension, which is what drops the comma
+ * when a method takes no arguments. An argument that is an operand of
+ * <code>##</code> is not macro replaced, and by the time the expansion is
+ * rescanned CMUTIL_CALL__ is already being expanded, so a nested CMCall is
+ * left as an undeclared identifier:
+ *
+ * <code>
+ * // does not compile with CMUTIL_CALL_NESTED == 0
+ * CMCall(sock, Write, CMCall(buf, GetBytes), len, 1000);
+ * </code>
+ *
+ * C23 and C++20 provide <code>__VA_OPT__</code>, which drops the comma
+ * without <code>##</code>. The trailing arguments are then macro replaced as
+ * usual and nesting works. That spelling also stops the empty argument list
+ * of <code>CMCall(obj, Destroy)</code> from tripping <code>-pedantic</code>.
+ *
+ * This is decided by the compiler that includes the header, not by the one
+ * that built the library: CMCall is a preprocessor macro and generates the
+ * same call either way, so the choice cannot break the ABI.
+ *
+ * Define CMUTIL_CALL_NESTED to 1 or 0 before including this header to force
+ * either spelling - to 1 on a compiler that offers <code>__VA_OPT__</code> as
+ * an extension outside C23, or to 0 to keep the portable spelling and have
+ * an accidental nesting rejected at compile time. Left undefined, it is
+ * enabled wherever <code>__VA_OPT__</code> is known to be available.
+ *
+ * Whether the receiver is evaluated once or twice is a separate question,
+ * see CMUTIL_CALL_SINGLE_EVAL below.
+ */
+#if !defined(CMUTIL_CALL_NESTED)
+# if defined(__STDC_VERSION__) && __STDC_VERSION__ > 201710L
+   /* C23, and the C2x drafts that already carried __VA_OPT__ */
+#  define CMUTIL_CALL_NESTED 1
+# elif defined(__cplusplus) && __cplusplus >= 202002L
+#  define CMUTIL_CALL_NESTED 1
+# elif defined(_MSC_VER) && _MSC_VER >= 1929 && \
+       defined(_MSVC_TRADITIONAL) && _MSVC_TRADITIONAL == 0
+   /* the conforming preprocessor, /Zc:preprocessor */
+#  define CMUTIL_CALL_NESTED 1
+# else
+#  define CMUTIL_CALL_NESTED 0
+# endif
+#endif
+
+/**
+ * @brief Whether CMCall evaluates its receiver once instead of twice.
+ *
+ * The plain expansion of <code>CMCall(obj, Method)</code> is
+ * <code>(obj)->Method((obj))</code>, which names the receiver twice. That is
+ * harmless for a variable and a trap for anything with a side effect:
+ *
+ * <code>
+ * // with CMUTIL_CALL_SINGLE_EVAL == 0 this removes two elements
+ * CMCall(CMCall(list, RemoveFront), GetName);
+ * </code>
+ *
+ * Binding the receiver to a temporary needs an expression that can hold a
+ * declaration, which standard C does not have. Two extensions do:
+ *
+ *   * a GNU statement expression, available in GCC and Clang for both C and
+ *     C++;
+ *   * an immediately invoked lambda, available in any C++ compiler.
+ *
+ * MSVC compiling C has neither, so there the receiver is still evaluated
+ * twice. Code that has to build there must keep avoiding side effects in a
+ * receiver, which is why this is worth knowing rather than forgetting.
+ *
+ * Define CMUTIL_CALL_SINGLE_EVAL to 0 to keep the double expansion
+ * everywhere - useful to make sure code stays portable to MSVC's C mode.
+ * Forcing it to 1 where neither extension exists is a compile error rather
+ * than a silent fallback.
+ */
+#if !defined(CMUTIL_CALL_SINGLE_EVAL)
+# if defined(__GNUC__)
+#  define CMUTIL_CALL_SINGLE_EVAL 1
+# elif defined(__cplusplus) && (!defined(_MSC_VER) || \
+       (defined(_MSVC_TRADITIONAL) && _MSVC_TRADITIONAL == 0))
+   /* MSVC only with /Zc:preprocessor - the traditional one mangles
+    * __VA_ARGS__ on its way into the inner macro. */
+#  define CMUTIL_CALL_SINGLE_EVAL 1
+# else
+#  define CMUTIL_CALL_SINGLE_EVAL 0
+# endif
+#endif
+
+#if CMUTIL_CALL_SINGLE_EVAL && \
+    !defined(__GNUC__) && !defined(__cplusplus)
+# error "CMUTIL_CALL_SINGLE_EVAL needs a statement expression or a lambda"
+#endif
+
+/**
+ * Token pasting helpers, used to give each receiver temporary a name of its
+ * own so that a nested CMCall does not shadow the enclosing one.
+ */
+#define CMUTIL_CAT2__(a,b)  a ## b
+#define CMUTIL_CAT__(a,b)   CMUTIL_CAT2__(a,b)
+
+/**
  * A wrapper macro for CMUTIL_CALL.
  */
-#define CMUTIL_CALL__(a,b,...)  (a)->b((a), ## __VA_ARGS__)
+#if CMUTIL_CALL_SINGLE_EVAL
+# if defined(__GNUC__)
+   /* statement expression: GCC and Clang, C and C++ alike */
+#  if CMUTIL_CALL_NESTED
+#   define CMUTIL_CALL_EXPR__(o,a,b,...) __extension__ ({                     \
+        __typeof__(a) o = (a); o->b(o __VA_OPT__(,) __VA_ARGS__); })
+#   define CMUTIL_CALL__(a,b,...) CMUTIL_CALL_EXPR__(                         \
+        CMUTIL_CAT__(cmutil_self__,__COUNTER__), a, b __VA_OPT__(,) __VA_ARGS__)
+#  else
+#   define CMUTIL_CALL_EXPR__(o,a,b,...) __extension__ ({                     \
+        __typeof__(a) o = (a); o->b(o, ## __VA_ARGS__); })
+#   define CMUTIL_CALL__(a,b,...) CMUTIL_CALL_EXPR__(                         \
+        CMUTIL_CAT__(cmutil_self__,__COUNTER__), a, b, ## __VA_ARGS__)
+#  endif
+# else
+   /* immediately invoked lambda: any C++ compiler, MSVC included */
+#  if CMUTIL_CALL_NESTED
+#   define CMUTIL_CALL_EXPR__(o,a,b,...) ([&]{                                \
+        auto o = (a); return o->b(o __VA_OPT__(,) __VA_ARGS__); }())
+#   define CMUTIL_CALL__(a,b,...) CMUTIL_CALL_EXPR__(                         \
+        CMUTIL_CAT__(cmutil_self__,__COUNTER__), a, b __VA_OPT__(,) __VA_ARGS__)
+#  else
+#   define CMUTIL_CALL_EXPR__(o,a,b,...) ([&]{                                \
+        auto o = (a); return o->b(o, ## __VA_ARGS__); }())
+#   define CMUTIL_CALL__(a,b,...) CMUTIL_CALL_EXPR__(                         \
+        CMUTIL_CAT__(cmutil_self__,__COUNTER__), a, b, ## __VA_ARGS__)
+#  endif
+# endif
+#else
+   /* the receiver is named twice */
+# if CMUTIL_CALL_NESTED
+#  define CMUTIL_CALL__(a,b,...)  (a)->b((a) __VA_OPT__(,) __VA_ARGS__)
+# else
+#  define CMUTIL_CALL__(a,b,...)  (a)->b((a), ## __VA_ARGS__)
+# endif
+#endif
 
 /**
  * @brief Method caller for this library.

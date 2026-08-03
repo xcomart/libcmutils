@@ -140,8 +140,9 @@ static void sample_build(void)
     CMCall(root, AddChild, item);
 
     {
-        /* The receiver of CMCall is evaluated twice, so a call used as one
-         * goes through a temporary. */
+        /* Portable code keeps a call out of the receiver position: only
+         * where CMUTIL_CALL_SINGLE_EVAL is 1 is the receiver guaranteed to
+         * be evaluated once. */
         CMUTIL_XmlNode *parent = CMCall(item, GetParent);
         CMLogInfo("item's parent is <%s>", CMCall(parent, GetName));
     }
