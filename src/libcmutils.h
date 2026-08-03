@@ -4180,6 +4180,14 @@ CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemCreate(void);
 /**
  * @brief Configure the log system from a JSON configuration file.
  *
+ * The result is installed as the global log system, replacing and destroying
+ * whatever was installed before, so the return value does not have to be
+ * passed to CMUTIL_LogSystemSet - and passing it there does nothing.
+ *
+ * A missing or invalid file is not a failure: a built-in console
+ * configuration is installed instead, so logging never breaks a program that
+ * was configured badly.
+ *
  * @param jsonfile The path to the JSON configuration file.
  * @return A pointer to the configured CMUTIL_LogSystem object,
  *         or NULL on failure.
@@ -4197,6 +4205,12 @@ CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemGet(void);
 
 /**
  * @brief Set the global log system.
+ *
+ * The log system already installed is destroyed, and ownership of @a lsys
+ * passes to the library. Setting the one that is already installed does
+ * nothing, which matters because the configure functions install their own
+ * result: passing what one of them returned back to this function would
+ * otherwise destroy the live log system.
  *
  * @param lsys A pointer to the CMUTIL_LogSystem object to set as the global log system.
  */

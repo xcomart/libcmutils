@@ -111,21 +111,16 @@ static void sample_file_configuration(void)
      * environment variable, or from cmutil_log.jsonc in the working
      * directory, which is what sample_init() relies on.
      *
-     * Two things to know about CMUTIL_LogSystemConfigureFomJson:
-     *
-     *   - it installs the system it builds as the global one itself, so the
-     *     result must NOT be handed to CMUTIL_LogSystemSet afterwards - that
-     *     would destroy the system that is already installed and leave a
-     *     dangling pointer behind;
-     *   - it does not release a system that is already installed, so drop
-     *     the current one with CMUTIL_LogSystemSet(NULL) first.
+     * CMUTIL_LogSystemConfigureFomJson installs the system it builds as the
+     * global one, destroying the one it replaces - the system built by hand
+     * above goes away here. So the return value is nothing to hand to
+     * CMUTIL_LogSystemSet: doing that does nothing at all.
      *
      * On failure it falls back to a built-in console configuration rather
      * than returning NULL, so logging never breaks an unconfigured program.
      * An appender without a "type" is such a failure - for a logger the key
      * is optional and only marks the "root" one.
      */
-    CMUTIL_LogSystemSet(NULL);
     (void)CMUTIL_LogSystemConfigureFomJson(path);
 
     CMLogInfo("now logging with the configuration from %s", path);

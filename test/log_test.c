@@ -49,6 +49,32 @@ int main() {
 
     CMUTIL_LogSystemSet(lsys); lsys = NULL;
 
+    // Setting what is already installed must not destroy it. Logging after
+    // this would use freed memory if it did.
+    CMUTIL_LogSystemSet(CMUTIL_LogSystemGet());
+    ASSERT(CMUTIL_LogSystemGet() != NULL, "LogSystemSet with the current system");
+    CMLogInfo("still logging through the system that was set twice");
+
+    // Replacing a system releases the one it replaces, whichever way it is
+    // installed - a system left behind here would show up as a leak in
+    // CMUTIL_Clear() below.
+    {
+        CMUTIL_LogSystem *replacement = CMUTIL_LogSystemCreate();
+        CMUTIL_ConfLogger *rlogger = CMCall(
+            replacement, CreateLogger, NULL, CMLogLevel_Debug, CMTrue);
+        CMUTIL_LogAppender *rapndr = CMUTIL_LogConsoleAppenderCreate(
+            "Console", pattern, CMTrue);
+        ASSERT(rlogger != NULL && rapndr != NULL, "replacement log system");
+        CMCall(rlogger, AddAppender, rapndr, CMLogLevel_Debug);
+        CMUTIL_LogSystemSet(replacement);
+        CMLogInfo("logging through the replacement");
+    }
+
+    // The same must hold for a configure, which installs its own result.
+    (void)CMUTIL_LogSystemConfigureFomJson("no_such_log_config.jsonc");
+    ASSERT(CMUTIL_LogSystemGet() != NULL, "configure falls back and installs");
+    CMLogInfo("logging through the fallback configuration");
+
     // You can view logs via the command "telnet localhost 9999" within 5 seconds
 
     for (int i=0; i<10; i++) {
