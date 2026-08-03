@@ -81,8 +81,6 @@ int main() {
     OpenSSL_add_all_algorithms();
     CMUTIL_Init(CMUTIL_MEM_TYPE);
 
-    EVP_CIPHER *cipher;
-
     CMUTIL_BlockCrypto *block = NULL;
     CMUTIL_Map *env = NULL;
     CMUTIL_String *pathstr = NULL;

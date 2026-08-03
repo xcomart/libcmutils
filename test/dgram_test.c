@@ -92,7 +92,7 @@ int main() {
     CMLogInfo("datagram socket connected to %s:%d", rhost, rport);
 
     const char *send_data = "this is sample message";
-    CMCall(buffer, AddBytes, (const uint8_t*)send_data, strlen(send_data));
+    CMCall(buffer, AddBytes, (const uint8_t*)send_data, (uint32_t)strlen(send_data));
     sr = CMCall(client, Send, buffer, 1000);
     ASSERT(sr == CMSocketOk, "Send");
 
@@ -108,7 +108,7 @@ int main() {
 
     client = CMUTIL_DGramSocketCreateBind(NULL);
     send_data = "second data";
-    CMCall(buffer, AddBytes, (const uint8_t*)send_data, strlen(send_data));
+    CMCall(buffer, AddBytes, (const uint8_t*)send_data, (uint32_t)strlen(send_data));
     sr = CMCall(client, SendTo, buffer, &localaddr, 1000);
     ASSERT(sr == CMSocketOk, "SendTo");
 
@@ -127,7 +127,7 @@ int main() {
 
     CMCall(buffer, Clear);
     send_data = "!@#$$#@!";
-    CMCall(buffer, AddBytes, (const uint8_t*)send_data, strlen(send_data));
+    CMCall(buffer, AddBytes, (const uint8_t*)send_data, (uint32_t)strlen(send_data));
     sr = CMCall(client, SendTo, buffer, &localaddr, 1000);
     if (sr != CMSocketOk) {
         CMLogError("datagram socket send failed - failed");

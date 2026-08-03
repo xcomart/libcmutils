@@ -406,10 +406,12 @@ CMSocketResult CMUTIL_SocketCheckBase(
     tv.tv_sec = timeout / 1000;
     tv.tv_usec = (int)((timeout % 1000) * 1000);
 
+    // nfds is an int; a SOCKET is a 64 bit handle on Windows, where the
+    // argument is ignored outright.
     if (isread) {
-        rc = select(sock+1, &fdset, NULL, NULL, &tv);
+        rc = select((int)(sock+1), &fdset, NULL, NULL, &tv);
     } else {
-        rc = select(sock+1, NULL, &fdset, NULL, &tv);
+        rc = select((int)(sock+1), NULL, &fdset, NULL, &tv);
     }
     if (rc < 0) {
         if (!silent)
@@ -837,7 +839,7 @@ CONNECT_RETRY:
         return CMFalse;
     }
 
-    rc = connect(s, (struct sockaddr*)addr, addrlen);
+    rc = connect(s, (struct sockaddr*)addr, (socklen_t)addrlen);
     is->sock = s;
     if (rc < 0) {
 
@@ -1128,9 +1130,9 @@ CMUTIL_STATIC CMBool CMUTIL_SocketConnectIPCInternal(
 {
     struct sockaddr_storage ss;
 #if defined(MSWIN)
-    struct sockaddr_in *sin = (struct sockaddr_in*)&ss;
-    long port = strtol(ipc_path, NULL, 10);
-    CMUTIL_SocketAddrSet(sin, "127.0.0.1", port);
+    // IPC is a loopback connection here, with the path naming the port.
+    const long port = strtol(ipc_path, NULL, 10);
+    CMUTIL_SocketAddrSet(&ss, "127.0.0.1", (int)port);
 #else
     struct sockaddr_un *sun = (struct sockaddr_un*)&ss;
     if (strlen(ipc_path) >= sizeof(sun->sun_path) - 1) {
@@ -1394,7 +1396,7 @@ CMUTIL_STATIC CMBool CMUTIL_ServerSocketCreateBase(
         goto FAILED;
     }
 
-    rc = bind(sock, (struct sockaddr *) &addr, addrlen);
+    rc = bind(sock, (struct sockaddr *) &addr, (socklen_t)addrlen);
     if (rc == SOCKET_ERROR) {
         if (res->silent)
             CMLogTrace("bind failed.(%d:%s)", errno, strerror(errno));
