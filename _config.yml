@@ -1,1 +1,21 @@
 theme: jekyll-theme-cayman
+
+title: libcmutils
+description: Multi-platform C99 utility library
+
+# Jekyll copies everything it is not told to skip, which otherwise mirrors
+# the whole source tree onto the site. Only README.md needs rendering; the
+# API reference is generated separately and dropped into /api by the Docs
+# workflow.
+exclude:
+  - src
+  - test
+  - samples
+  - doc
+  - build
+  - CMakeLists.txt
+  - vcpkg.json
+  - VERSION
+  - AUTHORS
+  - ChangeLog
+  - NEWS

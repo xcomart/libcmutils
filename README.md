@@ -1114,6 +1114,17 @@ Like the tests, every sample returns a failure status when `CMUTIL_Clear()` repo
 [`samples/README.md`](samples/README.md) for the full list, the data files each one reads, and which
 of them bind ports or reach the network.
 
+## API reference
+
+The sections above are prose. The generated reference is the same API organized for lookup — grouped
+by subject, built from the doc comments in `src/libcmutils.h`:
+
+```bash
+cd doc && doxygen          # or: cmake --build build --target docs
+```
+
+Open `doc/html/index.html`. See [doc/README.md](doc/README.md) for what the topics contain.
+
 ## Project structure
 
 ```
@@ -1147,6 +1158,9 @@ samples/            One annotated program per feature area
   sample_plugin.c     Tiny shared library, loaded by sample_15_library
   conf/               Configurations, documents and keys the samples read
   cmutil_log.jsonc    Annotated reference logging configuration
+doc/                API reference generated from the header's doc comments
+  Doxyfile            Doxygen configuration
+  README.md           What the reference contains and how to build it
 CMakeLists.txt      Build definition
 vcpkg.json          Dependency manifest
 VERSION             Version string, read at configure time
@@ -1164,7 +1178,9 @@ Issues and pull requests are welcome at
 3. Follow the surrounding style: object types are structs of function pointers, constructors are
    `CMUTIL_XxxCreate[Ex]`, and every allocation goes through the `CMAlloc`/`CMFree` family.
 4. Keep the public surface in `src/libcmutils.h`, documented with the same doxygen comment style as
-   its neighbours. Internal helpers belong in `src/functions.h`.
+   its neighbours — a `@brief`, a `@param` per argument and a `@return` unless it returns `void`.
+   Internal helpers belong in `src/functions.h`. `cd doc && doxygen` must leave `doc/doxygen.log`
+   empty; see [doc/README.md](doc/README.md).
 
 Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
