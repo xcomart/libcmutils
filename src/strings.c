@@ -251,27 +251,29 @@ CMUTIL_STATIC ssize_t CMUTIL_StringAddString(CMUTIL_String *string,
             CMLogError("CMUTIL_String AddNString failed");
         return ret;
     }
-    CMLogErrorS("invalid argument. %s", tobeadded == NULL ? "NULL" : "");
+    CMLogErrorS("invalid argument. NULL");
     return -1;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringAddNString(CMUTIL_String *string,
         const char *tobeadded, const size_t size)
 {
-    if (tobeadded && size > 0) {
-        CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
-        if (!CMUTIL_StringCheckSize(istr, size)) {
-            CMLogError("CMUTIL_StringCheckSize failed");
-            return -1;
-        }
-        memcpy(istr->data + istr->size, tobeadded, size);
-        istr->size += size;
-        istr->data[istr->size] = 0x0;
-        return (ssize_t)istr->size;
+    CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
+    if (tobeadded == NULL) {
+        CMLogErrorS("invalid argument. NULL");
+        return -1;
     }
-    CMLogErrorS("invalid argument. %s, size: %zu",
-        tobeadded == NULL ? "NULL" : "", size);
-    return -1;
+    // appending nothing is not an error, it just does nothing.
+    if (size == 0)
+        return (ssize_t)istr->size;
+    if (!CMUTIL_StringCheckSize(istr, size)) {
+        CMLogError("CMUTIL_StringCheckSize failed");
+        return -1;
+    }
+    memcpy(istr->data + istr->size, tobeadded, size);
+    istr->size += size;
+    istr->data[istr->size] = 0x0;
+    return (ssize_t)istr->size;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringAddChar(CMUTIL_String *string, char tobeadded)
@@ -343,42 +345,49 @@ CMUTIL_STATIC ssize_t CMUTIL_StringAddAnother(
             CMLogError("CMUTIL_String AddNString failed");
         return ret;
     }
-    CMLogErrorS("invalid argument. %s", tobeadded == NULL ? "NULL" : "");
+    CMLogErrorS("invalid argument. NULL");
     return -1;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringInsertString(CMUTIL_String *string,
         const char *tobeadded, const uint32_t at)
 {
-    size_t size = strlen((const char*)tobeadded);
-    const ssize_t ret = CMCall(string, InsertNString, tobeadded, at, size);
-    if (ret < 0)
-        CMLogError("CMUTIL_String InsertNString failed");
-    return ret;
+    if (tobeadded) {
+        const size_t size = strlen(tobeadded);
+        const ssize_t ret = CMCall(string, InsertNString, tobeadded, at, size);
+        if (ret < 0)
+            CMLogError("CMUTIL_String InsertNString failed");
+        return ret;
+    }
+    CMLogErrorS("invalid argument. NULL");
+    return -1;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringInsertNString(CMUTIL_String *string,
         const char *tobeadded, const uint32_t at, const size_t size)
 {
-    if (tobeadded && size > 0) {
-        CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
-        if ((size_t)at > istr->size) {
-            CMLogErrorS("index out of bound. at: %u, size: %zu",
-                at, istr->size);
-            return -1;
-        }
-        if (!CMUTIL_StringCheckSize(istr, size)) {
-            CMLogError("CMUTIL_StringCheckSize failed");
-            return -1;
-        }
-        memmove(istr->data+at+size, istr->data+at, istr->size-(size_t)at+1);
-        memcpy(istr->data+at, tobeadded, size);
-        istr->size += size;
-        return (ssize_t)istr->size;
+    CMUTIL_String_Internal *istr = (CMUTIL_String_Internal*)string;
+    if (tobeadded == NULL) {
+        CMLogErrorS("invalid argument. NULL");
+        return -1;
     }
-    CMLogErrorS("invalid argument. %s, size: %zu",
-        tobeadded == NULL ? "NULL" : "", size);
-    return -1;
+    // an out of bound index is an error even if nothing is to be inserted.
+    if ((size_t)at > istr->size) {
+        CMLogErrorS("index out of bound. at: %u, size: %zu",
+            at, istr->size);
+        return -1;
+    }
+    // inserting nothing is not an error, it just does nothing.
+    if (size == 0)
+        return (ssize_t)istr->size;
+    if (!CMUTIL_StringCheckSize(istr, size)) {
+        CMLogError("CMUTIL_StringCheckSize failed");
+        return -1;
+    }
+    memmove(istr->data+at+size, istr->data+at, istr->size-(size_t)at+1);
+    memcpy(istr->data+at, tobeadded, size);
+    istr->size += size;
+    return (ssize_t)istr->size;
 }
 
 CMUTIL_STATIC ssize_t CMUTIL_StringInsertPrint(
@@ -428,12 +437,16 @@ CMUTIL_STATIC ssize_t CMUTIL_StringInsertVPrint(
 CMUTIL_STATIC ssize_t CMUTIL_StringInsertAnother(
         CMUTIL_String *string, uint32_t idx, CMUTIL_String *tobeadded)
 {
-    const char *str = CMCall(tobeadded, GetCString);
-    ssize_t len = CMCall(tobeadded, GetSize);
-    len = CMCall(string, InsertNString, str, idx, len);
-    if (len < 0)
-        CMLogError("CMUTIL_String InsertNString failed");
-    return len;
+    if (tobeadded) {
+        const char *str = CMCall(tobeadded, GetCString);
+        const size_t len = CMCall(tobeadded, GetSize);
+        const ssize_t ret = CMCall(string, InsertNString, str, idx, len);
+        if (ret < 0)
+            CMLogError("CMUTIL_String InsertNString failed");
+        return ret;
+    }
+    CMLogErrorS("invalid argument. NULL");
+    return -1;
 }
 
 CMUTIL_STATIC void CMUTIL_StringCutTailOff(
@@ -563,7 +576,10 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringReplace(
             cur += nlen; prv = cur;
             cur = strstr(prv, needle);
         }
-        CMCall(res, AddString, prv);
+        if (CMCall(res, AddString, prv) < 0) {
+            CMLogError("CMUTIL_String AddString failed");
+            goto FAIL_POINT;
+        }
     } else {
         CMLogError("CMUTIL_StringCreateInternal failed");
     }
