@@ -196,7 +196,8 @@ int main() {
         "6wIDAQAB\n"
         "-----END PUBLIC KEY-----";
 
-    priv = CMUTIL_PrivateKeyCreateFromPEM(priv_pem, "");
+    /* the passphrase is bytes, not text */
+    priv = CMUTIL_PrivateKeyCreateFromPEM(priv_pem, (const uint8_t*)"");
     ASSERT(priv != NULL, "CMUTIL_PrivateKeyCreateFromPEM");
 
     pub = CMUTIL_PublicKeyCreateFromPEM(pub_pem);
