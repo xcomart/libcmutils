@@ -22,17 +22,60 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
 
-/*
- * File
- *      libcmutils.h
+/**
+ * @file libcmutils.h
+ * @brief The entire public API of libcmutils.
  *
- * Description
- *      libcmutils is a bunch of commonly used utility functions for
- *      multi-platform.
+ * This is the only header to include. Everything the library offers -
+ * collections, strings, concurrency, files, sockets, JSON, XML, logging,
+ * crypto and child processes - is declared here and grouped by subject in
+ * the module list.
  *
- * Authors
- *      libcmutils: Dennis Soungjin Park <xcomart@gmail.com>,
- *      fpattern: David R. Tribble <david.tribble@beasys.com>
+ * @author libcmutils: Dennis Soungjin Park <xcomart@gmail.com>
+ * @author fpattern: David R. Tribble <david.tribble@beasys.com>
+ */
+
+/**
+ * @mainpage libcmutils
+ *
+ * A C99 utility library for Linux, macOS and Windows, written so that one
+ * source tree builds unchanged on all three.
+ *
+ * @section mp_object Objects are structs of function pointers
+ *
+ * An object is a struct whose members are its methods, and every method
+ * takes the object as its first argument. The @c CMCall macro fills that
+ * argument in:
+ *
+ * @code
+ * CMUTIL_String *str = CMUTIL_StringCreate();
+ * CMCall(str, AddString, "hello");     // str->AddString(str, "hello")
+ * printf("%s\n", CMCall(str, GetCString));
+ * CMCall(str, Destroy);
+ * @endcode
+ *
+ * Two rules come with it. Whether a @c CMCall may appear inside another
+ * one's argument list depends on the compiler - see #CMUTIL_CALL_NESTED -
+ * and whether the receiver is evaluated once or twice likewise - see
+ * #CMUTIL_CALL_SINGLE_EVAL. Both detect what the compiler supports and can
+ * be overridden before including this header.
+ *
+ * @section mp_lifecycle Lifecycle
+ *
+ * @code
+ * CMUTIL_Init(CMMemRecycle);   // first library call in the process
+ * ...
+ * CMUTIL_Clear();              // returns CMFalse if anything leaked
+ * @endcode
+ *
+ * @c CMUTIL_Clear() reports whether every object allocated through the
+ * library was released, which makes it a leak check as well as a teardown.
+ *
+ * @section mp_where Where to look
+ *
+ * The <b>Modules</b> list groups the API by subject. The project README
+ * covers the same ground in prose, and @c samples/ holds one annotated
+ * program per subject.
  */
 
 #ifndef LIBCMUTILS_H__
@@ -123,7 +166,7 @@ extern "C" {
 
 
 /**
- * @defgroup CMUTIL Types.
+ * @defgroup CMUTIL Fixed width integers, CMBool and the platform shims.
  * @{
  *
  * CMUTIL library uses platform-independent data types for multi-platform
@@ -158,6 +201,16 @@ typedef SSIZE_T ssize_t;
 #endif
 
 #if defined(_MSC_VER)
+/**
+ * @brief gettimeofday(2) for MSVC, which does not ship one.
+ *
+ * Reached through the <tt>gettimeofday</tt> macro below; there is no reason
+ * to call it by this name.
+ *
+ * @param tv Receives the current time.
+ * @param tz Ignored, present only to match the POSIX signature.
+ * @return 0 on success.
+ */
 CMUTIL_API int __gettimeofday(struct timeval *tv, void *tz);
 
 #define gettimeofday(tv, tz) __gettimeofday(tv, tz)
@@ -186,8 +239,30 @@ typedef enum CMBool {
 # define gethostbyname_r    CMUTIL_NetworkGetHostByNameR
 # if !defined(CMUTIL_EXPORT)
 #  define gethostbyname    CMUTIL_NetworkGetHostByName
+/**
+ * @brief gethostbyname(3) implemented on top of the reentrant form below.
+ *
+ * Reached through the <tt>gethostbyname</tt> macro above.
+ *
+ * @param name Host name to resolve.
+ * @return The resolved host, or NULL. The storage is reused by the next call.
+ */
 CMUTIL_API struct hostent *CMUTIL_NetworkGetHostByName(const char *name);
 # endif
+/**
+ * @brief gethostbyname_r(3) for macOS, which does not ship one.
+ *
+ * Reached through the <tt>gethostbyname_r</tt> macro above, so that code
+ * written against the reentrant resolver builds unchanged on every platform.
+ *
+ * @param name Host name to resolve.
+ * @param ret Receives the resolved host.
+ * @param buf Scratch buffer the result points into.
+ * @param buflen Size of @a buf.
+ * @param result Receives @a ret on success, NULL on failure.
+ * @param h_errnop Receives the resolver error code on failure.
+ * @return 0 on success, otherwise an error code.
+ */
 CMUTIL_API int CMUTIL_NetworkGetHostByNameR(
         const char *name, struct hostent *ret, char *buf, size_t buflen,
          struct hostent **result, int *h_errnop);
@@ -197,7 +272,25 @@ CMUTIL_API int CMUTIL_NetworkGetHostByNameR(
  * Unused variable wrapper for avoiding compile warning.
  */
 #define CMUTIL_UNUSED(a,...) CMUTIL_UnusedP((void*)(int64_t)(a), ## __VA_ARGS__)
-CMUTIL_API void CMUTIL_UnusedP(void*,...);
+/**
+ * @brief Consumes its arguments so the compiler stops calling them unused.
+ *
+ * Use the <tt>CMUTIL_UNUSED</tt> macro above rather than this function.
+ *
+ * @param a First value to consume.
+ * @param ... Any further values to consume.
+ */
+CMUTIL_API void CMUTIL_UnusedP(void *a, ...);
+
+/**
+ * @defgroup CMUTILS_Calling The CMCall convention.
+ * @{
+ *
+ * An object in this library is a struct of function pointers, and every
+ * method takes the object itself as its first argument. CMCall writes that
+ * argument for you. What the compiler supports decides two details of how
+ * it expands, and both can be overridden before including this header.
+ */
 
 /**
  * @brief Whether CMCall may be nested inside another CMCall's arguments.
@@ -375,23 +468,27 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
 #define CMUTIL_CALL CMUTIL_CALL__
 
 /**
+ * @}
+ */
+
+/**
  * @brief Get a version string of this library.
  * @return Version string of this library.
  */
 CMUTIL_API const char *CMUTIL_GetLibVersion(void);
 
 /**
- * @typedef CMCompareCB Object comparison callback type.
+ * @brief Object comparison callback type.
  */
 typedef int (*CMCompareCB)(const void*, const void*);
 
 /**
- * @typedef CMFreeCB Callback type for memory deallocation.
+ * @brief Callback type for memory deallocation.
  */
 typedef void (*CMFreeCB)(void*);
 
 /**
- * @typedef CMProcCB Callback type for execution of some procedure.
+ * @brief Callback type for execution of some procedure.
  */
 typedef void (*CMProcCB)(void*);
 
@@ -418,7 +515,7 @@ typedef void (*CMProcCB)(void*);
  */
 
 /**
- * @typedef CMMemOper Memory operation types.
+ * @brief Memory operation types.
  * Refer CMUTIL_Init function for details.
  */
 typedef enum CMMemOper {
@@ -475,7 +572,7 @@ typedef struct CMUTIL_Mem {
     /**
      * @brief Allocate memory.
      *
-     * Allocates <code>size<code> bytes and returns a pointer to the allocated
+     * Allocates <code>size</code> bytes and returns a pointer to the allocated
      * memory. The memory is not initialized. If size is 0, then this function
      * returns either NULL or a unique pointer value that can later be
      * successfully passed to <code>Free</code>.
@@ -542,6 +639,9 @@ typedef struct CMUTIL_Mem {
  * @brief Global memory operator structure.
  * This object will be initialized with appropriate memory operators in
  * <tt>CMUTIL_Init</tt>.
+ *
+ * @return The allocator every object in the library allocates through.
+ *         It belongs to the library and must not be destroyed.
  */
 CMUTIL_API CMUTIL_Mem *CMUTIL_GetMem(void);
 
@@ -578,7 +678,12 @@ CMUTIL_API CMUTIL_Mem *CMUTIL_GetMem(void);
  */
 
 /**
- * @typedef CMUTIL_Cond Platform independent condition definition for
+ * @defgroup CMUTILS_Concurrency Threads, locks and synchronization primitives.
+ * @{
+ */
+
+/**
+ * @brief Platform independent condition definition for
  * concurrency control.
  *
  * Condition (or Event)
@@ -677,7 +782,7 @@ struct CMUTIL_Cond {
 CMUTIL_API CMUTIL_Cond *CMUTIL_CondCreate(CMBool manual_reset);
 
 /**
- * @typedef CMUTIL_Mutex Platform independent mutex implementation.
+ * @brief Platform independent mutex implementation.
  */
 typedef struct CMUTIL_Mutex CMUTIL_Mutex;
 struct CMUTIL_Mutex {
@@ -756,7 +861,7 @@ CMUTIL_API CMUTIL_Mutex *CMUTIL_MutexCreate(void);
 } while(0)
 
 /**
- * @typedef CMUTIL_Thread Platform independent thread object.
+ * @brief Platform independent thread object.
  */
 typedef struct CMUTIL_Thread CMUTIL_Thread;
 struct CMUTIL_Thread {
@@ -793,15 +898,17 @@ struct CMUTIL_Thread {
     CMBool (*IsRunning)(const CMUTIL_Thread *thread);
 
     /**
-     * @brief Get the ID fo this thread. Returned ID is not system thread ID.
-     *     just an internal thread index.
+     * @brief Get the ID of this thread. The returned ID is not the system
+     *     thread ID, just an internal thread index.
+     * @param thread This thread object.
      * @return ID of this thread.
      */
     uint32_t (*GetId)(const CMUTIL_Thread *thread);
 
     /**
      * @brief Get the name of this thread.
-     * @return Name of this thread.
+     * @param thread This thread object.
+     * @return Name of this thread. It belongs to the thread object.
      */
     const char *(*GetName)(const CMUTIL_Thread *thread);
 };
@@ -843,7 +950,7 @@ CMUTIL_API CMUTIL_Thread *CMUTIL_ThreadSelf(void);
 CMUTIL_API uint64_t CMUTIL_ThreadSystemSelfId(void);
 
 /**
- * @typedef CMUTIL_ThreadPool A threadpool object.
+ * @brief A threadpool object.
  */
 typedef struct CMUTIL_ThreadPool CMUTIL_ThreadPool;
 struct CMUTIL_ThreadPool {
@@ -892,7 +999,7 @@ CMUTIL_API CMUTIL_ThreadPool *CMUTIL_ThreadPoolCreate(
         int pool_size, const char *name);
 
 /**
- * @typedef CMUTIL_Semaphore Platform independent semaphore object.
+ * @brief Platform independent semaphore object.
  */
 typedef struct CMUTIL_Semaphore CMUTIL_Semaphore;
 struct CMUTIL_Semaphore {
@@ -941,7 +1048,7 @@ CMUTIL_API CMUTIL_Semaphore *CMUTIL_SemaphoreCreate(int initcnt);
 
 
 /**
- * @typedef CMUTIL_RWLock Platform independent read/write lock object.
+ * @brief Platform independent read/write lock object.
  */
 typedef struct CMUTIL_RWLock CMUTIL_RWLock;
 struct CMUTIL_RWLock {
@@ -999,11 +1106,22 @@ struct CMUTIL_RWLock {
 
 /**
  * @brief Create a read-write lock object.
+ *
+ * @return A new read-write lock, which must be destroyed after use.
  */
 CMUTIL_API CMUTIL_RWLock *CMUTIL_RWLockCreate(void);
 
 /**
- * @typedef CMUTIL_Iterator Iterator of collection members.
+ * @}
+ */
+
+/**
+ * @defgroup CMUTILS_Collections Arrays, maps, lists and their iterator.
+ * @{
+ */
+
+/**
+ * @brief Iterator of collection members.
  */
 typedef struct CMUTIL_Iterator CMUTIL_Iterator;
 struct CMUTIL_Iterator {
@@ -1037,7 +1155,7 @@ struct CMUTIL_Iterator {
 
 
 /**
- * @typedef CMUTIL_Array Dynamic array of any type element.
+ * @brief Dynamic array of any type element.
  */
 typedef struct CMUTIL_Array CMUTIL_Array;
 struct CMUTIL_Array {
@@ -1281,7 +1399,16 @@ CMUTIL_API CMUTIL_Array *CMUTIL_ArrayCreateEx(
         CMFreeCB freecb);
 
 /**
- * @typedef CMUTIL_String Multifunctional string type.
+ * @}
+ */
+
+/**
+ * @defgroup CMUTILS_Strings Strings, string arrays, byte buffers and charset conversion.
+ * @{
+ */
+
+/**
+ * @brief Multifunctional string type.
  */
 typedef struct CMUTIL_String CMUTIL_String;
 struct CMUTIL_String {
@@ -1596,7 +1723,7 @@ CMUTIL_API CMUTIL_String *CMUTIL_StringCreateEx(
 
 
 /**
- * @typedef CMUTIL_StringArray Dynamic array of string objects.
+ * @brief Dynamic array of string objects.
  */
 typedef struct CMUTIL_StringArray CMUTIL_StringArray;
 struct CMUTIL_StringArray {
@@ -1919,7 +2046,7 @@ CMUTIL_API int CMUTIL_StringHexToBytes(uint8_t *dest, const char *src, int len);
 
 
 /**
- * @typedef CMUTIL_ByteBuffer Manipulation of bytes.
+ * @brief Manipulation of bytes.
  */
 typedef struct CMUTIL_ByteBuffer CMUTIL_ByteBuffer;
 struct CMUTIL_ByteBuffer {
@@ -2127,9 +2254,18 @@ struct CMUTIL_ByteBuffer {
 CMUTIL_API CMUTIL_ByteBuffer *CMUTIL_ByteBufferCreateEx(
         size_t initcapacity);
 
+/**
+ * @}
+ */
+
 
 /**
- * @typedef CMUTIL_MapPair Key-value pair for CMUTIL_Map.
+ * @addtogroup CMUTILS_Collections
+ * @{
+ */
+
+/**
+ * @brief Key-value pair for CMUTIL_Map.
  */
 typedef struct CMUTIL_MapPair CMUTIL_MapPair;
 struct CMUTIL_MapPair {
@@ -2164,7 +2300,7 @@ struct CMUTIL_MapPair {
 
 
 /**
- * @typedef CMUTIL_Map Hashmap type with item order preserved.
+ * @brief Hashmap type with item order preserved.
  */
 typedef struct CMUTIL_Map CMUTIL_Map;
 struct CMUTIL_Map {
@@ -2403,7 +2539,7 @@ CMUTIL_API CMUTIL_Map *CMUTIL_MapCreateEx(
 
 
 /**
- * @typedef CMUTIL_List A doubly linked list type.
+ * @brief A doubly linked list type.
  */
 typedef struct CMUTIL_List CMUTIL_List;
 struct CMUTIL_List {
@@ -2551,11 +2687,20 @@ struct CMUTIL_List {
  */
 CMUTIL_API CMUTIL_List *CMUTIL_ListCreateEx(CMFreeCB freecb);
 
+/**
+ * @}
+ */
+
 
 
 
 /**
- * @typedef CMXmlNodeKind The kind of XML node.
+ * @defgroup CMUTILS_Xml XML parsing and the document model.
+ * @{
+ */
+
+/**
+ * @brief The kind of XML node.
  */
 typedef enum CMXmlNodeKind {
     /** Unknown node type. */
@@ -2568,7 +2713,7 @@ typedef enum CMXmlNodeKind {
 
 
 /**
- * @typedef CMUTIL_XmlNode XML node manipulation.
+ * @brief XML node manipulation.
  */
 typedef struct CMUTIL_XmlNode CMUTIL_XmlNode;
 struct CMUTIL_XmlNode {
@@ -2649,7 +2794,11 @@ struct CMUTIL_XmlNode {
     /**
      * @brief Get the name of this node.
      *
-     * @return The name of the node as a C-style string.
+     * For a text node the "name" is the text itself.
+     *
+     * @param node This XML node object.
+     * @return The name of the node as a C-style string. It belongs to the
+     *         node.
      */
     const char *(*GetName)(const CMUTIL_XmlNode *node);
 
@@ -2774,10 +2923,19 @@ CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlNodeCreate(
 CMUTIL_API CMUTIL_XmlNode *CMUTIL_XmlNodeCreateWithLen(
         CMXmlNodeKind type, const char *tagname, size_t len);
 
+/**
+ * @}
+ */
+
 
 
 /**
- * @typedef CMUTIL_CSConv Character set conversion object.
+ * @addtogroup CMUTILS_Strings
+ * @{
+ */
+
+/**
+ * @brief Character set conversion object.
  */
 typedef struct CMUTIL_CSConv CMUTIL_CSConv;
 struct CMUTIL_CSConv {
@@ -2830,9 +2988,18 @@ struct CMUTIL_CSConv {
 CMUTIL_API CMUTIL_CSConv *CMUTIL_CSConvCreate(
         const char *fromcs, const char *tocs);
 
+/**
+ * @}
+ */
+
 
 /**
- * @typedef CMUTIL_TimerTask Timer task handle.
+ * @defgroup CMUTILS_Timer Scheduled and repeating tasks.
+ * @{
+ */
+
+/**
+ * @brief Timer task handle.
  */
 typedef struct CMUTIL_TimerTask CMUTIL_TimerTask;
 struct CMUTIL_TimerTask {
@@ -2852,7 +3019,7 @@ struct CMUTIL_TimerTask {
 };
 
 /**
- * @typedef CMUTIL_Timer Timer object for scheduling tasks.
+ * @brief Timer object for scheduling tasks.
  */
 typedef struct CMUTIL_Timer CMUTIL_Timer;
 struct CMUTIL_Timer {
@@ -2968,9 +3135,18 @@ struct CMUTIL_Timer {
  */
 CMUTIL_API CMUTIL_Timer *CMUTIL_TimerCreateEx(long precision, int threads);
 
+/**
+ * @}
+ */
+
 
 /**
- * @typedef CMUTIL_Pool Resource pool object.
+ * @defgroup CMUTILS_Pool Generic resource pool.
+ * @{
+ */
+
+/**
+ * @brief Resource pool object.
  */
 typedef struct CMUTIL_Pool CMUTIL_Pool;
 struct CMUTIL_Pool {
@@ -3025,17 +3201,17 @@ struct CMUTIL_Pool {
 };
 
 /**
- * @typedef CMPoolItemCreateCB Callback type for creating a pool item.
+ * @brief Callback type for creating a pool item.
  */
 typedef void* (*CMPoolItemCreateCB)(void *udata);
 
 /**
- * @typedef CMPoolItemFreeCB Callback type for freeing a pool item.
+ * @brief Callback type for freeing a pool item.
  */
 typedef void (*CMPoolItemFreeCB)(void *resource, void *udata);
 
 /**
- * @typedef CMPoolItemTestCB Callback type for testing a pool item.
+ * @brief Callback type for testing a pool item.
  */
 typedef CMBool (*CMPoolItemTestCB)(void *resource, void *udata);
 
@@ -3073,10 +3249,19 @@ CMUTIL_API CMUTIL_Pool *CMUTIL_PoolCreate(
         void *udata,
         CMUTIL_Timer *timer);
 
+/**
+ * @}
+ */
+
 
 
 /**
- * @typedef CMUTIL_Library Dynamic library loader.
+ * @defgroup CMUTILS_Library Dynamic library loading.
+ * @{
+ */
+
+/**
+ * @brief Dynamic library loader.
  */
 typedef struct CMUTIL_Library CMUTIL_Library;
 struct CMUTIL_Library {
@@ -3125,14 +3310,23 @@ struct CMUTIL_Library {
  */
 CMUTIL_API CMUTIL_Library *CMUTIL_LibraryCreate(const char *path);
 
+/**
+ * @}
+ */
+
 
 /**
- * @typedef CMUTIL_FileList A list of files in a directory.
+ * @defgroup CMUTILS_File Files, directories and file streams.
+ * @{
+ */
+
+/**
+ * @brief A list of files in a directory.
  */
 typedef struct CMUTIL_FileList CMUTIL_FileList;
 
 /**
- * @typedef CMUTIL_File A file or directory object.
+ * @brief A file or directory object.
  */
 typedef struct CMUTIL_File CMUTIL_File;
 struct CMUTIL_FileList {
@@ -3167,7 +3361,7 @@ struct CMUTIL_FileList {
 };
 
 /**
- * @typedef CMUTIL_FileOpenMode File open mode enumeration.
+ * @brief File open mode enumeration.
  */
 typedef enum CMFileOpenMode {
     /** Open file for reading. */
@@ -3179,7 +3373,7 @@ typedef enum CMFileOpenMode {
 } CMFileOpenMode;
 
 /**
- * @typedef CMUTIL_FileStream File stream object for reading and writing files.
+ * @brief File stream object for reading and writing files.
  */
 typedef struct CMUTIL_FileStream CMUTIL_FileStream;
 struct CMUTIL_FileStream {
@@ -3485,7 +3679,16 @@ CMUTIL_API CMUTIL_File *CMUTIL_FileCreate(const char *path);
 CMUTIL_API CMBool CMUTIL_PathCreate(const char *path, uint32_t mode);
 
 /**
- * @typedef CMUTIL_Config Configuration management object.
+ * @}
+ */
+
+/**
+ * @defgroup CMUTILS_Config Configuration files.
+ * @{
+ */
+
+/**
+ * @brief Configuration management object.
  */
 typedef struct CMUTIL_Config CMUTIL_Config;
 struct CMUTIL_Config {
@@ -3595,6 +3798,10 @@ CMUTIL_API CMUTIL_Config *CMUTIL_ConfigCreate(void);
  */
 CMUTIL_API CMUTIL_Config *CMUTIL_ConfigLoad(const char *fconf);
 
+/**
+ * @}
+ */
+
 
 /**
  * Default log configuration file name.
@@ -3602,7 +3809,12 @@ CMUTIL_API CMUTIL_Config *CMUTIL_ConfigLoad(const char *fconf);
 #define CMUTIL_LOG_CONFIG_DEFAULT       "cmutil_log.jsonc"
 
 /**
- * @typedef CMLogLevel Log severity levels.
+ * @defgroup CMUTILS_Logging Log system, loggers and appenders.
+ * @{
+ */
+
+/**
+ * @brief Log severity levels.
  */
 typedef enum CMLogLevel {
     /** Trace level for detailed debugging information. */
@@ -3620,7 +3832,7 @@ typedef enum CMLogLevel {
 } CMLogLevel;
 
 /**
- * @typedef CMLogTerm Log rolling terms.
+ * @brief Log rolling terms.
  */
 typedef enum CMLogTerm {
     /** Yearly log rolling. */
@@ -3636,12 +3848,12 @@ typedef enum CMLogTerm {
 } CMLogTerm;
 
 /**
- * @typedef CMUTIL_LogAppender Log appender object.
+ * @brief Log appender object.
  */
 typedef struct CMUTIL_LogAppender CMUTIL_LogAppender;
 
 /**
- * @typedef CMUTIL_ConfLogger Logger configuration object.
+ * @brief Logger configuration object.
  */
 typedef struct CMUTIL_ConfLogger CMUTIL_ConfLogger;
 struct CMUTIL_ConfLogger {
@@ -3663,7 +3875,7 @@ struct CMUTIL_ConfLogger {
 };
 
 /**
- * @typedef CMUTIL_Logger Logger object.
+ * @brief Logger object.
  */
 typedef struct CMUTIL_Logger CMUTIL_Logger;
 struct CMUTIL_Logger {
@@ -4097,7 +4309,7 @@ CMUTIL_API CMBool CMUTIL_LogIsEnabled(
 #define CMLogS(l,f,...)     CMUTIL_Log2__(l,True ,f,##__VA_ARGS__)
 
 /**
- * @typedef CMUTIL_LogSystem Log system object.
+ * @brief Log system object.
  */
 typedef struct CMUTIL_LogSystem CMUTIL_LogSystem;
 struct CMUTIL_LogSystem {
@@ -4217,7 +4429,16 @@ CMUTIL_API CMUTIL_LogSystem *CMUTIL_LogSystemGet(void);
 CMUTIL_API void CMUTIL_LogSystemSet(CMUTIL_LogSystem *lsys);
 
 /**
- * @typedef CMUTIL_StackWalker Stack walker object.
+ * @}
+ */
+
+/**
+ * @defgroup CMUTILS_StackWalker Call stack capture.
+ * @{
+ */
+
+/**
+ * @brief Stack walker object.
  */
 typedef struct CMUTIL_StackWalker CMUTIL_StackWalker;
 struct CMUTIL_StackWalker {
@@ -4268,9 +4489,18 @@ struct CMUTIL_StackWalker {
  */
 CMUTIL_API CMUTIL_StackWalker *CMUTIL_StackWalkerCreate(void);
 
+/**
+ * @}
+ */
+
 
 /**
- * @typedef CMSocketResult Socket operation result codes.
+ * @defgroup CMUTILS_Network Sockets, datagrams and the HTTP and REST clients.
+ * @{
+ */
+
+/**
+ * @brief Socket operation result codes.
  */
 typedef enum CMSocketResult {
     /** Operation succeeded. */
@@ -4296,7 +4526,7 @@ typedef enum CMSocketResult {
 } CMSocketResult;
 
 /**
- * @typedef CMUTIL_SocketAddr Socket address object.
+ * @brief Socket address object.
  */
 typedef struct sockaddr_storage CMUTIL_SocketAddr;
 
@@ -4326,7 +4556,7 @@ CMUTIL_API CMSocketResult CMUTIL_SocketAddrSet(
         CMUTIL_SocketAddr *saddr, const char *host, int port);
 
 /**
- * @typedef CMUTIL_Socket Socket object.
+ * @brief Socket object.
  */
 typedef struct CMUTIL_Socket CMUTIL_Socket;
 struct CMUTIL_Socket {
@@ -4500,6 +4730,16 @@ struct CMUTIL_Socket {
     CMSocketResult (*WriteByte)(
             const CMUTIL_Socket *socket, uint8_t c, long timeout);
 
+    /**
+     * @brief Suppress this library's own error logging on this socket.
+     *
+     * A disconnect a server expects - a client that simply went away - is
+     * not worth an error line. Turning this on demotes those messages to
+     * trace level; the return codes are unaffected.
+     *
+     * @param socket The socket object.
+     * @param silent CMTrue to stop logging errors for this socket.
+     */
     void (*SetSilent)(
             CMUTIL_Socket *socket, CMBool silent);
 };
@@ -4577,7 +4817,7 @@ CMUTIL_API CMUTIL_Socket *CMUTIL_SSLSocketConnectWithAddr(
         const CMUTIL_SocketAddr *saddr, long timeout);
 
 /**
- * @typedef CMUTIL_ServerSocket Server socket object.
+ * @brief Server socket object.
  */
 typedef struct CMUTIL_ServerSocket CMUTIL_ServerSocket;
 struct CMUTIL_ServerSocket {
@@ -4607,6 +4847,15 @@ struct CMUTIL_ServerSocket {
      */
     void (*Close)(CMUTIL_ServerSocket *server);
 
+    /**
+     * @brief Suppress this library's own error logging on this listener.
+     *
+     * Behaves like CMUTIL_Socket::SetSilent, and does not affect the
+     * sockets handed out by Accept.
+     *
+     * @param socket The server socket object.
+     * @param silent CMTrue to stop logging errors for this listener.
+     */
     void (*SetSilent)(
             CMUTIL_ServerSocket *socket, CMBool silent);
 
@@ -4618,6 +4867,8 @@ struct CMUTIL_ServerSocket {
  * @param host Host address to listen on.(0.0.0.0 for any address)
  * @param port Port number to listen on.
  * @param qcnt The maximum length of the queue of pending connections.
+ * @param silent CMTrue to suppress this library's own error logging for
+ *      this listener, as CMUTIL_ServerSocket::SetSilent does.
  * @return A server socket if succeeded it must be closed after use.
  *      NULL if failed.
  */
@@ -4632,6 +4883,8 @@ CMUTIL_API CMUTIL_ServerSocket *CMUTIL_ServerSocketCreate(
  *
  * @param ipc_path unix domain socket path(xnix) or port number(windows) to listen on.
  * @param qcnt The maximum length of the queue of pending connections.
+ * @param silent CMTrue to suppress this library's own error logging for
+ *      this listener, as CMUTIL_ServerSocket::SetSilent does.
  * @return A server socket if succeeded it must be closed after use.
  *      NULL if failed.
  */
@@ -4665,7 +4918,7 @@ CMUTIL_API CMBool CMUTIL_SocketPair(
         CMUTIL_Socket **s1, CMUTIL_Socket **s2);
 
 /**
- * @typedef CMUTIL_DGramSocket Datagram socket object.
+ * @brief Datagram socket object.
  */
 typedef struct CMUTIL_DGramSocket CMUTIL_DGramSocket;
 struct CMUTIL_DGramSocket {
@@ -4818,20 +5071,98 @@ CMUTIL_API CMUTIL_DGramSocket *CMUTIL_DGramSocketCreateBind(
         CMUTIL_SocketAddr *addr);
 
 
+/**
+ * @brief An HTTP/HTTPS client built on the socket layer.
+ *
+ * The client is fixed to one origin: it takes a URL prefix at construction
+ * and every request names a URI relative to it. Request and response bodies
+ * are CMUTIL_ByteBuffer objects; see CMUTIL_RestClient for the same client
+ * speaking CMUTIL_Json.
+ *
+ * Connections are kept alive and pooled per host and port, so a series of
+ * requests to one origin reuses one socket. A pooled connection is dropped
+ * once it has been idle for 30 seconds.
+ */
 typedef struct CMUTIL_HttpClient CMUTIL_HttpClient;
 struct CMUTIL_HttpClient {
+
+    /**
+     * @brief Set TLS verification for this client.
+     *
+     * A fresh client verifies the host name and presents no client
+     * certificate. Turning @a verify_host off reaches a server whose
+     * certificate does not match its name - including a self-signed one.
+     *
+     * @param client This HTTP client object.
+     * @param verify_host CMTrue to check the server's certificate against
+     *      the host name, and to use the CA file set by SetSSLCert as the
+     *      trust anchor rather than the system trust store.
+     * @param verify_peer CMTrue to present the client certificate set by
+     *      SetSSLCert.
+     * @return CMTrue on success.
+     */
     CMBool (*SetVerify)(
             CMUTIL_HttpClient *client,
             CMBool verify_host,
             CMBool verify_peer);
+
+    /**
+     * @brief Set the TLS certificates this client uses.
+     *
+     * Which of them take effect depends on SetVerify: the client
+     * certificate and key are only sent when @a verify_peer is on, and the
+     * CA file only becomes the trust anchor when @a verify_host is on.
+     *
+     * @param client This HTTP client object.
+     * @param certfile Client certificate in PEM form, or NULL.
+     * @param keyfile Private key for @a certfile in PEM form, or NULL.
+     * @param cafile CA certificate to trust in PEM form, or NULL to use the
+     *      system trust store.
+     * @return CMTrue on success, CMFalse if a path is too long to store.
+     */
     CMBool (*SetSSLCert)(
             CMUTIL_HttpClient *client,
             const char *certfile,
             const char *keyfile,
             const char *cafile );
+
+    /**
+     * @brief Whether to keep connections open between requests.
+     *
+     * On by default. A server that answers with HTTP/1.0, or with
+     * <tt>Connection: close</tt>, ends the connection regardless.
+     *
+     * @param client This HTTP client object.
+     * @param keepalive CMFalse to close the connection after each request.
+     */
     void (*SetKeepAlive)(
             CMUTIL_HttpClient *client,
             CMBool keepalive);
+
+    /**
+     * @brief Perform a request with any method.
+     *
+     * Get and Post are this function with the method filled in; use it
+     * directly for PUT, DELETE, HEAD, PATCH and the rest.
+     *
+     * <tt>Host</tt>, <tt>Connection</tt> and - for a method that carries a
+     * body - <tt>Content-Length</tt> are supplied automatically unless
+     * @a headers already names them.
+     *
+     * @param client This HTTP client object.
+     * @param method Request method, such as "GET".
+     * @param headers Request headers as a map of C strings, or NULL. The
+     *      map is only read.
+     * @param uri Request URI, relative to the prefix given at creation.
+     * @param body Request body, or NULL. It is only sent for POST and PUT.
+     * @param status Receives the response status code. It is left untouched
+     *      when the request never reaches a response, so initialize it.
+     * @param timeout Timeout in milliseconds, applied to each socket
+     *      operation the request performs.
+     * @return The response body, which the caller must destroy, or NULL if
+     *      the request failed. A response with no body yields an empty
+     *      buffer rather than NULL.
+     */
     CMUTIL_ByteBuffer *(*Request)(
             CMUTIL_HttpClient *client,
             const char *method,
@@ -4840,12 +5171,35 @@ struct CMUTIL_HttpClient {
             CMUTIL_ByteBuffer *body,
             int *status,
             long timeout);
+
+    /**
+     * @brief Perform a GET request.
+     *
+     * @param client This HTTP client object.
+     * @param headers Request headers as a map of C strings, or NULL.
+     * @param uri Request URI, relative to the prefix given at creation.
+     * @param status Receives the response status code.
+     * @param timeout Timeout in milliseconds.
+     * @return The response body, which the caller must destroy, or NULL.
+     */
     CMUTIL_ByteBuffer *(*Get)(
             CMUTIL_HttpClient *client,
             CMUTIL_Map *headers,
             const char *uri,
             int *status,
             long timeout);
+
+    /**
+     * @brief Perform a POST request.
+     *
+     * @param client This HTTP client object.
+     * @param headers Request headers as a map of C strings, or NULL.
+     * @param uri Request URI, relative to the prefix given at creation.
+     * @param body Request body. Ownership stays with the caller.
+     * @param status Receives the response status code.
+     * @param timeout Timeout in milliseconds.
+     * @return The response body, which the caller must destroy, or NULL.
+     */
     CMUTIL_ByteBuffer *(*Post)(
             CMUTIL_HttpClient *client,
             CMUTIL_Map *headers,
@@ -4853,14 +5207,41 @@ struct CMUTIL_HttpClient {
             CMUTIL_ByteBuffer *body,
             int *status,
             long timeout);
+
+    /**
+     * @brief Destroy this client.
+     *
+     * Connections this client left in the pool are not closed here; they
+     * are closed when they expire, or at CMUTIL_Clear().
+     *
+     * @param client This HTTP client object.
+     */
     void (*Destroy)(
             CMUTIL_HttpClient *client);
 };
 
+/**
+ * @brief Create an HTTP client for the given URL prefix.
+ *
+ * @param urlprefix Scheme, host and optional port, like
+ *      <code>"https://example.com:8443"</code>. The port defaults to 80 for
+ *      http and 443 for https.
+ * @return A new HTTP client, or NULL if the prefix could not be parsed.
+ *      Destroy it with its Destroy method.
+ */
 CMUTIL_API CMUTIL_HttpClient *CMUTIL_HttpClientCreate(const char *urlprefix);
 
 /**
- * @typedef CMJsonType JSON value types.
+ * @}
+ */
+
+/**
+ * @defgroup CMUTILS_Json JSON parsing and the document model.
+ * @{
+ */
+
+/**
+ * @brief JSON value types.
  */
 typedef enum CMJsonType {
     /** JSON value type. */
@@ -4872,7 +5253,7 @@ typedef enum CMJsonType {
 } CMJsonType;
 
 /**
- * @typedef CMUTIL_Json JSON base object.
+ * @brief JSON base object.
  */
 typedef struct CMUTIL_Json CMUTIL_Json;
 struct CMUTIL_Json {
@@ -4935,7 +5316,7 @@ struct CMUTIL_Json {
 #define CMUTIL_JsonDestroy(a)   CMCall((CMUTIL_Json*)(a), Destroy)
 
 /**
- * @typedef CMJsonValueType JSON value types.
+ * @brief JSON value types.
  */
 typedef enum CMJsonValueType {
     /** JSON long integer type. */
@@ -4951,7 +5332,7 @@ typedef enum CMJsonValueType {
 } CMJsonValueType;
 
 /**
- * @typedef CMUTIL_JsonValue JSON value object.
+ * @brief JSON value object.
  *
  * Must be destroyed with <code>CMUTIL_JsonDestroy</code>.
  */
@@ -5091,7 +5472,7 @@ struct CMUTIL_JsonValue {
 CMUTIL_API CMUTIL_JsonValue *CMUTIL_JsonValueCreate(void);
 
 /**
- * @typedef CMUTIL_JsonObject JSON object.
+ * @brief JSON object.
  *
  * Must be destroyed with <code>CMUTIL_JsonDestroy</code>.
  */
@@ -5304,7 +5685,7 @@ struct CMUTIL_JsonObject {
 CMUTIL_API CMUTIL_JsonObject *CMUTIL_JsonObjectCreate(void);
 
 /**
- * @typedef CMUTIL_JsonArray JSON array type.
+ * @brief JSON array type.
  *
  * Must be destroyed with <code>CMUTIL_JsonDestroy</code>.
  */
@@ -5520,11 +5901,20 @@ CMUTIL_API CMUTIL_Json *CMUTIL_JsonParse(CMUTIL_String *jsonstr);
  */
 CMUTIL_API CMUTIL_Json *CMUTIL_XmlToJson(CMUTIL_XmlNode *node);
 
+/**
+ * @}
+ */
+
 
 
 
 /**
- * @typedef CMUTIL_RestClient A JSON layer over CMUTIL_HttpClient.
+ * @addtogroup CMUTILS_Network
+ * @{
+ */
+
+/**
+ * @brief A JSON layer over CMUTIL_HttpClient.
  *
  * A REST client serializes the request body from a CMUTIL_Json, parses the
  * response body back into one, and adds the two JSON content negotiation
@@ -5653,7 +6043,16 @@ struct CMUTIL_RestClient {
 CMUTIL_API CMUTIL_RestClient *CMUTIL_RestClientCreate(const char *urlprefix);
 
 /**
- * @typedef Enumeration of process stream types.
+ * @}
+ */
+
+/**
+ * @defgroup CMUTILS_Process Child process creation and control.
+ * @{
+ */
+
+/**
+ * @brief of process stream types.
  */
 typedef enum CMProcStreamType {
     /**
@@ -5689,7 +6088,7 @@ typedef enum CMProcStreamType {
 } CMProcStreamType;
 
 /**
- * @typedef Process structure for managing external processes.
+ * @brief structure for managing external processes.
  */
 typedef struct CMUTIL_Process CMUTIL_Process;
 struct CMUTIL_Process {
@@ -5907,6 +6306,10 @@ CMUTIL_API CMUTIL_Process *CMUTIL_ProcessCreateEx(
         ...);
 
 /**
+ * @}
+ */
+
+/**
  * @brief Creates a new process with the specified command and arguments.
  *
  * Sets working directory, environment variables, command, and arguments
@@ -5924,7 +6327,11 @@ CMUTIL_API CMUTIL_Process *CMUTIL_ProcessCreateEx(
 
 
 /**
- * @struct CMUTIL_BlockCrypto
+ * @defgroup CMUTILS_Crypto Block ciphers, RSA, Base64 and secure random.
+ * @{
+ */
+
+/**
  * @brief Block cipher encryption/decryption object.
  */
 typedef struct CMUTIL_BlockCrypto CMUTIL_BlockCrypto;
@@ -5977,11 +6384,24 @@ CMUTIL_API CMUTIL_BlockCrypto *CMUTIL_BlockCryptoCreate(
 
 
 /**
- * @struct CMUTIL_RSAKey
  * @brief RSA key object (can be either a private or public key).
  */
 typedef struct CMUTIL_RSAKey CMUTIL_RSAKey;
+
+/**
+ * @brief An RSA key that can decrypt and sign.
+ *
+ * The same object as CMUTIL_RSAKey; the two names exist to say which half
+ * of a key pair a function expects.
+ */
 typedef CMUTIL_RSAKey CMUTIL_PrivateKey;
+
+/**
+ * @brief An RSA key that can encrypt and verify.
+ *
+ * The same object as CMUTIL_RSAKey; the two names exist to say which half
+ * of a key pair a function expects.
+ */
 typedef CMUTIL_RSAKey CMUTIL_PublicKey;
 struct CMUTIL_RSAKey {
     /**
@@ -6033,7 +6453,6 @@ CMUTIL_API CMUTIL_PublicKey *CMUTIL_PublicKeyCreateFromFile(
         const char *file_path);
 
 /**
- * @struct CMUTIL_RSACrypto
  * @brief RSA encryption/decryption and signature object.
  */
 typedef struct CMUTIL_RSACrypto CMUTIL_RSACrypto;
@@ -6126,6 +6545,10 @@ CMUTIL_API CMUTIL_RSACrypto *CMUTIL_RSACryptoCreate(void);
  * @param len The number of bytes to generate.
  */
 CMUTIL_API void CMUTIL_CryptoRandom(uint8_t *buf, size_t len);
+
+/**
+ * @}
+ */
 
 /**
  * @brief Encodes data to Base64 string.
