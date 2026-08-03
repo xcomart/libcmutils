@@ -89,6 +89,9 @@ uint32_t len   = (uint32_t)CMCall(buf, GetSize);
 CMCall(sock, Write, bytes, len, 1000);
 ```
 
+The samples are built at C99, where that rule always holds. At C23 or C++20 the header switches to
+`__VA_OPT__` and nesting is allowed — see `CMUTIL_CALL_NESTED` in the top-level README.
+
 **Every appender in a `.jsonc` log configuration needs a `type`** — it is what selects the
 implementation, and a missing one invalidates the whole file, after which the library silently falls
 back to its built-in console configuration. Loggers are more forgiving: `type` is only needed to

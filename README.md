@@ -48,9 +48,10 @@ pointers. In exchange you get an API that stays legible at scale.
 `CMCall` is a preprocessor macro, and that leaks through in exactly two places. Both are easy to
 avoid once you know them, and both are silent if you do not.
 
-**Do not nest `CMCall` inside another `CMCall`'s argument list.** The trailing arguments are pasted
-with `## __VA_ARGS__`, and the preprocessor does not macro-expand arguments consumed by `##`. The
-inner call is left unexpanded and the compiler reports an undeclared `CMUTIL_CALL__`:
+**Do not nest `CMCall` inside another `CMCall`'s argument list** — unless your compiler gives you
+`__VA_OPT__`. The portable spelling pastes the trailing arguments with `## __VA_ARGS__`, which is
+what drops the comma for a method that takes none; the preprocessor does not macro-expand arguments
+consumed by `##`, so the inner call survives as an undeclared `CMUTIL_CALL__`:
 
 ```c
 /* does not compile */
@@ -61,6 +62,23 @@ uint8_t *bytes = CMCall(buf, GetBytes);
 uint32_t len   = (uint32_t)CMCall(buf, GetSize);
 CMCall(sock, Write, bytes, len, 1000);
 ```
+
+C23 and C++20 replace that paste with `__VA_OPT__`, and then the trailing arguments are expanded
+normally and nesting just works. The header picks the spelling for you:
+
+| `CMUTIL_CALL_NESTED` | when | nesting |
+| --- | --- | --- |
+| `1` | `__STDC_VERSION__ > 201710L`, `__cplusplus >= 202002L`, or MSVC ≥ 19.29 with `/Zc:preprocessor` | allowed |
+| `0` | anything older | rejected at compile time |
+
+Define `CMUTIL_CALL_NESTED` yourself to override it — `1` on a compiler that offers `__VA_OPT__`
+outside C23, `0` to keep the portable spelling so an accidental nesting is caught. This is decided
+by the compiler that *includes* the header, not the one that built the library: `CMCall` is a
+preprocessor macro and emits the same call either way, so it cannot break the ABI. Building your own
+code at C23 while linking a library compiled at C99 is fine.
+
+Where it is available, the `__VA_OPT__` spelling also silences the `-pedantic` complaint that
+`CMCall(obj, Destroy)` passes no variadic argument.
 
 **The receiver is evaluated twice.** `CMCall(obj, Method)` expands to `(obj)->Method((obj))`, so
 `obj` appears twice in the output. Passing a plain variable is fine; passing an expression with
