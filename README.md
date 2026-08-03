@@ -115,7 +115,7 @@ Forcing it to `1` where neither extension exists is a compile error rather than 
 | Text | `CMUTIL_String`, `CMUTIL_StringArray`, `CMUTIL_ByteBuffer`, `CMUTIL_CSConv` |
 | Concurrency | `CMUTIL_Thread`, `CMUTIL_ThreadPool`, `CMUTIL_Mutex`, `CMUTIL_Cond`, `CMUTIL_Semaphore`, `CMUTIL_RWLock`, `CMUTIL_Timer` |
 | Resource pooling | `CMUTIL_Pool` |
-| Networking | `CMUTIL_Socket`, `CMUTIL_ServerSocket`, `CMUTIL_DGramSocket`, `CMUTIL_HttpClient` |
+| Networking | `CMUTIL_Socket`, `CMUTIL_ServerSocket`, `CMUTIL_DGramSocket`, `CMUTIL_HttpClient`, `CMUTIL_RestClient` |
 | Serialization | `CMUTIL_Json`, `CMUTIL_JsonObject`, `CMUTIL_JsonArray`, `CMUTIL_JsonValue`, `CMUTIL_XmlNode` |
 | Cryptography | `CMUTIL_BlockCrypto`, `CMUTIL_RSACrypto`, `CMUTIL_RSAKey` |
 | System | `CMUTIL_Process`, `CMUTIL_File`, `CMUTIL_FileStream`, `CMUTIL_Library`, `CMUTIL_StackWalker` |
@@ -613,6 +613,60 @@ CMCall(client, SetVerify, CMFalse, CMFalse);
 To reach a server with a self-signed certificate you must do one or the other — the default now
 rejects it.
 
+### REST client — `CMUTIL_RestClient`
+
+The same client speaking [`CMUTIL_Json`](#json--cmutil_json-and-friends) instead of byte buffers. It
+serializes the request body, fills in `Accept` and `Content-Type: application/json` where the caller
+left them out, and parses the response.
+
+```c
+CMUTIL_RestClient *rest = CMUTIL_RestClientCreate("https://api.example.com");
+CMCall(rest, SetTimeout, 5000L);              /* the REST methods take no timeout */
+
+CMUTIL_Json *user = CMCall(rest, Get, NULL, "/v1/users/42");
+if (user != NULL) {
+    const char *name = CMCall((CMUTIL_JsonObject*)user, GetCString, "name");
+    printf("%s\n", name);
+    CMUTIL_JsonDestroy(user);
+}
+
+CMUTIL_JsonObject *body = CMUTIL_JsonObjectCreate();
+CMCall(body, PutString, "role", "maintainer");
+CMBool ok = CMCall(rest, Put, NULL, "/v1/users/42", (CMUTIL_Json*)body);
+CMUTIL_JsonDestroy(body);                     /* the body stays yours */
+
+CMCall(&rest->base, Destroy);
+```
+
+| Method | Returns |
+| --- | --- |
+| `Get(headers, uri)` | the parsed response body, or `NULL` |
+| `Post(headers, uri, data)` | the parsed response body, or `NULL` |
+| `Put(headers, uri, data)` | `CMTrue` for any 2xx; the response is discarded |
+| `Delete(headers, uri)` | nothing |
+| `SetTimeout(ms)` | — starts at `CMUTIL_REST_DEFAULT_TIMEOUT` (30 s) |
+| `GetStatus()` | the status of the most recent request, `0` if none arrived |
+
+`NULL` alone does not say what went wrong, so **check `GetStatus`**: a status of `0` means the
+request never reached a response — a connection failure, a timeout, a malformed reply — while any
+other value means the server answered and the body was absent or not JSON. An error body *that is*
+JSON comes back parsed, whatever the status, because that is where APIs put the reason:
+
+```c
+CMUTIL_Json *res = CMCall(rest, Get, NULL, "/v1/users/999");
+switch (CMCall(rest, GetStatus)) {
+    case 0:   /* never got there */          break;
+    case 200: /* res holds the user */       break;
+    default:  /* res may hold the error */   break;
+}
+if (res) CMUTIL_JsonDestroy(res);
+```
+
+The first member is a complete `CMUTIL_HttpClient`, so a REST client *is* one: TLS settings,
+keep-alive, non-JSON requests and `Destroy` all go through `&rest->base`. Note that a REST client
+has no `Destroy` of its own — destroying the base destroys both halves. The status is per client,
+so one client performs one request at a time.
+
 ### JSON — `CMUTIL_Json` and friends
 
 `CMUTIL_Json` is the common base; `CMUTIL_JsonObject`, `CMUTIL_JsonArray` and `CMUTIL_JsonValue` are
@@ -1045,8 +1099,8 @@ CI (`.github/workflows/build-and-test.yml`) runs this on `ubuntu-latest`, `macos
 
 ## Running the samples
 
-`samples/` holds one annotated program per feature area — twenty of them, from `sample_01_hello`
-through `sample_20_stackwalk`. They are built with the library by default (`BUILD_SAMPLES=ON`):
+`samples/` holds one annotated program per feature area — twenty-one of them, from `sample_01_hello`
+through `sample_21_rest`. They are built with the library by default (`BUILD_SAMPLES=ON`):
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -1072,7 +1126,7 @@ src/                Library sources and the single public header
   pool.c              CMUTIL_Pool
   network.c           TCP sockets, server sockets, TLS
   datagram.c          UDP sockets
-  http.c              CMUTIL_HttpClient
+  http.c              CMUTIL_HttpClient, CMUTIL_RestClient
   nanojson.c          JSON parser and model
   nanoxml.c           XML parser and model
   crypto.c            Block ciphers, RSA, Base64, secure random

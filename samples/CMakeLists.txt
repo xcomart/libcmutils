@@ -54,6 +54,7 @@ add_sample ( sample_17_dgram )
 add_sample ( sample_18_http )
 add_sample ( sample_19_crypto )
 add_sample ( sample_20_stackwalk )
+add_sample ( sample_21_rest )
 
 # sample_15_library resolves symbols out of the plugin built above.
 ADD_DEPENDENCIES ( sample_15_library sample_plugin )
