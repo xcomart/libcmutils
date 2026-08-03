@@ -81,8 +81,6 @@ int main() {
     OpenSSL_add_all_algorithms();
     CMUTIL_Init(CMUTIL_MEM_TYPE);
 
-    EVP_CIPHER *cipher;
-
     CMUTIL_BlockCrypto *block = NULL;
     CMUTIL_Map *env = NULL;
     CMUTIL_String *pathstr = NULL;
@@ -198,7 +196,8 @@ int main() {
         "6wIDAQAB\n"
         "-----END PUBLIC KEY-----";
 
-    priv = CMUTIL_PrivateKeyCreateFromPEM(priv_pem, "");
+    /* the passphrase is bytes, not text */
+    priv = CMUTIL_PrivateKeyCreateFromPEM(priv_pem, (const uint8_t*)"");
     ASSERT(priv != NULL, "CMUTIL_PrivateKeyCreateFromPEM");
 
     pub = CMUTIL_PublicKeyCreateFromPEM(pub_pem);
