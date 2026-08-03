@@ -1,5 +1,9 @@
 # API reference
 
+**Published at <https://xcomart.github.io/libcmutils/api/>**, rebuilt by the
+`Docs` workflow on every push that touches the header, this directory, the
+README or the Jekyll config.
+
 The reference is generated from the doc comments in
 [`src/libcmutils.h`](../src/libcmutils.h), which is the whole public API — the
 `.c` files are implementation and are deliberately left out.

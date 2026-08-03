@@ -73,9 +73,18 @@ SOFTWARE.
  *
  * @section mp_where Where to look
  *
- * The <b>Modules</b> list groups the API by subject. The project README
- * covers the same ground in prose, and @c samples/ holds one annotated
- * program per subject.
+ * <b>Topics</b>, in the bar above, groups the API by subject - start there
+ * if you know roughly what you need. <b>Data Structures</b> lists the object
+ * types, and the search box finds anything by name.
+ *
+ * Elsewhere:
+ *
+ * - <a href="https://xcomart.github.io/libcmutils/">Project page</a> - the
+ *   same API in prose, with the reasoning behind the conventions.
+ * - <a href="https://github.com/xcomart/libcmutils">Repository</a> - source,
+ *   issues and releases.
+ * - <a href="https://github.com/xcomart/libcmutils/tree/master/samples">
+ *   Samples</a> - one annotated, runnable program per subject.
  */
 
 #ifndef LIBCMUTILS_H__
