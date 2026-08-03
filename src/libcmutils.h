@@ -199,9 +199,61 @@ CMUTIL_API int CMUTIL_NetworkGetHostByNameR(
 CMUTIL_API void CMUTIL_UnusedP(void*,...);
 
 /**
+ * @brief Whether CMCall may be nested inside another CMCall's arguments.
+ *
+ * The portable spelling of CMCall pastes the trailing arguments with the
+ * GNU <code>, ## __VA_ARGS__</code> extension, which is what drops the comma
+ * when a method takes no arguments. An argument that is an operand of
+ * <code>##</code> is not macro replaced, and by the time the expansion is
+ * rescanned CMUTIL_CALL__ is already being expanded, so a nested CMCall is
+ * left as an undeclared identifier:
+ *
+ * <code>
+ * // does not compile with CMUTIL_CALL_NESTED == 0
+ * CMCall(sock, Write, CMCall(buf, GetBytes), len, 1000);
+ * </code>
+ *
+ * C23 and C++20 provide <code>__VA_OPT__</code>, which drops the comma
+ * without <code>##</code>. The trailing arguments are then macro replaced as
+ * usual and nesting works. That spelling also stops the empty argument list
+ * of <code>CMCall(obj, Destroy)</code> from tripping <code>-pedantic</code>.
+ *
+ * This is decided by the compiler that includes the header, not by the one
+ * that built the library: CMCall is a preprocessor macro and generates the
+ * same call either way, so the choice cannot break the ABI.
+ *
+ * Define CMUTIL_CALL_NESTED to 1 or 0 before including this header to force
+ * either spelling - to 1 on a compiler that offers <code>__VA_OPT__</code> as
+ * an extension outside C23, or to 0 to keep the portable spelling and have
+ * an accidental nesting rejected at compile time. Left undefined, it is
+ * enabled wherever <code>__VA_OPT__</code> is known to be available.
+ *
+ * The receiver is expanded twice in both spellings, so an expression with
+ * side effects must never be passed as one, nested calls or not.
+ */
+#if !defined(CMUTIL_CALL_NESTED)
+# if defined(__STDC_VERSION__) && __STDC_VERSION__ > 201710L
+   /* C23, and the C2x drafts that already carried __VA_OPT__ */
+#  define CMUTIL_CALL_NESTED 1
+# elif defined(__cplusplus) && __cplusplus >= 202002L
+#  define CMUTIL_CALL_NESTED 1
+# elif defined(_MSC_VER) && _MSC_VER >= 1929 && \
+       defined(_MSVC_TRADITIONAL) && _MSVC_TRADITIONAL == 0
+   /* the conforming preprocessor, /Zc:preprocessor */
+#  define CMUTIL_CALL_NESTED 1
+# else
+#  define CMUTIL_CALL_NESTED 0
+# endif
+#endif
+
+/**
  * A wrapper macro for CMUTIL_CALL.
  */
-#define CMUTIL_CALL__(a,b,...)  (a)->b((a), ## __VA_ARGS__)
+#if CMUTIL_CALL_NESTED
+# define CMUTIL_CALL__(a,b,...)  (a)->b((a) __VA_OPT__(,) __VA_ARGS__)
+#else
+# define CMUTIL_CALL__(a,b,...)  (a)->b((a), ## __VA_ARGS__)
+#endif
 
 /**
  * @brief Method caller for this library.
