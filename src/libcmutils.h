@@ -1426,9 +1426,13 @@ struct CMUTIL_String {
      *
      * Append the given string to the end of this string object.
      *
+     * Appending an empty string is not an error, it just does nothing.
+     *
      * @param string This string object.
      * @param tobeadded C-style null terminated string to be appended.
-     * @return New size of this string object.
+     * @return New size of this string object, which is the unchanged current
+     *         size when @a tobeadded is an empty string.
+     *         -1 if @a tobeadded is NULL.
      */
     ssize_t (*AddString)(
             CMUTIL_String *string, const char *tobeadded);
@@ -1439,10 +1443,14 @@ struct CMUTIL_String {
      * Append the given string to the end of this string object.
      * Given string is not needed to be null terminated.
      *
+     * Appending zero bytes is not an error, it just does nothing.
+     *
      * @param string This string object.
      * @param tobeadded C style string to be appended.
      * @param size Number of bytes to be appended from the given string.
-     * @return New size of this string object.
+     * @return New size of this string object, which is the unchanged current
+     *         size when @a size is zero.
+     *         -1 if @a tobeadded is NULL.
      */
     ssize_t (*AddNString)(
             CMUTIL_String *string, const char *tobeadded, size_t size);
@@ -1490,9 +1498,14 @@ struct CMUTIL_String {
      *
      * Append the given string object to the end of this string object.
      *
+     * Appending an empty string object is not an error,
+     * it just does nothing.
+     *
      * @param string This string object.
      * @param tobeadded Another string object to be appended.
-     * @return New size of this string object.
+     * @return New size of this string object, which is the unchanged current
+     *         size when @a tobeadded is an empty string object.
+     *         -1 if @a tobeadded is NULL.
      */
     ssize_t (*AddAnother)(
             CMUTIL_String *string, const CMUTIL_String *tobeadded);
@@ -1502,10 +1515,16 @@ struct CMUTIL_String {
      *
      * Insert the given string to this string object at the index.
      *
+     * Inserting an empty string is not an error, it just does nothing,
+     * but the index is still validated.
+     *
      * @param string This string object.
      * @param tobeadded C style null terminated string to be inserted.
      * @param at Index where the given string will be inserted.
-     * @return New size of this string object.
+     * @return New size of this string object, which is the unchanged current
+     *         size when @a tobeadded is an empty string.
+     *         -1 if @a tobeadded is NULL or @a at is greater than the current
+     *         size of this string object.
      */
     ssize_t (*InsertString)(
             CMUTIL_String *string, const char *tobeadded, uint32_t at);
@@ -1517,11 +1536,17 @@ struct CMUTIL_String {
      * at the given index.
      * Given string is not needed to be null terminated.
      *
+     * Inserting zero bytes is not an error, it just does nothing,
+     * but the index is still validated.
+     *
      * @param string This string object.
      * @param tobeadded C style string to be inserted.
      * @param at Index where the given string will be inserted.
      * @param size Number of bytes to be inserted from the given string.
-     * @return New size of this string object.
+     * @return New size of this string object, which is the unchanged current
+     *         size when @a size is zero.
+     *         -1 if @a tobeadded is NULL or @a at is greater than the current
+     *         size of this string object.
      */
     ssize_t (*InsertNString)(
             CMUTIL_String *string,
@@ -1561,10 +1586,16 @@ struct CMUTIL_String {
      *
      * Insert the given string object to this string object at the index.
      *
+     * Inserting an empty string object is not an error, it just does nothing,
+     * but the index is still validated.
+     *
      * @param string This string object.
      * @param idx Index where another string object will be inserted.
      * @param tobeadded Another string object to be inserted.
-     * @return New size of this string object.
+     * @return New size of this string object, which is the unchanged current
+     *         size when @a tobeadded is an empty string object.
+     *         -1 if @a tobeadded is NULL or @a idx is greater than the current
+     *         size of this string object.
      */
     ssize_t (*InsertAnother)(
             CMUTIL_String *string, uint32_t idx, CMUTIL_String *tobeadded);
@@ -1635,9 +1666,11 @@ struct CMUTIL_String {
      *
      * @param string This string object.
      * @param needle Substring to be replaced.
-     * @param alter Replacement string.
+     * @param alter Replacement string. An empty string is allowed and
+     *              removes every occurrence of @a needle.
      * @return New string object which is the result of replacement.
      *         Must be destroyed after use.
+     *         NULL if @a needle or @a alter is NULL, or on internal failure.
      */
     CMUTIL_String *(*Replace)(
             const CMUTIL_String *string,

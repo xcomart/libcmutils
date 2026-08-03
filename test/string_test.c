@@ -107,6 +107,106 @@ int main() {
     CMCall(str, SelfTrim);
     ASSERT(strcmp(CMCall(str, GetCString), "test") == 0, "SelfTrim");
 
+    // empty append/insert must be a no-op, not an error.
+    CMCall(str, Clear);
+    ASSERT(CMCall(str, AddString, "") == 0, "AddString empty on empty string");
+    ASSERT(strcmp(CMCall(str, GetCString), "") == 0,
+        "AddString empty on empty string validation");
+
+    CMCall(str, AddString, "abc");
+    ASSERT(CMCall(str, AddString, "") == 3, "AddString empty");
+    ASSERT(strcmp(CMCall(str, GetCString), "abc") == 0,
+        "AddString empty validation");
+
+    ASSERT(CMCall(str, AddNString, "xyz", 0) == 3, "AddNString zero size");
+    ASSERT(strcmp(CMCall(str, GetCString), "abc") == 0,
+        "AddNString zero size validation");
+
+    ASSERT(CMCall(str, AddString, NULL) == -1, "AddString NULL");
+    ASSERT(CMCall(str, AddNString, NULL, 3) == -1, "AddNString NULL");
+    ASSERT(strcmp(CMCall(str, GetCString), "abc") == 0,
+        "AddString/AddNString NULL validation");
+
+    ASSERT(CMCall(str, InsertString, "", 1) == 3, "InsertString empty");
+    ASSERT(strcmp(CMCall(str, GetCString), "abc") == 0,
+        "InsertString empty validation");
+
+    ASSERT(CMCall(str, InsertNString, "x", 1, 0) == 3,
+        "InsertNString zero size");
+    ASSERT(strcmp(CMCall(str, GetCString), "abc") == 0,
+        "InsertNString zero size validation");
+
+    ASSERT(CMCall(str, InsertString, NULL, 0) == -1, "InsertString NULL");
+    ASSERT(CMCall(str, InsertNString, NULL, 0, 1) == -1, "InsertNString NULL");
+
+    // an out of bound index is still an error even with nothing to insert.
+    ASSERT(CMCall(str, InsertNString, "x", 10, 0) == -1,
+        "InsertNString zero size out of bound");
+    ASSERT(CMCall(str, InsertString, "", 10) == -1,
+        "InsertString empty out of bound");
+    ASSERT(strcmp(CMCall(str, GetCString), "abc") == 0,
+        "Insert out of bound validation");
+
+    // a NULL string object is an error, an empty one is a no-op.
+    ASSERT(CMCall(str, AddAnother, NULL) == -1, "AddAnother NULL");
+    ASSERT(CMCall(str, InsertAnother, 1, NULL) == -1, "InsertAnother NULL");
+    ASSERT(strcmp(CMCall(str, GetCString), "abc") == 0,
+        "AddAnother/InsertAnother NULL validation");
+
+    if (another) CMCall(another, Destroy); another = NULL;
+    another = CMUTIL_StringCreate();
+    ASSERT(CMCall(str, AddAnother, another) == 3, "AddAnother empty");
+    ASSERT(strcmp(CMCall(str, GetCString), "abc") == 0,
+        "AddAnother empty validation");
+
+    ASSERT(CMCall(str, InsertAnother, 1, another) == 3, "InsertAnother empty");
+    ASSERT(strcmp(CMCall(str, GetCString), "abc") == 0,
+        "InsertAnother empty validation");
+
+    // an out of bound index is still an error even with nothing to insert.
+    ASSERT(CMCall(str, InsertAnother, 10, another) == -1,
+        "InsertAnother empty out of bound");
+    ASSERT(strcmp(CMCall(str, GetCString), "abc") == 0,
+        "InsertAnother empty out of bound validation");
+
+    CMCall(another, AddString, "XY");
+    ASSERT(CMCall(str, InsertAnother, 1, another) == 5, "InsertAnother");
+    ASSERT(strcmp(CMCall(str, GetCString), "aXYbc") == 0,
+        "InsertAnother validation");
+
+    ASSERT(CMCall(str, InsertAnother, 10, another) == -1,
+        "InsertAnother out of bound");
+    ASSERT(strcmp(CMCall(str, GetCString), "aXYbc") == 0,
+        "InsertAnother out of bound validation");
+
+    // replacing with an empty string removes every occurrence of needle.
+    CMCall(str, Clear);
+    CMCall(str, AddString, "UTF-8");
+    if (another) CMCall(another, Destroy); another = NULL;
+    another = CMCall(str, Replace, "-", "");
+    ASSERT(another != NULL, "Replace with empty alter");
+    ASSERT(strcmp(CMCall(another, GetCString), "UTF8") == 0,
+        "Replace with empty alter validation");
+    ASSERT(strcmp(CMCall(str, GetCString), "UTF-8") == 0,
+        "Replace with empty alter keeps source");
+
+    CMCall(str, Clear);
+    CMCall(str, AddString, "--a--b--");
+    if (another) CMCall(another, Destroy); another = NULL;
+    another = CMCall(str, Replace, "-", "");
+    ASSERT(another != NULL, "Replace leading/trailing/consecutive needle");
+    ASSERT(strcmp(CMCall(another, GetCString), "ab") == 0,
+        "Replace leading/trailing/consecutive needle validation");
+    ASSERT(strcmp(CMCall(str, GetCString), "--a--b--") == 0,
+        "Replace leading/trailing/consecutive needle keeps source");
+
+    if (another) CMCall(another, Destroy); another = NULL;
+    another = CMCall(str, Replace, "--", "-");
+    ASSERT(another != NULL, "Replace non-empty alter");
+    ASSERT(strcmp(CMCall(another, GetCString), "-a-b-") == 0,
+        "Replace non-empty alter validation");
+    ASSERT(strcmp(CMCall(str, GetCString), "--a--b--") == 0,
+        "Replace non-empty alter keeps source");
 
     //////////////////////////////////////////////////////////////////////
     // CMUTIL_StringArray tests

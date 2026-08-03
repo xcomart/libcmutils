@@ -2,6 +2,8 @@
 // Created by 박성진 on 25. 12. 23..
 //
 
+#include <string.h>
+
 #include "libcmutils.h"
 #include "test.h"
 
@@ -12,6 +14,7 @@ int main() {
     CMUTIL_Init(CMUTIL_MEM_TYPE);
 
     CMUTIL_XmlNode *node = NULL;
+    CMUTIL_XmlNode *tmpnode = NULL;
     CMUTIL_String *str = NULL;
     CMUTIL_Json *json = NULL;
 
@@ -23,6 +26,17 @@ int main() {
         "<xml><a attr=\"a attribute\">1</a><b>2</b></xml>");
     node = CMUTIL_XmlParse(str);
     ASSERT(node != NULL, "CMUTIL_XmlParse");
+
+    // setting an empty name must succeed and yield an empty name.
+    tmpnode = CMUTIL_XmlNodeCreate(CMXmlNodeTag, "tmp");
+    ASSERT(tmpnode != NULL, "CMUTIL_XmlNodeCreate");
+    ASSERT(strcmp(CMCall(tmpnode, GetName), "tmp") == 0, "XmlNode GetName");
+    CMCall(tmpnode, SetName, "");
+    ASSERT(strcmp(CMCall(tmpnode, GetName), "") == 0, "XmlNode SetName empty");
+    CMCall(tmpnode, SetName, "renamed");
+    ASSERT(strcmp(CMCall(tmpnode, GetName), "renamed") == 0,
+        "XmlNode SetName");
+    CMCall(tmpnode, Destroy); tmpnode = NULL;
 
     if (str) CMCall(str, Destroy); str = NULL;
     str = CMCall(node, ToDocument, CMFalse);
@@ -39,6 +53,7 @@ int main() {
 END_POINT:
     if (json) CMUTIL_JsonDestroy(json);
     if (str) CMCall(str, Destroy);
+    if (tmpnode) CMCall(tmpnode, Destroy);
     if (node) CMCall(node, Destroy);
     if (!CMUTIL_Clear()) ir = -1;
     return ir;
