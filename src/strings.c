@@ -607,13 +607,15 @@ CMUTIL_STATIC CMUTIL_String *CMUTIL_StringClone(const CMUTIL_String *string)
     const CMUTIL_String_Internal *istr = (const CMUTIL_String_Internal*)string;
     size_t size = CMCall(string, GetSize);
     const char *str = CMCall(string, GetCString);
+    // capacity must be positive: cloning an empty string fails otherwise.
     CMUTIL_String *res =
-            CMUTIL_StringCreateInternal(istr->memst, size, NULL);
+            CMUTIL_StringCreateInternal(istr->memst, size? size:1, NULL);
     if (!res) {
         CMLogError("CMUTIL_StringCreateInternal failed");
         return NULL;
     }
-    CMCall(res, AddNString, str, size);
+    if (size > 0)
+        CMCall(res, AddNString, str, size);
     return res;
 }
 

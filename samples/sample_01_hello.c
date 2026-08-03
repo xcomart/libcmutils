@@ -36,8 +36,12 @@ int main(void)
      *
      *   1. Never nest CMCall inside another CMCall's trailing arguments -
      *      the inner call is not macro-expanded and will not compile.
-     *   2. The receiver is evaluated twice, so never pass an expression
-     *      with side effects as the receiver.
+     *   2. Never pass an expression with side effects as the receiver, it
+     *      may be evaluated twice.
+     *
+     * Both relax on a modern enough compiler - see CMUTIL_CALL_NESTED and
+     * CMUTIL_CALL_SINGLE_EVAL in libcmutils.h - but portable code observes
+     * them anyway.
      */
     str = CMUTIL_StringCreate();
     CMCall(str, AddString, "hello");
