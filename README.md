@@ -1065,10 +1065,11 @@ pattern)` and `CMUTIL_LogSocketAppenderCreate(name, accept_host, listen_port, pa
 listens for connections and streams the log to whoever attaches (`telnet localhost <port>`).
 `CMCall(lsys, UpdateEnv)` re-establishes the logging threads in a child after `fork()`.
 
-`CMUTIL_LogSystemConfigureFomJson(path)` builds the same thing from a file, but note that it
-installs the result as the global log system itself: pass it to `CMUTIL_LogSystemSet` afterwards and
-you destroy the system that is already installed. Drop the current one with
-`CMUTIL_LogSystemSet(NULL)` first, then call it and ignore the return value.
+`CMUTIL_LogSystemConfigureFomJson(path)` builds the same thing from a file. It installs the result
+as the global log system itself, destroying the one it replaces, so call it and ignore the return
+value — passing that value to `CMUTIL_LogSystemSet` does nothing, because setting the system that is
+already installed is a no-op. A missing or invalid file is not a failure either: a built-in console
+configuration is installed instead.
 
 ## Running the tests
 
