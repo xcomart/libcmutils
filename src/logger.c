@@ -1930,14 +1930,31 @@ CMUTIL_LogSystem *CMUTIL_LogSystemCreate()
     return CMUTIL_LogSystemCreateInternal(CMUTIL_GetMem());
 }
 
+/**
+ * Make @a lsys the global log system, releasing the one it replaces.
+ *
+ * Every path that installs a log system goes through here, so replacing one
+ * never leaks and installing the one already in place never destroys it -
+ * the configure functions install their own result, which makes handing that
+ * same pointer to CMUTIL_LogSystemSet an easy mistake to make.
+ *
+ * The caller must hold g_cmutil_logsystem_mutex.
+ */
+CMUTIL_STATIC void CMUTIL_LogSystemInstall(CMUTIL_LogSystem *lsys)
+{
+    CMUTIL_LogSystem *prev = __cmutil_logsystem;
+    if (lsys == prev) return;
+    // Publish first: whatever the outgoing system logs while it tears itself
+    // down then reaches the incoming one instead of reaching itself.
+    __cmutil_logsystem = lsys;
+    if (prev)
+        CMCall(prev, Destroy);
+}
+
 void CMUTIL_LogSystemSet(CMUTIL_LogSystem *lsys)
 {
     CMCall(g_cmutil_logsystem_mutex, Lock);
-    if (__cmutil_logsystem) {
-        CMCall(__cmutil_logsystem, Destroy);
-        __cmutil_logsystem = NULL;
-    }
-    __cmutil_logsystem = lsys;
+    CMUTIL_LogSystemInstall(lsys);
     CMCall(g_cmutil_logsystem_mutex, Unlock);
 }
 
@@ -1999,7 +2016,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureDefault(CMUTIL_Mem *memst)
     //CMCall(conapndr, SetAsync, 64);
     CMCall(res, AddAppender, conapndr);
     CMCall(root_logger, AddAppender, conapndr, CMLogLevel_Debug);
-    __cmutil_logsystem = (CMUTIL_LogSystem*)res;
+    CMUTIL_LogSystemInstall((CMUTIL_LogSystem*)res);
     CMCall(g_cmutil_logsystem_mutex, Unlock);
 
     printf("logging system not initialized or invalid configuration. "
@@ -2361,7 +2378,7 @@ CMUTIL_LogSystem *CMUTIL_LogSystemConfigureInternal(
                     (CMUTIL_LogSystem_Internal*)lsys, loggers, "logger",
                     CMUTIL_LogSystemProcessOneLogger);
         if (succeeded) {
-            __cmutil_logsystem = (CMUTIL_LogSystem*)lsys;
+            CMUTIL_LogSystemInstall((CMUTIL_LogSystem*)lsys);
         } else {
             if (lsys) CMCall(lsys, Destroy);
         }
@@ -2416,8 +2433,10 @@ CMUTIL_LogSystem *CMUTIL_LogSystemGetInternal(CMUTIL_Mem *memst)
         char *conf = getenv("CMUTIL_LOG_CONFIG");
         g_logsystem_initialized = CMTrue;
         if (!conf) conf = CMUTIL_LOG_CONFIG_DEFAULT;
-        __cmutil_logsystem = CMUTIL_LogSystemConfigureFomJsonInternal(
-                    memst, conf);
+        // installs what it builds - falling back to a console configuration
+        // when the file is missing or invalid - so the result is already the
+        // global system by the time this returns.
+        (void)CMUTIL_LogSystemConfigureFomJsonInternal(memst, conf);
     }
     CMCall(g_cmutil_logsystem_mutex, Unlock);
     return __cmutil_logsystem;
