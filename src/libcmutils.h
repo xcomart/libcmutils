@@ -115,6 +115,7 @@ extern "C" {
  */
 #if defined(_MSC_VER)
 # define strcasecmp     _stricmp
+# define strncasecmp    _strnicmp
 # define stat           _stat
 # define pid_t          DWORD
 # define usleep(x)      Sleep(x / 1000)
