@@ -228,8 +228,8 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
  * an accidental nesting rejected at compile time. Left undefined, it is
  * enabled wherever <code>__VA_OPT__</code> is known to be available.
  *
- * The receiver is expanded twice in both spellings, so an expression with
- * side effects must never be passed as one, nested calls or not.
+ * Whether the receiver is evaluated once or twice is a separate question,
+ * see CMUTIL_CALL_SINGLE_EVAL below.
  */
 #if !defined(CMUTIL_CALL_NESTED)
 # if defined(__STDC_VERSION__) && __STDC_VERSION__ > 201710L
@@ -247,12 +247,96 @@ CMUTIL_API void CMUTIL_UnusedP(void*,...);
 #endif
 
 /**
+ * @brief Whether CMCall evaluates its receiver once instead of twice.
+ *
+ * The plain expansion of <code>CMCall(obj, Method)</code> is
+ * <code>(obj)->Method((obj))</code>, which names the receiver twice. That is
+ * harmless for a variable and a trap for anything with a side effect:
+ *
+ * <code>
+ * // with CMUTIL_CALL_SINGLE_EVAL == 0 this removes two elements
+ * CMCall(CMCall(list, RemoveFront), GetName);
+ * </code>
+ *
+ * Binding the receiver to a temporary needs an expression that can hold a
+ * declaration, which standard C does not have. Two extensions do:
+ *
+ *   * a GNU statement expression, available in GCC and Clang for both C and
+ *     C++;
+ *   * an immediately invoked lambda, available in any C++ compiler.
+ *
+ * MSVC compiling C has neither, so there the receiver is still evaluated
+ * twice. Code that has to build there must keep avoiding side effects in a
+ * receiver, which is why this is worth knowing rather than forgetting.
+ *
+ * Define CMUTIL_CALL_SINGLE_EVAL to 0 to keep the double expansion
+ * everywhere - useful to make sure code stays portable to MSVC's C mode.
+ * Forcing it to 1 where neither extension exists is a compile error rather
+ * than a silent fallback.
+ */
+#if !defined(CMUTIL_CALL_SINGLE_EVAL)
+# if defined(__GNUC__)
+#  define CMUTIL_CALL_SINGLE_EVAL 1
+# elif defined(__cplusplus) && (!defined(_MSC_VER) || \
+       (defined(_MSVC_TRADITIONAL) && _MSVC_TRADITIONAL == 0))
+   /* MSVC only with /Zc:preprocessor - the traditional one mangles
+    * __VA_ARGS__ on its way into the inner macro. */
+#  define CMUTIL_CALL_SINGLE_EVAL 1
+# else
+#  define CMUTIL_CALL_SINGLE_EVAL 0
+# endif
+#endif
+
+#if CMUTIL_CALL_SINGLE_EVAL && \
+    !defined(__GNUC__) && !defined(__cplusplus)
+# error "CMUTIL_CALL_SINGLE_EVAL needs a statement expression or a lambda"
+#endif
+
+/**
+ * Token pasting helpers, used to give each receiver temporary a name of its
+ * own so that a nested CMCall does not shadow the enclosing one.
+ */
+#define CMUTIL_CAT2__(a,b)  a ## b
+#define CMUTIL_CAT__(a,b)   CMUTIL_CAT2__(a,b)
+
+/**
  * A wrapper macro for CMUTIL_CALL.
  */
-#if CMUTIL_CALL_NESTED
-# define CMUTIL_CALL__(a,b,...)  (a)->b((a) __VA_OPT__(,) __VA_ARGS__)
+#if CMUTIL_CALL_SINGLE_EVAL
+# if defined(__GNUC__)
+   /* statement expression: GCC and Clang, C and C++ alike */
+#  if CMUTIL_CALL_NESTED
+#   define CMUTIL_CALL_EXPR__(o,a,b,...) __extension__ ({                     \
+        __typeof__(a) o = (a); o->b(o __VA_OPT__(,) __VA_ARGS__); })
+#   define CMUTIL_CALL__(a,b,...) CMUTIL_CALL_EXPR__(                         \
+        CMUTIL_CAT__(cmutil_self__,__COUNTER__), a, b __VA_OPT__(,) __VA_ARGS__)
+#  else
+#   define CMUTIL_CALL_EXPR__(o,a,b,...) __extension__ ({                     \
+        __typeof__(a) o = (a); o->b(o, ## __VA_ARGS__); })
+#   define CMUTIL_CALL__(a,b,...) CMUTIL_CALL_EXPR__(                         \
+        CMUTIL_CAT__(cmutil_self__,__COUNTER__), a, b, ## __VA_ARGS__)
+#  endif
+# else
+   /* immediately invoked lambda: any C++ compiler, MSVC included */
+#  if CMUTIL_CALL_NESTED
+#   define CMUTIL_CALL_EXPR__(o,a,b,...) ([&]{                                \
+        auto o = (a); return o->b(o __VA_OPT__(,) __VA_ARGS__); }())
+#   define CMUTIL_CALL__(a,b,...) CMUTIL_CALL_EXPR__(                         \
+        CMUTIL_CAT__(cmutil_self__,__COUNTER__), a, b __VA_OPT__(,) __VA_ARGS__)
+#  else
+#   define CMUTIL_CALL_EXPR__(o,a,b,...) ([&]{                                \
+        auto o = (a); return o->b(o, ## __VA_ARGS__); }())
+#   define CMUTIL_CALL__(a,b,...) CMUTIL_CALL_EXPR__(                         \
+        CMUTIL_CAT__(cmutil_self__,__COUNTER__), a, b, ## __VA_ARGS__)
+#  endif
+# endif
 #else
-# define CMUTIL_CALL__(a,b,...)  (a)->b((a), ## __VA_ARGS__)
+   /* the receiver is named twice */
+# if CMUTIL_CALL_NESTED
+#  define CMUTIL_CALL__(a,b,...)  (a)->b((a) __VA_OPT__(,) __VA_ARGS__)
+# else
+#  define CMUTIL_CALL__(a,b,...)  (a)->b((a), ## __VA_ARGS__)
+# endif
 #endif
 
 /**

@@ -80,18 +80,32 @@ code at C23 while linking a library compiled at C99 is fine.
 Where it is available, the `__VA_OPT__` spelling also silences the `-pedantic` complaint that
 `CMCall(obj, Destroy)` passes no variadic argument.
 
-**The receiver is evaluated twice.** `CMCall(obj, Method)` expands to `(obj)->Method((obj))`, so
-`obj` appears twice in the output. Passing a plain variable is fine; passing an expression with
-side effects runs it twice:
+**The receiver may be evaluated twice.** The plain expansion of `CMCall(obj, Method)` is
+`(obj)->Method((obj))`, which names `obj` twice. A variable does not care; an expression with side
+effects runs twice:
 
 ```c
-/* GetAt is called twice */
+/* with CMUTIL_CALL_SINGLE_EVAL == 0, GetAt is called twice */
 puts(CMCall(CMCall(list, GetAt, i), GetFullPath));
 
-/* RemoveFront would remove two elements */
+/* always safe */
 CMUTIL_File *f = CMCall(list, GetAt, i);
 puts(CMCall(f, GetFullPath));
 ```
+
+Binding the receiver to a temporary needs an expression that can hold a declaration, which standard
+C does not have — but a GNU statement expression and a C++ lambda both do, and the header uses
+whichever is available:
+
+| `CMUTIL_CALL_SINGLE_EVAL` | when | receiver |
+| --- | --- | --- |
+| `1` | GCC or Clang (C and C++), any C++ compiler with a conforming preprocessor | evaluated once |
+| `0` | MSVC compiling C | evaluated twice |
+
+Define it to `0` yourself to keep the double expansion everywhere, which is the honest setting while
+your code still has to build with MSVC as C: **the single-evaluation guarantee does not exist
+there**, so a side-effecting receiver stays a portability bug even where this happens to work.
+Forcing it to `1` where neither extension exists is a compile error rather than a silent fallback.
 
 ## Feature overview
 
