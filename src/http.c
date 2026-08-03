@@ -435,10 +435,10 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
         if (body != NULL) {
             const uint8_t *data = CMCall(body, GetBytes);
             const size_t size = CMCall(body, GetSize);
+            // Content-Length already delimits the body. A CRLF after it is
+            // extra bytes the peer reads as the start of the next request,
+            // which desynchronizes a kept-alive connection.
             sr = CMCall(sock, Write, data, size, timeout);
-            // write last crlf
-            if (sr == CMSocketOk)
-                sr = CMUTIL_HttpClientWriteLine(sock, NULL, timeout);
             if (sr != CMSocketOk) {
                 CMLogError("failed to write request body");
                 goto FAILED;
@@ -461,13 +461,21 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
             CMLogError("failed to parse status line");
             goto FAILED;
         }
+        // Only HTTP/1.1 keeps a connection open by default. An older peer
+        // closes right after the response unless it asks to keep going, and
+        // pooling that socket hands the next request a broken pipe.
+        if ((size_t)(p - buf) != 8 || strncmp(buf, "HTTP/1.1", 8) != 0)
+            keepalive = CMFalse;
         // p points at the space before the status code,
         // the reason phrase starts after the next one.
         q = strchr(p+1, ' ');
         if (q) *q = '\0';
         *status = (int)strtol(p+1, NULL, 10);
-        if (*status != 200) {
-            CMLogWarn("status code is not 200: %d - %s",
+        // The whole 2xx range is success - 201 Created and 204 No Content
+        // are ordinary answers to a POST or a DELETE, not something to
+        // complain about.
+        if (*status < 200 || *status > 299) {
+            CMLogWarn("status code is not successful: %d - %s",
                       *status, q? q+1:"");
        }
     }
@@ -479,8 +487,11 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
         }
         p = CMUTIL_HttpClientLineValue(buf, "Connection");
         if (p) {
-            if (strcmp(p, "close") == 0) {
+            if (strcasecmp(p, "close") == 0) {
                 keepalive = CMFalse;
+            } else if (strcasecmp(p, "keep-alive") == 0) {
+                // an HTTP/1.0 peer opting in, if we asked for it too
+                keepalive = ih->keepalive;
             }
             continue;
         }
@@ -679,4 +690,287 @@ CMUTIL_HttpClient *CMUTIL_HttpClientCreateInternal(
 CMUTIL_HttpClient *CMUTIL_HttpClientCreate(const char *urlprefix)
 {
     return CMUTIL_HttpClientCreateInternal(CMUTIL_GetMem(), urlprefix);
+}
+
+/* ---------------------------------------------------------------------------
+ * REST client.
+ *
+ * CMUTIL_RestClient starts with a CMUTIL_HttpClient by value, so a pointer to
+ * one is a valid HTTP client. That rules out simply reusing the HTTP client's
+ * own object: its private fields sit right after the interface, where the REST
+ * methods have to go. So a REST client owns an HTTP client instead and its
+ * inherited half is a set of forwarders - the layout contract of the header is
+ * kept without http.c's internals leaking into it.
+ * ---------------------------------------------------------------------------
+ */
+
+/* Put() stores a void*, and a string literal would have to lose its const to
+ * get there. */
+static char g_cmutil_rest_json_type[] = "application/json";
+
+typedef struct CMUTIL_RestClient_Internal {
+    CMUTIL_RestClient   base;
+    CMUTIL_HttpClient   *http;
+    CMUTIL_Mem          *memst;
+    long                timeout;
+    int                 status;
+} CMUTIL_RestClient_Internal;
+
+CMUTIL_STATIC CMBool CMUTIL_RestClientSetVerify(
+    CMUTIL_HttpClient *client, CMBool verify_host, CMBool verify_peer)
+{
+    CMUTIL_RestClient_Internal *ir = (CMUTIL_RestClient_Internal*)client;
+    return CMCall(ir->http, SetVerify, verify_host, verify_peer);
+}
+
+CMUTIL_STATIC CMBool CMUTIL_RestClientSetSSLCert(
+    CMUTIL_HttpClient *client,
+    const char *certfile,
+    const char *keyfile,
+    const char *cafile)
+{
+    CMUTIL_RestClient_Internal *ir = (CMUTIL_RestClient_Internal*)client;
+    return CMCall(ir->http, SetSSLCert, certfile, keyfile, cafile);
+}
+
+CMUTIL_STATIC void CMUTIL_RestClientSetKeepAlive(
+    CMUTIL_HttpClient *client, CMBool keepalive)
+{
+    CMUTIL_RestClient_Internal *ir = (CMUTIL_RestClient_Internal*)client;
+    CMCall(ir->http, SetKeepAlive, keepalive);
+}
+
+CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_RestClientHttpRequest(
+    CMUTIL_HttpClient *client,
+    const char *method,
+    CMUTIL_Map *headers,
+    const char *uri,
+    CMUTIL_ByteBuffer *body,
+    int *status,
+    long timeout)
+{
+    CMUTIL_RestClient_Internal *ir = (CMUTIL_RestClient_Internal*)client;
+    return CMCall(ir->http, Request,
+                  method, headers, uri, body, status, timeout);
+}
+
+CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_RestClientHttpGet(
+    CMUTIL_HttpClient *client,
+    CMUTIL_Map *headers,
+    const char *uri,
+    int *status,
+    long timeout)
+{
+    CMUTIL_RestClient_Internal *ir = (CMUTIL_RestClient_Internal*)client;
+    return CMCall(ir->http, Get, headers, uri, status, timeout);
+}
+
+CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_RestClientHttpPost(
+    CMUTIL_HttpClient *client,
+    CMUTIL_Map *headers,
+    const char *uri,
+    CMUTIL_ByteBuffer *body,
+    int *status,
+    long timeout)
+{
+    CMUTIL_RestClient_Internal *ir = (CMUTIL_RestClient_Internal*)client;
+    return CMCall(ir->http, Post, headers, uri, body, status, timeout);
+}
+
+CMUTIL_STATIC void CMUTIL_RestClientDestroy(
+    CMUTIL_HttpClient *client)
+{
+    CMUTIL_RestClient_Internal *ir = (CMUTIL_RestClient_Internal*)client;
+    if (ir->http)
+        CMCall(ir->http, Destroy);
+    ir->memst->Free(ir);
+}
+
+CMUTIL_STATIC CMBool CMUTIL_RestClientHasHeader(
+    CMUTIL_Map *headers, const char *name)
+{
+    const CMUTIL_Array *pairs;
+    uint32_t i;
+    if (headers == NULL) return CMFalse;
+    pairs = CMCall(headers, GetPairs);
+    if (pairs == NULL) return CMFalse;
+    for (i=0; i<(uint32_t)CMCall(pairs, GetSize); i++) {
+        const CMUTIL_MapPair *pair = CMCall(pairs, GetAt, i);
+        if (strcasecmp(CMCall(pair, GetKey), name) == 0)
+            return CMTrue;
+    }
+    return CMFalse;
+}
+
+/**
+ * The caller's header map is left alone - the defaults go into a copy. The
+ * copy borrows the caller's values, so it is created without a free callback.
+ */
+CMUTIL_STATIC CMUTIL_Map *CMUTIL_RestClientHeaders(
+    CMUTIL_RestClient_Internal *ir, CMUTIL_Map *headers, CMBool hasbody)
+{
+    CMUTIL_Map *res = CMUTIL_MapCreateInternal(
+                ir->memst, 16, CMFalse, NULL, 0.75f);
+    if (headers)
+        CMCall(res, PutAll, headers);
+    if (!CMUTIL_RestClientHasHeader(headers, "Accept"))
+        CMCall(res, Put, "Accept", g_cmutil_rest_json_type, NULL);
+    if (hasbody && !CMUTIL_RestClientHasHeader(headers, "Content-Type"))
+        CMCall(res, Put, "Content-Type", g_cmutil_rest_json_type, NULL);
+    return res;
+}
+
+CMUTIL_STATIC CMUTIL_Json *CMUTIL_RestClientExchange(
+    CMUTIL_RestClient_Internal *ir,
+    const char *method,
+    CMUTIL_Map *headers,
+    const char *uri,
+    CMUTIL_Json *data)
+{
+    CMUTIL_Map *hdrs;
+    CMUTIL_ByteBuffer *body = NULL;
+    CMUTIL_ByteBuffer *resbuf;
+    CMUTIL_Json *res = NULL;
+
+    // Request only assigns the status once it has read a status line, so a
+    // request that never got that far has to leave a zero behind.
+    ir->status = 0;
+
+    if (data) {
+        CMUTIL_String *sbuf = CMUTIL_StringCreateInternal(ir->memst, 128, NULL);
+        const char *json;
+        size_t len;
+        CMCall(data, ToString, sbuf, CMFalse);
+        json = CMCall(sbuf, GetCString);
+        len = CMCall(sbuf, GetSize);
+        body = CMUTIL_ByteBufferCreateInternal(ir->memst, len? len:1);
+        CMCall(body, AddBytes, (const uint8_t*)json, (uint32_t)len);
+        CMCall(sbuf, Destroy);
+    }
+
+    hdrs = CMUTIL_RestClientHeaders(ir, headers, body? CMTrue:CMFalse);
+    resbuf = CMCall(ir->http, Request,
+                    method, hdrs, uri, body, &ir->status, ir->timeout);
+    CMCall(hdrs, Destroy);
+    if (body)
+        CMCall(body, Destroy);
+
+    if (resbuf) {
+        const size_t len = CMCall(resbuf, GetSize);
+        if (len > 0) {
+            CMUTIL_String *sbuf = CMUTIL_StringCreateInternal(
+                        ir->memst, len + 1, NULL);
+            const uint8_t *bytes = CMCall(resbuf, GetBytes);
+            CMCall(sbuf, AddNString, (const char*)bytes, len);
+            // An error response is often not JSON at all, and that is the
+            // status code's story to tell - parse it quietly.
+            res = CMUTIL_JsonParseInternal(ir->memst, sbuf, CMTrue);
+            CMCall(sbuf, Destroy);
+            if (res == NULL)
+                CMLogWarn("%s %s: response body is not valid JSON",
+                          method, uri);
+        }
+        CMCall(resbuf, Destroy);
+    }
+    return res;
+}
+
+CMUTIL_STATIC CMUTIL_Json *CMUTIL_RestClientGet(
+    CMUTIL_RestClient *client,
+    CMUTIL_Map *headers,
+    const char *uri)
+{
+    return CMUTIL_RestClientExchange(
+                (CMUTIL_RestClient_Internal*)client, "GET", headers, uri, NULL);
+}
+
+CMUTIL_STATIC CMUTIL_Json *CMUTIL_RestClientPost(
+    CMUTIL_RestClient *client,
+    CMUTIL_Map *headers,
+    const char *uri,
+    CMUTIL_Json *data)
+{
+    return CMUTIL_RestClientExchange(
+                (CMUTIL_RestClient_Internal*)client, "POST", headers, uri, data);
+}
+
+CMUTIL_STATIC CMBool CMUTIL_RestClientPut(
+    CMUTIL_RestClient *client,
+    CMUTIL_Map *headers,
+    const char *uri,
+    CMUTIL_Json *data)
+{
+    CMUTIL_RestClient_Internal *ir = (CMUTIL_RestClient_Internal*)client;
+    CMUTIL_Json *res = CMUTIL_RestClientExchange(
+                ir, "PUT", headers, uri, data);
+    if (res)
+        CMUTIL_JsonDestroy(res);
+    return (ir->status >= 200 && ir->status < 300)? CMTrue:CMFalse;
+}
+
+CMUTIL_STATIC void CMUTIL_RestClientDelete(
+    CMUTIL_RestClient *client,
+    CMUTIL_Map *headers,
+    const char *uri)
+{
+    CMUTIL_Json *res = CMUTIL_RestClientExchange(
+                (CMUTIL_RestClient_Internal*)client,
+                "DELETE", headers, uri, NULL);
+    if (res)
+        CMUTIL_JsonDestroy(res);
+}
+
+CMUTIL_STATIC void CMUTIL_RestClientSetTimeout(
+    CMUTIL_RestClient *client, long timeout)
+{
+    CMUTIL_RestClient_Internal *ir = (CMUTIL_RestClient_Internal*)client;
+    ir->timeout = timeout;
+}
+
+CMUTIL_STATIC int CMUTIL_RestClientGetStatus(
+    const CMUTIL_RestClient *client)
+{
+    const CMUTIL_RestClient_Internal *ir =
+            (const CMUTIL_RestClient_Internal*)client;
+    return ir->status;
+}
+
+static CMUTIL_RestClient g_cmutil_rest_client = {
+    {
+        CMUTIL_RestClientSetVerify,
+        CMUTIL_RestClientSetSSLCert,
+        CMUTIL_RestClientSetKeepAlive,
+        CMUTIL_RestClientHttpRequest,
+        CMUTIL_RestClientHttpGet,
+        CMUTIL_RestClientHttpPost,
+        CMUTIL_RestClientDestroy
+    },
+    CMUTIL_RestClientGet,
+    CMUTIL_RestClientPost,
+    CMUTIL_RestClientPut,
+    CMUTIL_RestClientDelete,
+    CMUTIL_RestClientSetTimeout,
+    CMUTIL_RestClientGetStatus
+};
+
+CMUTIL_RestClient *CMUTIL_RestClientCreateInternal(
+    CMUTIL_Mem *memst, const char *urlprefix)
+{
+    CMUTIL_RestClient_Internal *ir;
+    CMUTIL_HttpClient *http = CMUTIL_HttpClientCreateInternal(
+                memst, urlprefix);
+    if (http == NULL)
+        return NULL;
+    ir = memst->Alloc(sizeof(CMUTIL_RestClient_Internal));
+    memset(ir, 0x0, sizeof(CMUTIL_RestClient_Internal));
+    ir->base = g_cmutil_rest_client;
+    ir->http = http;
+    ir->memst = memst;
+    ir->timeout = CMUTIL_REST_DEFAULT_TIMEOUT;
+    return &ir->base;
+}
+
+CMUTIL_RestClient *CMUTIL_RestClientCreate(const char *urlprefix)
+{
+    return CMUTIL_RestClientCreateInternal(CMUTIL_GetMem(), urlprefix);
 }

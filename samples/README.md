@@ -50,6 +50,7 @@ the working directory.
 | [sample_18_http.c](sample_18_http.c) | `CMUTIL_HttpClient` GET / POST / arbitrary methods, headers, TLS verification |
 | [sample_19_crypto.c](sample_19_crypto.c) | AES-CBC / CTR / GCM, RSA encryption and signatures, Base64, secure random |
 | [sample_20_stackwalk.c](sample_20_stackwalk.c) | `CMUTIL_StackWalker` and the `CMLog*S` macros |
+| [sample_21_rest.c](sample_21_rest.c) | `CMUTIL_RestClient` GET / POST / PUT / DELETE against a JSON API in the same process |
 
 [sample_common.h](sample_common.h) holds the two helpers every sample uses: `sample_init()`, which
 initializes the library and points the log system at [conf/sample_console_log.jsonc](conf/sample_console_log.jsonc),
@@ -57,9 +58,13 @@ and `sample_exit()`, which tears everything down and reports leaks.
 
 ## Samples that touch the outside world
 
-- **sample_16_socket** binds `127.0.0.1:19999`, **sample_17_dgram** binds `127.0.0.1:19898`.
+- **sample_16_socket** binds `127.0.0.1:19999`, **sample_17_dgram** binds `127.0.0.1:19898`,
+  **sample_21_rest** binds `127.0.0.1:19797`.
 - **sample_18_http** performs real HTTPS requests against `example.com`. It warns and still exits
   successfully when the network is unavailable; pass another URL prefix as the first argument.
+- **sample_21_rest** needs no network: it serves its own API. Its last step deliberately connects to
+  a closed port to show what a failed request looks like, so the errors and the stack trace near the
+  end of its output are expected.
 - **sample_14_process** spawns `/bin/sh`, `/bin/echo` (`cmd` on Windows).
 - **sample_08_logging** writes `sample_app.log`, `sample_rolling.log` and a `log/` directory into
   the working directory.
