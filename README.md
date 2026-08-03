@@ -7,6 +7,10 @@ A multi-platform C99 utility library that exposes common building blocks — col
 [![Language: C99](https://img.shields.io/badge/Language-C99-blue.svg)](https://en.wikipedia.org/wiki/C99)
 [![Build System: CMake](https://img.shields.io/badge/Build-CMake%20%E2%89%A5%203.10-064F8C.svg)](https://cmake.org/)
 [![Platforms](https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](#requirements)
+[![API reference](https://img.shields.io/badge/docs-API%20reference-brightgreen.svg)](https://xcomart.github.io/libcmutils/api/)
+
+📖 **[API reference](https://xcomart.github.io/libcmutils/api/)** — every type and method, grouped by
+subject. This page is the guided tour; that one is the lookup.
 
 ---
 
@@ -1116,14 +1120,19 @@ of them bind ports or reach the network.
 
 ## API reference
 
-The sections above are prose. The generated reference is the same API organized for lookup — grouped
-by subject, built from the doc comments in `src/libcmutils.h`:
+**<https://xcomart.github.io/libcmutils/api/>**
+
+The sections above are prose. The reference is the same API organized for lookup — every type and
+method grouped into eighteen subjects, generated from the doc comments in `src/libcmutils.h` and
+rebuilt on every push that touches them.
+
+To build it locally instead:
 
 ```bash
 cd doc && doxygen          # or: cmake --build build --target docs
 ```
 
-Open `doc/html/index.html`. See [doc/README.md](doc/README.md) for what the topics contain.
+That writes `doc/html/index.html`. See [doc/README.md](doc/README.md) for what the topics contain.
 
 ## Project structure
 
