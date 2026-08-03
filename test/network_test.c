@@ -38,7 +38,7 @@ void client_handler(void* udata) {
             CMCall(str, InsertPrint, 0, "%04d", len);
             p = (uint8_t*)CMCall(str, GetCString);
             blen = CMCall(str, GetSize);
-            sr = CMCall(csock, Write, p, blen, 1000);
+            sr = CMCall(csock, Write, p, (uint32_t)blen, 1000);
             if (sr != CMSocketOk) break;
             CMLogInfo("sent to client: %s", CMCall(str, GetCString));
             CMCall(buf, Clear);
@@ -93,11 +93,11 @@ void client_proc(void* udata) {
         CMLogInfo("connected to server: %s:%d", host, port);
         for (int i=0; i<10; i++) {
             CMCall(sbuf, AddPrint, "%s: %d", tname, i);
-            int len = CMCall(sbuf, GetSize);
+            int len = (int)CMCall(sbuf, GetSize);
             CMCall(sbuf, InsertPrint, 0, "%04d", len);
             uint8_t *p = (uint8_t*)CMCall(sbuf, GetCString);
             size_t blen = CMCall(sbuf, GetSize);
-            sr = CMCall(csock, Write, p, blen, 1000);
+            sr = CMCall(csock, Write, p, (uint32_t)blen, 1000);
             if (sr != CMSocketOk) break;
             CMLogInfo("sent to server: %s", CMCall(sbuf, GetCString));
             CMCall(sbuf, Clear);

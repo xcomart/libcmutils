@@ -39,6 +39,12 @@ CMUTIL_LogDefine("cmutils.http")
 // absurd or hostile length headers.
 #define CMUTIL_HTTP_MAX_BODY    (1024L*1024L*1024L)
 
+// How wide a host name this client stores, and how wide the "host:port"
+// key derived from it can get - a truncated key would let two different
+// hosts share one connection pool.
+#define CMUTIL_HTTP_HOST_MAX    256
+#define CMUTIL_HTTP_POOLKEY_MAX (CMUTIL_HTTP_HOST_MAX + 16)
+
 struct CMUTIL_HttpContext {
     CMUTIL_Map      *socket_pools;
     CMUTIL_Mutex    *socket_pools_mutex;
@@ -48,7 +54,7 @@ struct CMUTIL_HttpContext {
 typedef struct CMUTIL_SocketPoolElem {
     time_t          last_used;
     CMUTIL_Mem      *memst;
-    char            host[256];
+    char            host[CMUTIL_HTTP_HOST_MAX];
     int             port;
     CMUTIL_Socket   *sock;
 } CMUTIL_SocketPoolElem;
@@ -120,7 +126,7 @@ CMUTIL_STATIC CMUTIL_Socket *CMUTIL_HttpContextGetSocket(
 {
     CMUTIL_Pool *pool = NULL;
     CMUTIL_SocketPoolElem *elem = NULL;
-    char buf[256];
+    char buf[CMUTIL_HTTP_POOLKEY_MAX];
     snprintf(buf, sizeof(buf), "%s:%d", host, port);
     CMCall(g_httpctx.socket_pools_mutex, Lock);
     pool = CMCall(g_httpctx.socket_pools, Get, buf);
@@ -164,7 +170,7 @@ CMUTIL_STATIC CMBool CMUTIL_HttpContextPutSocket(
     const char *host, int port, CMUTIL_Socket *sock)
 {
     CMUTIL_Pool *pool = NULL;
-    char buf[256];
+    char buf[CMUTIL_HTTP_POOLKEY_MAX];
     CMBool res = CMFalse;
     snprintf(buf, sizeof(buf), "%s:%d", host, port);
     CMCall(g_httpctx.socket_pools_mutex, Lock);
@@ -192,7 +198,7 @@ CMUTIL_STATIC CMBool CMUTIL_HttpContextPutSocket(
 typedef struct CMUTIL_HttpClient_Internal {
     CMUTIL_HttpClient   base;
     CMUTIL_Mem          *memst;
-    char                host[256];
+    char                host[CMUTIL_HTTP_HOST_MAX];
     int                 port;
     CMBool              ishttps;
     CMBool              verifypeer;
@@ -329,7 +335,7 @@ CMUTIL_STATIC CMSocketResult CMUTIL_HttpClientWriteLine(
 {
     CMSocketResult sr = CMSocketOk;
     if (line && *line)
-        sr = CMCall(sock, Write, line, strlen(line), timeout);
+        sr = CMCall(sock, Write, line, (uint32_t)strlen(line), timeout);
     if (sr == CMSocketOk)
         sr = CMCall(sock, Write, "\r\n", 2, timeout);
     CMLogTrace("Write -> %s", line);
@@ -438,7 +444,7 @@ CMUTIL_STATIC CMUTIL_ByteBuffer *CMUTIL_HttpClientRequest(
             // Content-Length already delimits the body. A CRLF after it is
             // extra bytes the peer reads as the start of the next request,
             // which desynchronizes a kept-alive connection.
-            sr = CMCall(sock, Write, data, size, timeout);
+            sr = CMCall(sock, Write, data, (uint32_t)size, timeout);
             if (sr != CMSocketOk) {
                 CMLogError("failed to write request body");
                 goto FAILED;
