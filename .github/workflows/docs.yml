@@ -17,6 +17,16 @@ on:
       - 'README.md'
       - '_config.yml'
       - '.github/workflows/docs.yml'
+  # Build on pull requests as well - without deploying - so a site that no
+  # longer builds is caught before it reaches the default branch.
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'src/libcmutils.h'
+      - 'doc/**'
+      - 'README.md'
+      - '_config.yml'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
@@ -65,8 +75,11 @@ jobs:
         fi
         echo "doxygen reported no documentation problems"
 
+    # jekyll-build-pages runs in a container as root, so _site comes back
+    # owned by root: take it over before writing into it or packing it.
     - name: Place the reference under /api
       run: |
+        sudo chown -R "$(id -u):$(id -g)" _site
         mkdir -p _site/api
         cp -r doc/html/. _site/api/
 
@@ -77,6 +90,7 @@ jobs:
   deploy:
     name: Deploy to Pages
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
