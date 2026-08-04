@@ -1191,8 +1191,6 @@ Issues and pull requests are welcome at
    Internal helpers belong in `src/functions.h`. `cd doc && doxygen` must leave `doc/doxygen.log`
    empty; see [doc/README.md](doc/README.md).
 
-Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
-
 ## License
 
 MIT — see [LICENSE](LICENSE).

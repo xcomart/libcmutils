@@ -80,3 +80,5 @@ build*
 # Generated API reference (cmake --build build --target docs)
 doc/html/
 doc/doxygen.log
+
+.claude

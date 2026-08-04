@@ -17,5 +17,3 @@ exclude:
   - vcpkg.json
   - VERSION
   - AUTHORS
-  - ChangeLog
-  - NEWS
